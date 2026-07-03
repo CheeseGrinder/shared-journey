@@ -1,0 +1,99 @@
+{
+  "key.categories.sharedjourney": "Shared Journey",
+  "key.sharedjourney.fullmap": "Open full map",
+  "key.sharedjourney.toggle_minimap": "Toggle minimap",
+  "key.sharedjourney.cycle_layer": "Cycle map layer",
+
+  "sharedjourney.layer.day": "Day",
+  "sharedjourney.layer.night": "Night",
+  "sharedjourney.layer.topo": "Topographic",
+  "sharedjourney.layer.biome": "Biomes",
+  "sharedjourney.layer.cave": "Caves",
+
+  "sharedjourney.fullmap.hint": "Drag: pan | Wheel: zoom | Right-click: new waypoint | Click marker: edit",
+  "sharedjourney.waypoint.create": "New waypoint",
+  "sharedjourney.waypoint.edit": "Edit waypoint",
+  "sharedjourney.waypoint.delete": "Delete",
+  "sharedjourney.waypoint.visible": "Visible: yes",
+  "sharedjourney.waypoint.hidden": "Visible: no",
+  "sharedjourney.command.purged": "%s cached region file(s) deleted for layer '%s'",
+
+  "sharedjourney.configuration.title": "Shared Journey Configs",
+  "sharedjourney.configuration.section.sharedjourney.client.toml": "Client (minimap, radar, cache)",
+  "sharedjourney.configuration.section.sharedjourney.client.toml.title": "Shared Journey — Client",
+  "sharedjourney.configuration.section.sharedjourney.common.toml": "Common",
+  "sharedjourney.configuration.section.sharedjourney.common.toml.title": "Shared Journey — Common",
+  "sharedjourney.configuration.section.sharedjourney.server.toml": "Server (layers, engine, sync)",
+  "sharedjourney.configuration.section.sharedjourney.server.toml.title": "Shared Journey — Server",
+
+  "sharedjourney.configuration.layers": "Layers",
+  "sharedjourney.configuration.layers.tooltip": "Layer configuration: which map layers are rendered per dimension.",
+  "sharedjourney.configuration.layers.button": "Configure",
+
+  "sharedjourney.configuration.defaultLayers": "Default Layers",
+  "sharedjourney.configuration.defaultLayers.tooltip": "Active layers for dimensions not listed in Shared Layers.",
+  "sharedjourney.configuration.defaultLayers.button": "Edit list",
+
+  "sharedjourney.configuration.sharedLayers": "Shared Layers",
+  "sharedjourney.configuration.sharedLayers.tooltip": "Layers per dimension, format 'namespace:dimension=LAYER1,LAYER2'. Example: 'minecraft:overworld=DAY,NIGHT,TOPO,BIOME,CAVE'.",
+  "sharedjourney.configuration.sharedLayers.button": "Edit list",
+
+  "sharedjourney.configuration.caveBands": "Cave Bands",
+  "sharedjourney.configuration.caveBands.tooltip": "Y-bands rendered for the CAVE layer (band = floor(y/16)). Example: -1 → y=-16..-1.",
+  "sharedjourney.configuration.caveBands.button": "Edit list",
+
+  "sharedjourney.configuration.engine": "Engine",
+  "sharedjourney.configuration.engine.tooltip": "Rendering engine performance settings.",
+  "sharedjourney.configuration.engine.button": "Configure",
+
+  "sharedjourney.configuration.sync": "Sync",
+  "sharedjourney.configuration.sync.tooltip": "Map synchronisation settings between server and clients.",
+  "sharedjourney.configuration.sync.button": "Configure",
+
+  "sharedjourney.configuration.minimap": "Minimap",
+  "sharedjourney.configuration.minimap.tooltip": "Minimap HUD settings.",
+  "sharedjourney.configuration.minimap.button": "Configure",
+
+  "sharedjourney.configuration.enabled": "Enabled",
+  "sharedjourney.configuration.enabled.tooltip": "Show or hide this feature.",
+
+  "sharedjourney.configuration.size": "Size",
+  "sharedjourney.configuration.size.tooltip": "Minimap size in screen pixels.",
+
+  "sharedjourney.configuration.corner": "Corner",
+  "sharedjourney.configuration.corner.tooltip": "Screen corner where the minimap is displayed.",
+
+  "sharedjourney.configuration.rotateWithPlayer": "Rotate with Player",
+  "sharedjourney.configuration.rotateWithPlayer.tooltip": "Rotate the minimap to match the player's look direction (false = north always up).",
+
+  "sharedjourney.configuration.showCoordinates": "Show Coordinates",
+  "sharedjourney.configuration.showCoordinates.tooltip": "Show the player's coordinates below the minimap.",
+
+  "sharedjourney.configuration.radar": "Radar",
+  "sharedjourney.configuration.radar.tooltip": "Entity radar settings.",
+  "sharedjourney.configuration.radar.button": "Configure",
+
+  "sharedjourney.configuration.radius": "Radius",
+  "sharedjourney.configuration.radius.tooltip": "Radar range in blocks (capped by the server's radarMaxRadius).",
+
+  "sharedjourney.configuration.showPlayers": "Show Players",
+  "sharedjourney.configuration.showPlayers.tooltip": "Show other players on the radar.",
+
+  "sharedjourney.configuration.showHostile": "Show Hostile Mobs",
+  "sharedjourney.configuration.showHostile.tooltip": "Show hostile mobs on the radar.",
+
+  "sharedjourney.configuration.showPassive": "Show Passive Mobs",
+  "sharedjourney.configuration.showPassive.tooltip": "Show passive mobs on the radar.",
+
+  "sharedjourney.configuration.defaultLayer": "Default Layer",
+  "sharedjourney.configuration.defaultLayer.tooltip": "Layer displayed when connecting to a server (DAY, NIGHT, TOPO, BIOME, CAVE).",
+
+  "sharedjourney.configuration.diskCache": "Disk Cache",
+  "sharedjourney.configuration.diskCache.tooltip": "Cache received map tiles to disk (.minecraft/sharedjourney_cache/).",
+
+  "sharedjourney.configuration.debugLogging": "Debug Logging",
+  "sharedjourney.configuration.debugLogging.tooltip": "Enable verbose render/sync logging.",
+
+  "sharedjourney.configuration.fragmentSize": "Fragment Size",
+  "sharedjourney.configuration.fragmentSize.tooltip": "Maximum network fragment size in bytes."
+}

@@ -1,0 +1,42 @@
+// Racine : conventions communes aux modules. Chaque module applique ModDevGradle
+// pour compiler contre NeoForge ; seul :mod définit les runs et produit le jar final.
+plugins {
+    id 'net.neoforged.moddev' version '2.0.141' apply false
+}
+
+subprojects {
+    apply plugin: 'java-library'
+
+    version = rootProject.mod_version
+    group = rootProject.mod_group_id
+
+    java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+    repositories {
+        maven { name = 'JourneyMap (Public)'; url = 'https://jm.gserv.me/repository/maven-public/' }
+        maven { name = 'BlameJared (JourneyMap API mirror)'; url = 'https://maven.blamejared.com' }
+        // Chaîne de dépendances Create (tests de compat) — wiki officiel :
+        // https://wiki.createmod.net/developers/depend-on-create/neoforge-1.21.1
+        maven { name = 'CreateMod'; url = 'https://maven.createmod.net' }          // Create, Ponder, Flywheel
+        maven { name = 'IThundxr (Registrate)'; url = 'https://maven.ithundxr.dev/snapshots' }
+        // Tous les projets Modrinth sont servis en Maven (mods de test de compat).
+        // ATTENTION : pas de dépendances transitives — chaque mod requis doit être listé.
+        exclusiveContent {
+            forRepository { maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' } }
+            filter { includeGroup 'maven.modrinth' }
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+    }
+}
+
+// Modules de code compilés contre NeoForge (pas de jar mod autonome).
+configure([project(':api'), project(':common'), project(':server'), project(':client')]) {
+    apply plugin: 'net.neoforged.moddev'
+    neoForge {
+        version = rootProject.neo_version
+        // Pas de run ici : les runs vivent dans :mod
+    }
+}

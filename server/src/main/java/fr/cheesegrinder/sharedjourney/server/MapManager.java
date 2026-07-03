@@ -1,0 +1,358 @@
+package fr.cheesegrinder.sharedjourney.server;
+
+import com.mojang.logging.LogUtils;
+import fr.cheesegrinder.sharedjourney.api.ChunkLayerRenderer;
+import fr.cheesegrinder.sharedjourney.api.MapLayer;
+import fr.cheesegrinder.sharedjourney.common.RegionIndex;
+import fr.cheesegrinder.sharedjourney.common.RegionKey;
+import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.storage.LevelResource;
+import org.slf4j.Logger;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.EnumSet;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * Source de vérité côté serveur (spec §3.1 et §4).
+ *
+ * - Régions 512x512 px en RAM, persistées en PNG dans
+ *   world/data/sharedjourney/[dimension]/[layer]/region_X_Z.png
+ * - index.json : registre {RegionKey -> Timestamp} (sérialisation du registre RAM)
+ * - Moteur ASYNCHRONE : le tick serveur ne fait que dépiler la file de chunks
+ *   "dirty" et soumettre les tâches à un pool de threads dimensionné
+ *   min(coeurs-2, config.maxWorkerThreads), plancher 1. Le calcul des pixels,
+ *   l'encodage PNG et les écritures disque se font hors du main thread.
+ *   Note : les tâches lisent le ChunkAccess en lecture seule ; le chunk est
+ *   résolu sur le main thread (getChunkNow) avant soumission.
+ */
+public final class MapManager {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
+    private static MapManager INSTANCE;
+
+    public static void init(MinecraftServer server, Map<String, ChunkLayerRenderer> customLayers) {
+        INSTANCE = new MapManager(server, customLayers);
+    }
+
+    public static void shutdown() {
+        if (INSTANCE != null) {
+            INSTANCE.close();
+            INSTANCE = null;
+        }
+    }
+
+    public static MapManager get() { return INSTANCE; }
+
+    // ------------------------------------------------------------------
+
+    private final MinecraftServer server;
+    private final Path root;
+    private final RegionIndex index = new RegionIndex();
+    private final Map<RegionKey, RegionImage> regions = new ConcurrentHashMap<>();
+    private final Map<String, ChunkLayerRenderer> customLayers;
+
+    private final ExecutorService workers;
+    private final int workerCount;
+    private final AtomicInteger tasksInFlight = new AtomicInteger();
+
+    /** File de chunks à (re)rendre, dédupliquée (dirty marking, spec §4). */
+    private final ArrayDeque<QueuedChunk> renderQueue = new ArrayDeque<>();
+    private final Set<QueuedChunk> queued = new LinkedHashSet<>();
+
+    private record QueuedChunk(ResourceKey<Level> dim, int cx, int cz) {}
+
+    private MapManager(MinecraftServer server, Map<String, ChunkLayerRenderer> customLayers) {
+        this.server = server;
+        this.customLayers = customLayers;
+        this.root = server.getWorldPath(LevelResource.ROOT).resolve("data").resolve("sharedjourney");
+        this.index.load(root.resolve("index.json"));
+
+        // Formule d'allocation de la spec §4.
+        int cores = Runtime.getRuntime().availableProcessors();
+        this.workerCount = Math.max(1, Math.min(cores - 2, ServerConfig.MAX_WORKER_THREADS.get()));
+        this.workers = Executors.newFixedThreadPool(workerCount, r -> {
+            Thread t = new Thread(r, "SharedJourney-Render");
+            t.setDaemon(true);
+            t.setPriority(Thread.NORM_PRIORITY - 1);
+            return t;
+        });
+        LOGGER.info("SharedJourney : moteur de rendu initialisé ({} thread(s), index: {} région(s))",
+                workerCount, index.size());
+    }
+
+    private void close() {
+        workers.shutdown();
+        try {
+            if (!workers.awaitTermination(10, TimeUnit.SECONDS)) workers.shutdownNow();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        saveAll();
+    }
+
+    // ------------------------------------------------------------------ file de rendu
+
+    public synchronized void enqueueChunk(ServerLevel level, int cx, int cz) {
+        QueuedChunk q = new QueuedChunk(level.dimension(), cx, cz);
+        if (queued.add(q)) renderQueue.add(q);
+    }
+
+    public synchronized int queueSize() { return renderQueue.size(); }
+
+    public int tasksInFlight() { return tasksInFlight.get(); }
+
+    public int workerCount() { return workerCount; }
+
+    /**
+     * Tick serveur : résout les chunks sur le main thread (obligatoire) puis
+     * délègue tout le calcul au pool. Coût main-thread quasi nul.
+     */
+    public void tick() {
+        int budget = ServerConfig.RENDER_CHUNKS_PER_TICK.get();
+        // Évite d'inonder le pool si le disque/CPU ne suit pas.
+        int maxInFlight = workerCount * 8;
+        while (budget-- > 0 && tasksInFlight.get() < maxInFlight) {
+            QueuedChunk q;
+            synchronized (this) {
+                q = renderQueue.poll();
+                if (q == null) return;
+                queued.remove(q);
+            }
+            ServerLevel level = server.getLevel(q.dim());
+            if (level == null) continue;
+            ChunkAccess chunk = level.getChunkSource().getChunkNow(q.cx(), q.cz());
+            if (chunk == null) continue; // déchargé entre-temps
+            tasksInFlight.incrementAndGet();
+            workers.submit(() -> {
+                try {
+                    renderChunk(level, chunk);
+                } catch (Throwable t) {
+                    LOGGER.error("Echec de rendu du chunk {},{} en {}", q.cx(), q.cz(), q.dim().location(), t);
+                } finally {
+                    tasksInFlight.decrementAndGet();
+                }
+            });
+        }
+    }
+
+    /** Rendu de toutes les couches actives d'un chunk (exécuté sur un worker). */
+    private void renderChunk(ServerLevel level, ChunkAccess chunk) {
+        EnumSet<MapLayer> layers = ServerConfig.layersFor(level.dimension());
+        ChunkPos cp = chunk.getPos();
+        for (MapLayer layer : layers) {
+            if (layer == MapLayer.CAVE) {
+                for (int band : ServerConfig.CAVE_BANDS.get()) {
+                    int[] pixels = ChunkColorizer.render(level, chunk, layer, band);
+                    writeChunk(RegionKey.of(level.dimension(), layer, band, cp.x, cp.z), cp.x, cp.z, pixels);
+                }
+            } else {
+                int[] pixels = ChunkColorizer.render(level, chunk, layer, 0);
+                writeChunk(RegionKey.of(level.dimension(), layer, 0, cp.x, cp.z), cp.x, cp.z, pixels);
+            }
+        }
+        // NB: les couches custom (LayerRegisterEvent) sont collectées mais leur
+        // pipeline de stockage/sync n'est pas encore branché — voir README §Limites.
+    }
+
+    /** Un chunk a-t-il déjà été peint (au moins un pixel opaque sur la 1re couche active) ? */
+    public boolean isChunkRendered(ServerLevel level, int cx, int cz) {
+        EnumSet<MapLayer> layers = ServerConfig.layersFor(level.dimension());
+        if (layers.isEmpty()) return true;
+        MapLayer probe = layers.iterator().next();
+        int band = probe == MapLayer.CAVE ? firstCaveBand() : 0;
+        RegionKey key = RegionKey.of(level.dimension(), probe, band, cx, cz);
+        // Astuce rapide : si l'index ne connaît pas la région, rien n'a été peint.
+        if (index.get(key) < 0 && !regions.containsKey(key)) return false;
+        RegionImage img = getOrLoad(key, false);
+        if (img == null) return false;
+        int px = Math.floorMod(cx, RegionKey.REGION_CHUNKS) * 16;
+        int pz = Math.floorMod(cz, RegionKey.REGION_CHUNKS) * 16;
+        synchronized (img) {
+            return (img.pixels[px + pz * RegionKey.REGION_BLOCKS] >>> 24) != 0;
+        }
+    }
+
+    private int firstCaveBand() {
+        var bands = ServerConfig.CAVE_BANDS.get();
+        return bands.isEmpty() ? 0 : bands.get(0);
+    }
+
+    // ------------------------------------------------------------------ écriture (workers)
+
+    private void writeChunk(RegionKey key, int cx, int cz, int[] chunkPixels) {
+        RegionImage img = getOrLoad(key, true);
+        int ox = Math.floorMod(cx, RegionKey.REGION_CHUNKS) * 16;
+        int oz = Math.floorMod(cz, RegionKey.REGION_CHUNKS) * 16;
+        long version;
+        synchronized (img) {
+            for (int z = 0; z < 16; z++) {
+                System.arraycopy(chunkPixels, z * 16, img.pixels,
+                        ox + (oz + z) * RegionKey.REGION_BLOCKS, 16);
+            }
+            img.version = Math.max(img.version + 1, System.currentTimeMillis());
+            img.dirty = true;
+            img.cachedPng = null;
+            version = img.version;
+        }
+        index.put(key, version); // registre RAM ; sérialisé par saveAll()
+    }
+
+    // ------------------------------------------------------------------ lecture / versions
+
+    /** Version d'une région : index (vérité) > fichier (mtime) > -1. */
+    public long versionOf(RegionKey key) {
+        long fromIndex = index.get(key);
+        if (fromIndex >= 0) return fromIndex;
+        RegionImage img = regions.get(key);
+        if (img != null) return img.version;
+        Path file = pathOf(key);
+        if (Files.exists(file)) {
+            try {
+                long v = Files.getLastModifiedTime(file).toMillis();
+                index.put(key, v);
+                return v;
+            } catch (IOException e) {
+                return -1;
+            }
+        }
+        return -1;
+    }
+
+    /** PNG encodé de la région (mis en cache tant que la région n'est pas réécrite). */
+    public byte[] pngOf(RegionKey key) {
+        RegionImage img = getOrLoad(key, false);
+        if (img == null) return null;
+        synchronized (img) {
+            if (img.cachedPng != null) return img.cachedPng;
+            byte[] png = encodePng(img.pixels);
+            img.cachedPng = png;
+            return png;
+        }
+    }
+
+    private static byte[] encodePng(int[] pixels) {
+        try {
+            BufferedImage bi = new BufferedImage(RegionKey.REGION_BLOCKS, RegionKey.REGION_BLOCKS,
+                    BufferedImage.TYPE_INT_ARGB);
+            bi.setRGB(0, 0, RegionKey.REGION_BLOCKS, RegionKey.REGION_BLOCKS,
+                    pixels, 0, RegionKey.REGION_BLOCKS);
+            ByteArrayOutputStream bos = new ByteArrayOutputStream(64 * 1024);
+            ImageIO.write(bi, "png", bos);
+            return bos.toByteArray();
+        } catch (IOException e) {
+            LOGGER.error("Echec d'encodage PNG", e);
+            return null;
+        }
+    }
+
+    private RegionImage getOrLoad(RegionKey key, boolean createIfMissing) {
+        RegionImage img = regions.get(key);
+        if (img != null) return img;
+
+        Path file = pathOf(key);
+        if (Files.exists(file)) {
+            try {
+                BufferedImage bi = ImageIO.read(file.toFile());
+                RegionImage loaded = new RegionImage();
+                bi.getRGB(0, 0, RegionKey.REGION_BLOCKS, RegionKey.REGION_BLOCKS,
+                        loaded.pixels, 0, RegionKey.REGION_BLOCKS);
+                long v = index.get(key);
+                loaded.version = v >= 0 ? v : Files.getLastModifiedTime(file).toMillis();
+                RegionImage prev = regions.putIfAbsent(key, loaded);
+                return prev != null ? prev : loaded;
+            } catch (IOException e) {
+                LOGGER.error("Echec de lecture de {}", file, e);
+            }
+        }
+        if (!createIfMissing) return null;
+        RegionImage fresh = new RegionImage();
+        RegionImage prev = regions.putIfAbsent(key, fresh);
+        return prev != null ? prev : fresh;
+    }
+
+    private Path pathOf(RegionKey key) {
+        String dim = key.dimension().location().getPath(); // "overworld" comme la spec
+        if (!key.dimension().location().getNamespace().equals("minecraft")) {
+            dim = key.dimension().location().toString().replace(':', '_');
+        }
+        return root.resolve(dim).resolve(key.layer().folderName(key.caveBand())).resolve(key.fileName());
+    }
+
+    // ------------------------------------------------------------------ persistance
+
+    /** Flush asynchrone : sauvegarde régions modifiées + index.json (world save, arrêt). */
+    public void saveAllAsync() {
+        workers.submit(this::saveAll);
+    }
+
+    public synchronized void saveAll() {
+        int saved = 0;
+        for (Map.Entry<RegionKey, RegionImage> e : regions.entrySet()) {
+            RegionImage img = e.getValue();
+            byte[] png;
+            long version;
+            synchronized (img) {
+                if (!img.dirty) continue;
+                png = img.cachedPng != null ? img.cachedPng : encodePng(img.pixels);
+                img.cachedPng = png;
+                version = img.version;
+                img.dirty = false;
+            }
+            if (png == null) continue;
+            Path file = pathOf(e.getKey());
+            try {
+                Files.createDirectories(file.getParent());
+                Files.write(file, png);
+                Files.setLastModifiedTime(file, java.nio.file.attribute.FileTime.fromMillis(version));
+                saved++;
+            } catch (IOException ex) {
+                LOGGER.error("Echec de sauvegarde de {}", file, ex);
+                synchronized (img) { img.dirty = true; }
+            }
+        }
+        try {
+            index.save(root.resolve("index.json"));
+        } catch (IOException ex) {
+            LOGGER.error("Echec de sauvegarde de l'index", ex);
+        }
+        if (saved > 0) LOGGER.info("SharedJourney : {} région(s) sauvegardée(s)", saved);
+    }
+
+    // ------------------------------------------------------------------ stats (spec §7)
+
+    /** Etat RAM / file / threads pour /map stats. */
+    public String engineStats() {
+        long dirty = regions.values().stream().filter(r -> r.dirty).count();
+        long ramMb = regions.size() * (long) RegionKey.REGION_BLOCKS * RegionKey.REGION_BLOCKS * 4 / (1024 * 1024);
+        return "Moteur: " + workerCount + " thread(s), " + tasksInFlight.get() + " tâche(s) en cours | "
+                + "Régions RAM: " + regions.size() + " (~" + ramMb + " Mo, " + dirty + " modifiées) | "
+                + "Index: " + index.size() + " entrées | File de rendu: " + queueSize() + " chunk(s)";
+    }
+
+    private static final class RegionImage {
+        final int[] pixels = new int[RegionKey.REGION_BLOCKS * RegionKey.REGION_BLOCKS];
+        long version = System.currentTimeMillis();
+        boolean dirty = false;
+        byte[] cachedPng = null;
+    }
+}

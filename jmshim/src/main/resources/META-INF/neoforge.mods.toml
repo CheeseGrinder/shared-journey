@@ -1,0 +1,19 @@
+# Shim optionnel : fait croire aux mods tiers que "journeymap" est présent,
+# pour que leurs intégrations (ex: Waystones) s'activent. SharedJourney fournit
+# alors l'implémentation via son bridge. Incompatible avec le vrai JourneyMap.
+modLoader="lowcodefml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="journeymap"
+version="6.0.0"
+displayName="JourneyMap (SharedJourney shim)"
+description='''Shim de compatibilité fourni par SharedJourney. Ne fait rien par lui-même.'''
+
+[[dependencies.journeymap]]
+    modId="sharedjourney"
+    type="required"
+    versionRange="[1.0.0,)"
+    ordering="AFTER"
+    side="CLIENT"

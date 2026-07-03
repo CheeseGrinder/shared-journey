@@ -1,0 +1,5 @@
+// Cœur partagé : structures de données, index de régions, payloads réseau, configs.
+dependencies {
+    api project(':api')
+    implementation 'com.google.code.gson:gson:2.10.1' // fourni par Minecraft au runtime
+}

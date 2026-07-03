@@ -1,0 +1,4 @@
+// Moteur de génération asynchrone, disque, file réseau, commandes serveur.
+dependencies {
+    api project(':common')
+}

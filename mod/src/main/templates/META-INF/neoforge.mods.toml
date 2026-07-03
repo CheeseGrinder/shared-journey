@@ -1,0 +1,35 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="${mod_license}"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+description='''Carte serveur-autoritaire synchronisée entre tous les joueurs.
+Couches DAY/NIGHT/TOPO/BIOME/CAVE par dimension, waypoints, radar,
+et bridge de compatibilité avec l'API JourneyMap (Waystones, etc.).'''
+authors="cheesegrinder"
+
+[[dependencies.${mod_id}]]
+    modId="neoforge"
+    type="required"
+    versionRange="${neo_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    type="required"
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+# Si le vrai JourneyMap est présent, notre bridge se désactive tout seul,
+# mais on préfère se charger APRÈS lui pour le détecter proprement.
+[[dependencies.${mod_id}]]
+    modId="journeymap"
+    type="optional"
+    versionRange="[1.21.1,)"
+    ordering="AFTER"
+    side="CLIENT"

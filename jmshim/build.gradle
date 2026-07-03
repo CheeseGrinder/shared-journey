@@ -1,0 +1,5 @@
+// Compagnon OPTIONNEL "lowcodefml" : déclare le modId "journeymap" pour satisfaire
+// les mods qui testent ModList.isLoaded("journeymap") avant d'activer leur
+// intégration. NE PAS l'installer en même temps que le vrai JourneyMap.
+plugins { id 'java' }
+jar { archiveBaseName = 'sharedjourney-jmshim' }
