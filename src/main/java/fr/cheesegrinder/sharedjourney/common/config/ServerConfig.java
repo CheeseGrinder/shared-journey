@@ -35,6 +35,8 @@ public final class ServerConfig {
     public static ModConfigSpec.IntValue MAX_KB_PER_SECOND_PER_PLAYER;
     public static ModConfigSpec.IntValue SYNC_RATE_TICKS;
     public static ModConfigSpec.IntValue RENDER_CHUNKS_PER_TICK;
+    /** Rayon de lissage des couleurs de biome (eau, herbe, feuillage) : 0 = désactivé. */
+    public static ModConfigSpec.IntValue BIOME_BLEND_RADIUS;
     public static ModConfigSpec.BooleanValue ALLOW_ON_DEMAND_REQUESTS;
     /** Rayon max du radar toléré côté serveur (anti-triche, plafonne le client). */
     public static ModConfigSpec.IntValue RADAR_MAX_RADIUS;
@@ -66,6 +68,8 @@ public final class ServerConfig {
                 .defineInRange("maxWorkerThreads", 4, 1, 32);
         RENDER_CHUNKS_PER_TICK = b.comment("Chunks soumis au pool de rendu au maximum par tick serveur.")
                 .defineInRange("renderChunksPerTick", 32, 1, 512);
+        BIOME_BLEND_RADIUS = b.comment("Rayon de lissage des couleurs de biome (eau, herbe, feuillage). 0 = désactivé, 2 = équivalent vanilla.")
+                .defineInRange("biomeBlendRadius", 2, 0, 7);
         b.pop();
 
         b.push("sync");

@@ -58,6 +58,9 @@
   "sharedjourney.configuration.engine.tooltip": "Paramètres de performance du moteur de rendu.",
   "sharedjourney.configuration.engine.button": "Configurer",
 
+  "sharedjourney.configuration.biomeBlendRadius": "Rayon de lissage des biomes",
+  "sharedjourney.configuration.biomeBlendRadius.tooltip": "Rayon de lissage des couleurs dépendant du biome (eau, herbe, feuillage). 0 = désactivé, 2 = équivalent vanilla.",
+
   "sharedjourney.configuration.sync": "Synchronisation",
   "sharedjourney.configuration.sync.tooltip": "Paramètres de synchronisation de la carte entre le serveur et les clients.",
   "sharedjourney.configuration.sync.button": "Configurer",

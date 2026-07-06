@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.render;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
+import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
@@ -11,6 +12,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.FoliageColor;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.BiomeManager;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -28,20 +30,27 @@ public final class ChunkColorizer {
     private ChunkColorizer() {}
 
     /** Rendu d'un chunk complet -> tableau 256 pixels ARGB (index = x + z*16). */
-    public static int[] render(ServerLevel level, ChunkAccess chunk, MapLayer layer, int caveBand) {
+    public static int[] render(ServerLevel level, ChunkAccess chunk, ChunkAccess[] neighbors,
+                               MapLayer layer, int caveBand) {
         int[] out = new int[256];
         ChunkPos cp = chunk.getPos();
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        // Zoom de biomes du jeu (frontières irrégulières bloc par bloc), branché
+        // sur le chunk ET ses voisins : sûr depuis un thread de rendu, et fidèle
+        // jusqu'aux bordures. Sans lui, les biomes apparaissent en patchs carrés
+        // de 4x4 blocs à bords droits.
+        BiomeManager zoom = new BiomeManager(neighborSource(chunk, neighbors),
+                BiomeManager.obfuscateSeed(level.getSeed()));
 
         for (int lx = 0; lx < 16; lx++) {
             for (int lz = 0; lz < 16; lz++) {
                 int wx = cp.getMinBlockX() + lx;
                 int wz = cp.getMinBlockZ() + lz;
                 int argb = switch (layer) {
-                    case DAY   -> renderSurface(level, chunk, pos, wx, wz, false);
-                    case NIGHT -> renderSurface(level, chunk, pos, wx, wz, true);
+                    case DAY   -> renderSurface(level, chunk, zoom, pos, wx, wz, false);
+                    case NIGHT -> renderSurface(level, chunk, zoom, pos, wx, wz, true);
                     case TOPO  -> renderTopo(level, chunk, pos, wx, wz);
-                    case BIOME -> renderBiome(level, chunk, wx, wz);
+                    case BIOME -> renderBiome(level, zoom, pos, wx, wz);
                     case CAVE  -> renderCave(level, chunk, pos, wx, wz, caveBand);
                 };
                 out[lx + lz * 16] = argb;
@@ -50,9 +59,33 @@ public final class ChunkColorizer {
         return out;
     }
 
+    /**
+     * Source de biomes couvrant le chunk et ses 8 voisins (index 3x3, [4] =
+     * centre). Le zoom de biomes lit jusqu'à une cellule au-delà du bloc : sans
+     * les voisins, les frontières seraient déformées le long des bords de chunk.
+     * Un voisin absent retombe sur le chunk central (bord approximé, corrigé au
+     * prochain re-rendu).
+     */
+    private static BiomeManager.NoiseBiomeSource neighborSource(ChunkAccess chunk, ChunkAccess[] neighbors) {
+        ChunkPos cp = chunk.getPos();
+        return (qx, qy, qz) -> {
+            int dx = (qx >> 2) - cp.x;
+            int dz = (qz >> 2) - cp.z;
+            ChunkAccess owner = chunk;
+            if (dx >= -1 && dx <= 1 && dz >= -1 && dz <= 1) {
+                ChunkAccess neighbor = neighbors[(dx + 1) + (dz + 1) * 3];
+                if (neighbor != null) {
+                    owner = neighbor;
+                }
+            }
+
+            return owner.getNoiseBiome(qx, qy, qz);
+        };
+    }
+
     // ------------------------------------------------------------------ DAY / NIGHT
 
-    private static int renderSurface(ServerLevel level, ChunkAccess chunk,
+    private static int renderSurface(ServerLevel level, ChunkAccess chunk, BiomeManager zoom,
                                      BlockPos.MutableBlockPos pos, int wx, int wz, boolean night) {
         int y = surfaceY(chunk, wx, wz);
         if (y <= chunk.getMinBuildHeight()) {
@@ -68,9 +101,8 @@ public final class ChunkColorizer {
             pos.set(wx, y, wz);
             state = chunk.getBlockState(pos);
         }
-        Biome biome = chunk.getNoiseBiome(wx >> 2, y >> 2, wz >> 2).value();
-
-        // Eau : couleur du biome assombrie selon la profondeur.
+        // Eau : couleur du biome (lissée entre biomes voisins) assombrie selon
+        // la profondeur.
         if (!state.getFluidState().isEmpty()) {
             int depth = 0;
             while (y - depth > chunk.getMinBuildHeight()
@@ -79,12 +111,12 @@ public final class ChunkColorizer {
                 depth++;
             }
             float dark = Math.max(0.35f, 1.0f - depth * 0.035f);
-            int base = biome.getWaterColor() & 0xFFFFFF;
+            int base = blendedColor(zoom, wx, y, wz, (b, x, z) -> b.getWaterColor());
             int rgb = scaleRgb(base, dark);
             return night ? applyNight(level, pos.set(wx, y + 1, wz), rgb) : (0xFF000000 | rgb);
         }
 
-        int base = tintedBaseColor(level, state, biome, pos, wx, wz);
+        int base = tintedBaseColor(level, state, zoom, pos, wx, y, wz);
 
         // Ombrage de pente : compare la hauteur avec le voisin nord (comme un relief).
         int yNorth = surfaceY(level, chunk, wx, wz - 1);
@@ -104,10 +136,10 @@ public final class ChunkColorizer {
      * température/précipitations des colormaps (vérifié proche des valeurs
      * réelles : plaines ≈ 0x8CBD57 pour 0x91BD59).
      */
-    private static int tintedBaseColor(ServerLevel level, BlockState state, Biome biome,
-                                       BlockPos pos, int wx, int wz) {
+    private static int tintedBaseColor(ServerLevel level, BlockState state, BiomeManager zoom,
+                                       BlockPos pos, int wx, int y, int wz) {
         if (isGrassTinted(state)) {
-            return grassColor(biome, wx, wz);
+            return blendedColor(zoom, wx, y, wz, ChunkColorizer::grassColor);
         }
         if (state.is(BlockTags.LEAVES) || state.is(Blocks.VINE)) {
             // Essences à teinte fixe (comme vanilla), sinon feuillage du biome.
@@ -122,7 +154,7 @@ public final class ChunkColorizer {
                     || state.is(Blocks.FLOWERING_AZALEA_LEAVES)) {
                 tint = -1; // texture non teintée
             } else {
-                tint = foliageColor(biome);
+                tint = blendedColor(zoom, wx, y, wz, (b, x, z) -> foliageColor(b));
             }
 
             // Textures de feuilles sombres : teinte atténuée.
@@ -238,11 +270,49 @@ public final class ChunkColorizer {
         return 0xFF000000 | rgb;
     }
 
+    /** Échantillonneur de couleur dépendant du biome à une position donnée. */
+    @FunctionalInterface
+    private interface BiomeColorSampler {
+        int colorAt(Biome biome, int wx, int wz);
+    }
+
+    /**
+     * Couleur moyennée sur les blocs voisins (équivalent du lissage de biomes
+     * du client vanilla) : adoucit les frontières entre biomes au lieu d'un
+     * bord franc. Le rayon vient de la config serveur (biomeBlendRadius,
+     * 0 = désactivé, 2 = équivalent vanilla).
+     */
+    private static int blendedColor(BiomeManager zoom, int wx, int y, int wz, BiomeColorSampler sampler) {
+        int radius = ServerConfig.BIOME_BLEND_RADIUS.get();
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        if (radius <= 0) {
+            return sampler.colorAt(zoom.getBiome(p.set(wx, y, wz)).value(), wx, wz) & 0xFFFFFF;
+        }
+
+        int r = 0;
+        int g = 0;
+        int b = 0;
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                Biome biome = zoom.getBiome(p.set(wx + dx, y, wz + dz)).value();
+                int c = sampler.colorAt(biome, wx + dx, wz + dz) & 0xFFFFFF;
+                r += (c >>> 16) & 0xFF;
+                g += (c >>> 8) & 0xFF;
+                b += c & 0xFF;
+            }
+        }
+
+        int samples = (2 * radius + 1) * (2 * radius + 1);
+        return ((r / samples) << 16) | ((g / samples) << 8) | (b / samples);
+    }
+
     // ------------------------------------------------------------------ BIOME
 
-    private static int renderBiome(ServerLevel level, ChunkAccess chunk, int wx, int wz) {
-        // getNoiseBiome (et pas level.getBiome) : sûr depuis un thread de rendu.
-        Holder<Biome> biome = chunk.getNoiseBiome(wx >> 2, level.getSeaLevel() >> 2, wz >> 2);
+    private static int renderBiome(ServerLevel level, BiomeManager zoom,
+                                   BlockPos.MutableBlockPos pos, int wx, int wz) {
+        // Zoom BiomeManager branché sur le chunk (et pas level.getBiome) :
+        // sûr depuis un thread de rendu, frontières bloc par bloc comme en jeu.
+        Holder<Biome> biome = zoom.getBiome(pos.set(wx, level.getSeaLevel(), wz));
         // Couleur d'herbe si le biome en définit une, sinon couleur déterministe
         // dérivée de l'identifiant du biome (stable entre serveur et clients).
         var effects = biome.value().getSpecialEffects();

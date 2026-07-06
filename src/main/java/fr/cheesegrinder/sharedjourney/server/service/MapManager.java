@@ -15,6 +15,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
 
@@ -196,11 +197,26 @@ public final class MapManager {
 
     /** Soumet le rendu d'un chunk résolu au pool de workers. */
     private void submitRender(ServerLevel level, ChunkAccess chunk) {
+        // Voisinage 3x3 (biomes uniquement, statut BIOMES suffit, jamais de
+        // génération) : le zoom de biomes du jeu lit jusqu'à une cellule au-delà
+        // du chunk, il faut donc les voisins pour des frontières fidèles jusqu'au
+        // bord. Résolu ici, sur le main thread ; un voisin absent sera approximé
+        // par le chunk central dans ChunkColorizer.
+        ChunkPos cp = chunk.getPos();
+        ChunkAccess[] neighbors = new ChunkAccess[9];
+        for (int dz = -1; dz <= 1; dz++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                neighbors[(dx + 1) + (dz + 1) * 3] = level.getChunkSource()
+                        .getChunk(cp.x + dx, cp.z + dz, ChunkStatus.BIOMES, false);
+            }
+        }
+        neighbors[4] = chunk;
+
         tasksInFlight.incrementAndGet();
         try {
             workers.submit(() -> {
                 try {
-                    renderChunk(level, chunk);
+                    renderChunk(level, chunk, neighbors);
                 } catch (Throwable t) {
                     LOGGER.error("Echec de rendu du chunk {},{} en {}",
                             chunk.getPos().x, chunk.getPos().z, level.dimension().location(), t);
@@ -214,7 +230,7 @@ public final class MapManager {
     }
 
     /** Rendu de toutes les couches actives d'un chunk (exécuté sur un worker). */
-    private void renderChunk(ServerLevel level, ChunkAccess chunk) {
+    private void renderChunk(ServerLevel level, ChunkAccess chunk, ChunkAccess[] neighbors) {
         EnumSet<MapLayer> layers = ServerConfig.layersFor(level.dimension());
         ChunkPos cp = chunk.getPos();
         List<RegionKey> touched = new ArrayList<>(layers.size() + 4);
@@ -230,13 +246,13 @@ public final class MapManager {
                         continue;
                     }
 
-                    int[] pixels = ChunkColorizer.render(level, chunk, layer, band);
+                    int[] pixels = ChunkColorizer.render(level, chunk, neighbors, layer, band);
                     writeChunk(key, cp.x, cp.z, pixels);
                     touched.add(key);
                     caveUnlocks.remove(unlock);
                 }
             } else {
-                int[] pixels = ChunkColorizer.render(level, chunk, layer, 0);
+                int[] pixels = ChunkColorizer.render(level, chunk, neighbors, layer, 0);
                 RegionKey key = RegionKey.of(level.dimension(), layer, 0, cp.x, cp.z);
                 writeChunk(key, cp.x, cp.z, pixels);
                 touched.add(key);
