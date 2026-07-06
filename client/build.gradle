@@ -1,9 +1,0 @@
-// Rendu GUI/minimap, cache local, inputs, bridge JourneyMap.
-dependencies {
-    api project(':common')
-
-    // Bridge JourneyMap : dépendance de COMPILATION uniquement (facultative).
-    // Le bridge est écrit en réflexion et fonctionne sans cette dépendance ;
-    // elle n'est utile que pour du débogage typé. Décommenter si besoin :
-    // compileOnly "info.journeymap:journeymap-api-neoforge:${rootProject.journeymap_api_version}"
-}

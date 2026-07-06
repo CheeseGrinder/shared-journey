@@ -1,42 +1,138 @@
-// Racine : conventions communes aux modules. Chaque module applique ModDevGradle
-// pour compiler contre NeoForge ; seul :mod définit les runs et produit le jar final.
+// Module unique : tout le mod (API, cœur partagé, moteur serveur, client, entrées @Mod)
+// vit dans src/main. Seul :jmshim reste un sous-projet (jar compagnon séparé qui
+// déclare le modId "journeymap" — ne peut pas être fusionné dans le jar principal).
 plugins {
-    id 'net.neoforged.moddev' version '2.0.141' apply false
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.141'
 }
 
-subprojects {
-    apply plugin: 'java-library'
+base { archivesName = mod_id }
+version = mod_version
+group = mod_group_id
 
-    version = rootProject.mod_version
-    group = rootProject.mod_group_id
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-    java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+repositories {
+    maven { name = 'JourneyMap (Public)'; url = 'https://jm.gserv.me/repository/maven-public/' }
+    maven { name = 'BlameJared (JourneyMap API mirror)'; url = 'https://maven.blamejared.com' }
+    // Chaîne de dépendances Create (tests de compat) — wiki officiel :
+    // https://wiki.createmod.net/developers/depend-on-create/neoforge-1.21.1
+    maven { name = 'CreateMod'; url = 'https://maven.createmod.net' }          // Create, Ponder, Flywheel
+    maven { name = 'IThundxr (Registrate)'; url = 'https://maven.ithundxr.dev/snapshots' }
+    // Tous les projets Modrinth sont servis en Maven (mods de test de compat).
+    // ATTENTION : pas de dépendances transitives — chaque mod requis doit être listé.
+    exclusiveContent {
+        forRepository { maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' } }
+        filter { includeGroup 'maven.modrinth' }
+    }
+}
 
-    repositories {
-        maven { name = 'JourneyMap (Public)'; url = 'https://jm.gserv.me/repository/maven-public/' }
-        maven { name = 'BlameJared (JourneyMap API mirror)'; url = 'https://maven.blamejared.com' }
-        // Chaîne de dépendances Create (tests de compat) — wiki officiel :
-        // https://wiki.createmod.net/developers/depend-on-create/neoforge-1.21.1
-        maven { name = 'CreateMod'; url = 'https://maven.createmod.net' }          // Create, Ponder, Flywheel
-        maven { name = 'IThundxr (Registrate)'; url = 'https://maven.ithundxr.dev/snapshots' }
-        // Tous les projets Modrinth sont servis en Maven (mods de test de compat).
-        // ATTENTION : pas de dépendances transitives — chaque mod requis doit être listé.
-        exclusiveContent {
-            forRepository { maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' } }
-            filter { includeGroup 'maven.modrinth' }
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// 'localRuntime' : dépendances présentes UNIQUEMENT dans les runs de dev
+// (tests de compatibilité), jamais publiées ni exigées par le mod final.
+configurations {
+    localRuntime
+    runtimeClasspath.extendsFrom localRuntime
+}
+
+dependencies {
+    implementation 'com.google.code.gson:gson:2.10.1' // fourni par Minecraft au runtime
+
+    // Bridge JourneyMap : dépendance de COMPILATION uniquement (facultative).
+    // Le bridge est écrit en réflexion et fonctionne sans cette dépendance ;
+    // elle n'est utile que pour du débogage typé. Décommenter si besoin :
+    // compileOnly "info.journeymap:journeymap-api-neoforge:${journeymap_api_version}"
+
+    // ------------------------------------------------------------------
+    // MODS DE TEST DE COMPATIBILITÉ (dev uniquement, via le Maven Modrinth).
+    // Le Maven Modrinth n'a pas de dépendances transitives : les libs
+    // requises sont listées explicitement.
+    // ------------------------------------------------------------------
+
+    // Waystones : crée des waypoints via l'API JourneyMap -> teste le bridge.
+    localRuntime 'maven.modrinth:waystones:21.1.30+neoforge-1.21.1'
+    localRuntime 'maven.modrinth:balm:21.0.59+neoforge-1.21.1' // requis par Waystones
+
+    // Chunky : prégénération de chunks -> teste /sj admin regen full sur un
+    // monde prégénéré. ID de version Modrinth (LuFhm4eU = Chunky-NeoForge
+    // 1.4.23) car le numéro "1.4.23" existe aussi en Fabric/Forge et le
+    // Maven Modrinth ne saurait pas choisir le bon jar.
+    localRuntime 'maven.modrinth:chunky:LuFhm4eU'
+
+    // Create: Rock & Stone : overlay carte quand un gisement est découvert
+    // -> teste la voie "overlays" du bridge (voir README §Bridge : les
+    // overlays sont pour l'instant journalisés, pas rendus).
+    localRuntime 'maven.modrinth:create-rns:1.0.2-1.21.1-6'
+
+    // Chaîne officielle de Create 6.0.10 pour NeoForge 1.21.1 (wiki Create) :
+    // le jar "slim" n'embarque pas ses libs, d'où Ponder/Flywheel/Registrate.
+    localRuntime("com.simibubi.create:create-${minecraft_version}:${create_version}:slim") { transitive = false }
+    localRuntime "net.createmod.ponder:ponder-neoforge:${ponder_version}+mc${minecraft_version}"
+    localRuntime "dev.engine-room.flywheel:flywheel-neoforge-${minecraft_version}:${flywheel_version}"
+    localRuntime "com.tterrag.registrate:Registrate:${registrate_version}"
+
+    // Classes de l'API JourneyMap au runtime : indispensables pour que les
+    // classes plugin des mods tiers (Waystones/RNS) se chargent quand le
+    // vrai JourneyMap est ABSENT (scénario "bridge SharedJourney").
+    localRuntime "info.journeymap:journeymap-api-neoforge:${journeymap_api_version}"
+
+    // Scénario A/B avec le VRAI JourneyMap (le bridge doit alors se
+    // désactiver tout seul) : décommenter, et NE PAS mettre le jmshim.
+    // localRuntime 'maven.modrinth:journeymap:<version 1.21.1 neoforge>'
+}
+
+neoForge {
+    version = neo_version
+
+    runs {
+        client_1 {
+            client()
+            programArguments.addAll '--username', 'Dev'
+            gameDirectory = file("run/client-1")
+        }
+        client_2 {
+            client()
+            programArguments.addAll '--username', 'Dev2'
+            gameDirectory = file("run/client-2")
+        }
+        server {
+            server()
+            gameDirectory = file("run/server")
+            programArgument '--nogui'
+        }
+        configureEach {
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.INFO
         }
     }
 
-    tasks.withType(JavaCompile).configureEach {
-        options.encoding = 'UTF-8'
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
     }
 }
 
-// Modules de code compilés contre NeoForge (pas de jar mod autonome).
-configure([project(':api'), project(':common'), project(':server'), project(':client')]) {
-    apply plugin: 'net.neoforged.moddev'
-    neoForge {
-        version = rootProject.neo_version
-        // Pas de run ici : les runs vivent dans :mod
-    }
+// Expansion des métadonnées (reprise du template)
+var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    var replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version            : neo_version,
+            neo_version_range      : neo_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from 'src/main/templates'
+    into 'build/generated/sources/modMetadata'
 }
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata

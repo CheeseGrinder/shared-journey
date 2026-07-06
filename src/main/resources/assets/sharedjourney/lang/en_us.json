@@ -27,6 +27,7 @@
   "sharedjourney.coords.chat": "Position: %s, %s",
   "sharedjourney.coords.open": "Click to open the map here",
   "sharedjourney.regen.bossbar": "Map regeneration: %s/%s chunks",
+  "sharedjourney.regen.scan": "Map regeneration: scanning region files…",
 
   "sharedjourney.configuration.title": "Shared Journey Configs",
   "sharedjourney.configuration.section.sharedjourney.client.toml": "Client (minimap, radar, cache)",

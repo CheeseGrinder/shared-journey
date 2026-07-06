@@ -1,3 +1,0 @@
-// Module API : interfaces publiques + événements NeoForge custom.
-// Aucune logique métier — les autres mods peuvent dépendre de ce module.
-dependencies {}

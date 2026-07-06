@@ -13,34 +13,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build Commands
 
 ```bash
-./gradlew :mod:build          # Build the main mod JAR → mod/build/libs/sharedjourney-1.0.0.jar
-./gradlew :mod:runClient      # Dev client run (username: Dev)
-./gradlew :mod:runClient_2    # Second dev client for multiplayer testing (username: Dev2)
-./gradlew :mod:runServer      # Dedicated dev server (--nogui)
+./gradlew build               # Build the mod JAR → build/libs/sharedjourney-1.0.0.jar
+./gradlew runClient_1         # Dev client run (username: Dev)
+./gradlew runClient_2         # Second dev client for multiplayer testing (username: Dev2)
+./gradlew runServer           # Dedicated dev server (--nogui)
 ./gradlew :jmshim:build       # Optional JourneyMap shim JAR
 ```
 
 There are no unit or integration tests.
 
-## Module Architecture
+## Project Structure
 
-The project is split into 6 Gradle subprojects with a strict dependency chain:
+Single Gradle module at the root (`src/main/java`, `src/main/resources`, `src/main/templates`), plus one subproject:
 
-```
-api ← common ← server ─┐
-                       ├─ mod
-              client ──┘
-jmshim (standalone)
-```
+| Location  | Role                                                                             |
+|-----------|----------------------------------------------------------------------------------|
+| `...sharedjourney.api`    | Public interfaces: `Waypoint`, `MapLayer`, `ChunkLayerRenderer`, NeoForge events |
+| `...sharedjourney.common` | Shared data: `RegionKey`, `RegionIndex`, `Payloads` (network packets), configs   |
+| `...sharedjourney.server` | Async rendering engine: `ChunkColorizer`, `MapManager`, `SyncService`            |
+| `...sharedjourney.client` | Client cache, minimap/fullmap GUI, waypoint store, JourneyMap bridge             |
+| `...sharedjourney`        | `@Mod` entry points (`SharedJourney`, `SharedJourneyClient`)                     |
+| `jmshim/` (subproject)    | Declares modId `journeymap` (empty mod) so JourneyMap integrations activate — MUST stay a separate JAR |
 
-| Module   | Role                                                                             |
-|----------|----------------------------------------------------------------------------------|
-| `api`    | Public interfaces: `Waypoint`, `MapLayer`, `ChunkLayerRenderer`, NeoForge events |
-| `common` | Shared data: `RegionKey`, `RegionIndex`, `Payloads` (network packets), configs   |
-| `server` | Async rendering engine: `ChunkColorizer`, `MapManager`, `SyncService`            |
-| `client` | Client cache, minimap/fullmap GUI, waypoint store, JourneyMap bridge             |
-| `mod`    | Assembly: `@Mod` entry points, metadata, dev run configs                         |
-| `jmshim` | Declares modId `journeymap` (empty mod) so JourneyMap integrations activate      |
+The packages keep the layering discipline of the former multi-module split: `api` has no dependencies, `common` depends only on `api`, `server` and `client` depend on `common` and never on each other.
 
 ## Key Architectural Patterns
 
@@ -70,6 +65,6 @@ jmshim (standalone)
 
 ## Entry Points
 
-- `mod/src/main/java/.../SharedJourney.java` — Common `@Mod` entry point (server + client). Registers configs, network payloads, server-side handlers.
-- `mod/src/main/java/.../SharedJourneyClient.java` — Client-only `@Mod` entry point. Registers client config, in-game config screen, client-side handlers, calls `JourneyMapBridge.init()`.
-- `mod/src/main/templates/META-INF/neoforge.mods.toml` — Mod metadata template (values expanded from `gradle.properties` at build time).
+- `src/main/java/.../SharedJourney.java` — Common `@Mod` entry point (server + client). Registers configs, network payloads, server-side handlers.
+- `src/main/java/.../SharedJourneyClient.java` — Client-only `@Mod` entry point. Registers client config, in-game config screen, client-side handlers, calls `JourneyMapBridge.init()`.
+- `src/main/templates/META-INF/neoforge.mods.toml` — Mod metadata template (values expanded from `gradle.properties` at build time).

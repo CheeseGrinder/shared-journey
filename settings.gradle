@@ -10,4 +10,5 @@ plugins {
 }
 
 rootProject.name = 'sharedjourney'
-include 'api', 'common', 'server', 'client', 'mod', 'jmshim'
+// jmshim reste un sous-projet : jar compagnon optionnel, séparé du mod principal.
+include 'jmshim'

@@ -29,6 +29,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -142,16 +143,42 @@ public final class MapManager {
             if (level == null) continue;
             ChunkAccess chunk = level.getChunkSource().getChunkNow(q.cx(), q.cz());
             if (chunk == null) continue; // déchargé entre-temps
-            tasksInFlight.incrementAndGet();
+            submitRender(level, chunk);
+        }
+    }
+
+    /**
+     * Rendu immédiat d'un chunk déjà résolu (référence issue d'un événement).
+     * Indispensable pour les chunks fraîchement générés (prégénération
+     * Chunky) : ils sont déchargés sitôt générés, une résolution différée au
+     * tick suivant (getChunkNow) les manquerait systématiquement. Si le pool
+     * est saturé, on retombe sur la file classique plutôt que de retenir en
+     * mémoire un nombre illimité de chunks déchargés.
+     */
+    public void renderNow(ServerLevel level, ChunkAccess chunk) {
+        if (tasksInFlight.get() < workerCount * 8) {
+            submitRender(level, chunk);
+        } else {
+            enqueueChunk(level, chunk.getPos().x, chunk.getPos().z);
+        }
+    }
+
+    /** Soumet le rendu d'un chunk résolu au pool de workers. */
+    private void submitRender(ServerLevel level, ChunkAccess chunk) {
+        tasksInFlight.incrementAndGet();
+        try {
             workers.submit(() -> {
                 try {
                     renderChunk(level, chunk);
                 } catch (Throwable t) {
-                    LOGGER.error("Echec de rendu du chunk {},{} en {}", q.cx(), q.cz(), q.dim().location(), t);
+                    LOGGER.error("Echec de rendu du chunk {},{} en {}",
+                            chunk.getPos().x, chunk.getPos().z, level.dimension().location(), t);
                 } finally {
                     tasksInFlight.decrementAndGet();
                 }
             });
+        } catch (RejectedExecutionException e) {
+            tasksInFlight.decrementAndGet(); // arrêt du serveur en cours
         }
     }
 

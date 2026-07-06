@@ -2,4 +2,9 @@
 // les mods qui testent ModList.isLoaded("journeymap") avant d'activer leur
 // intégration. NE PAS l'installer en même temps que le vrai JourneyMap.
 plugins { id 'java' }
+
+version = rootProject.mod_version
+group = rootProject.mod_group_id
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
 jar { archiveBaseName = 'sharedjourney-jmshim' }

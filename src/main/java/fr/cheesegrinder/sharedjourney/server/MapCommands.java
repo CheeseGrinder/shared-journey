@@ -133,6 +133,7 @@ public final class MapCommands {
         admin.then(layerCmd);
 
         // regen : re-rend toute la carte connue (progression en boss bar)
+        // regen full : rend TOUS les chunks générés sur disque (mondes prégénérés)
         admin.then(Commands.literal("regen")
                 .executes(ctx -> {
                     if (RegenService.isRunning()) {
@@ -149,6 +150,20 @@ public final class MapCommands {
                             "Régénération lancée : " + total + " chunk(s) à re-rendre"), true);
                     return total;
                 })
+                .then(Commands.literal("full").executes(ctx -> {
+                    if (RegenService.isRunning()) {
+                        ctx.getSource().sendFailure(Component.literal(
+                                "Une régénération est déjà en cours (/sj admin regen cancel pour l'annuler)"));
+                        return 0;
+                    }
+                    if (!RegenService.startFull(ctx.getSource().getServer())) {
+                        ctx.getSource().sendFailure(Component.literal("Moteur de carte indisponible"));
+                        return 0;
+                    }
+                    ctx.getSource().sendSuccess(() -> Component.literal(
+                            "Scan des fichiers de région lancé — le rendu démarre dès la fin du scan"), true);
+                    return 1;
+                }))
                 .then(Commands.literal("cancel").executes(ctx -> {
                     if (!RegenService.isRunning()) {
                         ctx.getSource().sendFailure(Component.literal("Aucune régénération en cours"));

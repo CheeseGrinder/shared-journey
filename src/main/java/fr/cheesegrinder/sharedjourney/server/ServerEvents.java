@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModLoader;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -119,7 +120,13 @@ public final class ServerEvents {
             }
             return;
         }
-        if (event.isNewChunk() || !mgr.isChunkRendered(level, pos.x, pos.z)) {
+        if (event.isNewChunk() && event.getChunk() instanceof LevelChunk fullChunk) {
+            // Chunk fraîchement généré (exploration ou prégénération Chunky) :
+            // rendu immédiat depuis la référence de l'événement. Les chunks
+            // prégénérés sont déchargés sitôt générés — une résolution différée
+            // au tick suivant (getChunkNow) les manquerait systématiquement.
+            mgr.renderNow(level, fullChunk);
+        } else if (event.isNewChunk() || !mgr.isChunkRendered(level, pos.x, pos.z)) {
             mgr.enqueueChunk(level, pos.x, pos.z);
         }
     }
