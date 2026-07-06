@@ -3,6 +3,8 @@ package fr.cheesegrinder.sharedjourney.client.gui;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.event.ClientSetupEvents;
+import fr.cheesegrinder.sharedjourney.client.render.EntityDots;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
@@ -10,9 +12,12 @@ import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -21,19 +26,27 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.animal.Animal;
-import net.minecraft.world.entity.monster.Enemy;
-import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 
+import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import org.lwjgl.glfw.GLFW;
+
 import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Supplier;
 
 /**
  * Carte plein écran (spec §6.2) :
@@ -48,6 +61,18 @@ public class FullMapScreen extends Screen {
     private static final long REQUEST_COOLDOWN_MS = 5_000;
     private static final int WAYPOINT_CLICK_PX = 6;
 
+    /**
+     * Échelle du zoom : puissances de 2 affichées comme JourneyMap
+     * (libellé = zoom * 2048, de 64 à 16384). La borne basse est limitée pour
+     * borner le nombre de régions parcourues par frame.
+     */
+    private static final float ZOOM_MIN = 64f / 2048f;
+
+    private static final float ZOOM_MAX = 16384f / 2048f;
+
+    /** Légende des touches (Show Keys), conservée le temps de la session. */
+    private static boolean showKeys = false;
+
     private double centerX;
     private double centerZ;
     private float zoom = 1.0f; // pixels écran par bloc
@@ -60,6 +85,16 @@ public class FullMapScreen extends Screen {
     private Button bandPlus;
     /** Boutons du menu contextuel (clic droit), retirés au prochain clic. */
     private final List<Button> contextButtons = new ArrayList<>();
+
+    // Barre d'actions du haut : bouton par couche + toggles avec leur état.
+    private final Map<MapLayer, IconButton> layerIcons = new EnumMap<>(MapLayer.class);
+    private final Map<IconButton, Supplier<Boolean>> toggleIcons = new LinkedHashMap<>();
+
+    // Recherche de position (barre de gauche).
+    private EditBox locateX;
+    private EditBox locateZ;
+    private Button locateGo;
+    private boolean locateOpen;
 
     // Throttle des requêtes d'infos de survol (colonne + horodatage).
     private long lastInfoRequestKey = Long.MIN_VALUE;
@@ -104,7 +139,141 @@ public class FullMapScreen extends Screen {
                         .bounds(width - 86, height - 26, 80, 20)
                         .build());
         contextButtons.clear(); // init() recrée tous les widgets (resize)
+        buildTopToolbar();
+        buildLeftToolbar();
         updateBandButtons();
+        refreshToolbar();
+    }
+
+    // ------------------------------------------------------------------ barres d'actions
+
+    /** Barre du haut : couches, toggles d'affichage, et Close à droite. */
+    private void buildTopToolbar() {
+        layerIcons.clear();
+        toggleIcons.clear();
+        int size = 20;
+        int step = size + 2;
+        int total = 5 * step + 6 + 7 * step - 2;
+        int x = (width - total) / 2;
+        List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
+
+        x = addLayerIcon(x, step, MapLayer.DAY, Items.DAYLIGHT_DETECTOR, allowed);
+        x = addLayerIcon(x, step, MapLayer.NIGHT, Items.CLOCK, allowed);
+        x = addLayerIcon(x, step, MapLayer.BIOME, Items.OAK_SAPLING, allowed);
+        x = addLayerIcon(x, step, MapLayer.TOPO, Items.MAP, allowed);
+        x = addLayerIcon(x, step, MapLayer.CAVE, Items.TORCH, allowed);
+        x += 6;
+
+        x = addToggleIcon(x, step, Items.LANTERN, "sharedjourney.action.show_cave", ClientConfig.SHOW_CAVE);
+        x = addToggleIcon(x, step, Items.ZOMBIE_HEAD, "sharedjourney.action.show_mobs", ClientConfig.RADAR_HOSTILE);
+        x = addToggleIcon(x, step, Items.PORKCHOP, "sharedjourney.action.show_animals", ClientConfig.RADAR_PASSIVE);
+        x = addToggleIcon(x, step, Items.BONE, "sharedjourney.action.show_pets", ClientConfig.RADAR_PETS);
+        x = addToggleIcon(x, step, Items.EMERALD, "sharedjourney.action.show_villagers", ClientConfig.RADAR_VILLAGERS);
+        x = addToggleIcon(x, step, Items.IRON_BARS, "sharedjourney.action.show_grid", ClientConfig.SHOW_GRID);
+
+        IconButton keys = addIcon(x, 6, Items.WRITABLE_BOOK, "sharedjourney.action.show_keys", b -> {
+            showKeys = !showKeys;
+            refreshToolbar();
+        });
+        toggleIcons.put(keys, () -> showKeys);
+
+        addIcon(width - 26, 6, Items.BARRIER, "sharedjourney.action.close", b -> onClose());
+    }
+
+    /** Barre de gauche : recherche de position, suivi du joueur, zoom. */
+    private void buildLeftToolbar() {
+        int y = 40;
+        addIcon(6, y, Items.COMPASS, "sharedjourney.action.locate", b -> {
+            locateOpen = !locateOpen;
+            updateLocateWidgets();
+        });
+        locateX = new EditBox(font, 32, y + 1, 56, 18, Component.literal("X"));
+        locateX.setHint(Component.literal("x:"));
+        locateZ = new EditBox(font, 92, y + 1, 56, 18, Component.literal("Z"));
+        locateZ.setHint(Component.literal("z:"));
+        locateGo = Button.builder(Component.literal("→"), b -> doLocate())
+                .bounds(152, y, 20, 20)
+                .build();
+        addRenderableWidget(locateX);
+        addRenderableWidget(locateZ);
+        addRenderableWidget(locateGo);
+        updateLocateWidgets();
+
+        addIcon(6, y + 24, Items.ENDER_EYE, "sharedjourney.action.follow", b -> centerOnPlayer());
+        addRenderableWidget(Button.builder(Component.literal("+"), b -> zoomStep(1, width / 2.0, height / 2.0))
+                .bounds(6, y + 48, 20, 20)
+                .tooltip(Tooltip.create(Component.translatable("sharedjourney.action.zoom_in")))
+                .build());
+        addRenderableWidget(Button.builder(Component.literal("-"), b -> zoomStep(-1, width / 2.0, height / 2.0))
+                .bounds(6, y + 72, 20, 20)
+                .tooltip(Tooltip.create(Component.translatable("sharedjourney.action.zoom_out")))
+                .build());
+    }
+
+    private IconButton addIcon(int x, int y, Item icon, String tooltipKey, Button.OnPress press) {
+        IconButton b = new IconButton(x, y, 20, new ItemStack(icon), Component.translatable(tooltipKey), press);
+        addRenderableWidget(b);
+        return b;
+    }
+
+    private int addLayerIcon(int x, int step, MapLayer target, Item icon, List<MapLayer> allowed) {
+        IconButton b = addIcon(
+                x,
+                6,
+                icon,
+                "sharedjourney.action." + target.name().toLowerCase(Locale.ROOT),
+                btn -> selectLayer(target));
+        b.active = allowed.isEmpty() || allowed.contains(target);
+        layerIcons.put(target, b);
+        return x + step;
+    }
+
+    private int addToggleIcon(int x, int step, Item icon, String tooltipKey, ModConfigSpec.BooleanValue value) {
+        IconButton b = addIcon(x, 6, icon, tooltipKey, btn -> {
+            value.set(!value.get());
+            refreshToolbar();
+        });
+        toggleIcons.put(b, value::get);
+        return x + step;
+    }
+
+    private void selectLayer(MapLayer target) {
+        layer = target;
+        MinimapRenderer.setLayer(target);
+        layerButton.setMessage(layerLabel());
+        updateBandButtons();
+        refreshToolbar();
+    }
+
+    private void refreshToolbar() {
+        layerIcons.forEach((l, b) -> b.setSelected(layer == l));
+        toggleIcons.forEach((b, state) -> b.setSelected(state.get()));
+    }
+
+    private void updateLocateWidgets() {
+        locateX.setVisible(locateOpen);
+        locateZ.setVisible(locateOpen);
+        locateGo.visible = locateOpen;
+    }
+
+    private void doLocate() {
+        try {
+            centerX = Integer.parseInt(locateX.getValue().trim()) + 0.5;
+            centerZ = Integer.parseInt(locateZ.getValue().trim()) + 0.5;
+        } catch (NumberFormatException ignored) {
+            // Entrée invalide : on ne bouge pas.
+        }
+    }
+
+    /** Zoom par pas de x2 (échelle en puissances de 2), ancré sur un point écran. */
+    private void zoomStep(int direction, double anchorX, double anchorY) {
+        float old = zoom;
+        float target = direction > 0 ? zoom * 2f : zoom / 2f;
+        zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, target));
+        double wx = centerX + (anchorX - width / 2.0) / old;
+        double wz = centerZ + (anchorY - height / 2.0) / old;
+        centerX = wx - (anchorX - width / 2.0) / zoom;
+        centerZ = wz - (anchorY - height / 2.0) / zoom;
     }
 
     private void centerOnPlayer() {
@@ -390,14 +559,19 @@ public class FullMapScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        float old = zoom;
-        zoom = Math.max(0.125f, Math.min(8.0f, zoom * (scrollY > 0 ? 1.25f : 0.8f)));
-        // Zoom centré sur le curseur
-        double wx = centerX + (mouseX - width / 2.0) / old;
-        double wz = centerZ + (mouseY - height / 2.0) / old;
-        centerX = wx - (mouseX - width / 2.0) / zoom;
-        centerZ = wz - (mouseY - height / 2.0) / zoom;
+        zoomStep(scrollY > 0 ? 1 : -1, mouseX, mouseY);
         return true;
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        boolean enter = keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER;
+        if (locateOpen && enter && (locateX.isFocused() || locateZ.isFocused())) {
+            doLocate();
+            return true;
+        }
+
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     // ------------------------------------------------------------------ rendu
@@ -407,38 +581,12 @@ public class FullMapScreen extends Screen {
         renderBackgroundLayers(gg);
         super.render(gg, mouseX, mouseY, partialTick);
 
-        // Infos sous le curseur : coordonnées, biome + bloc de surface (comme
-        // JourneyMap). Chunk chargé localement si possible, sinon infos
-        // demandées au serveur (cache + requête throttlée).
-        int wx = (int) Math.floor(worldX(mouseX));
-        int wz = (int) Math.floor(worldZ(mouseY));
         var mc = Minecraft.getInstance();
-        int infoY = 6;
-        ClientMapCache.HoverInfo info = hoverInfoAt(mc, wx, wz);
-        if (info != null) {
-            gg.drawString(font, wx + ", " + info.y() + ", " + wz, 6, infoY, 0xFFFFFF);
-            infoY += 12;
-            if (!info.biomeId().isEmpty()) {
-                var loc = ResourceLocation.parse(info.biomeId());
-                gg.drawString(
-                        font,
-                        Component.translatable("biome." + loc.getNamespace() + "." + loc.getPath()),
-                        6,
-                        infoY,
-                        0xC0C0FF);
-                infoY += 12;
-            }
-            if (!info.blockId().isEmpty()) {
-                var block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(info.blockId()));
-                gg.drawString(font, block.getName(), 6, infoY, 0xA0E0A0);
-                infoY += 12;
-            }
-        } else {
-            gg.drawString(font, wx + ", " + wz, 6, infoY, 0xFFFFFF);
-            infoY += 12;
+        renderTopInfoBar(gg, mc);
+        renderHoverBar(gg, mc, mouseX, mouseY);
+        if (showKeys) {
+            renderLegend(gg);
         }
-        gg.drawString(font, "zoom x" + String.format("%.2f", zoom), 6, infoY, 0xAAAAAA);
-        gg.drawString(font, Component.translatable("sharedjourney.fullmap.hint"), 6, height - 14, 0x808080);
 
         // Nom du waypoint survolé
         Waypoint hovered = nearestWaypoint(mouseX, mouseY);
@@ -449,6 +597,92 @@ public class FullMapScreen extends Screen {
                             hovered.name() + " (" + hovered.x() + ", " + hovered.y() + ", " + hovered.z() + ")"),
                     mouseX,
                     mouseY);
+        }
+    }
+
+    /** Barre d'infos joueur sous la barre d'actions : pseudo ■ position ■ biome ■ zoom. */
+    private void renderTopInfoBar(GuiGraphics gg, Minecraft mc) {
+        if (mc.player == null || mc.level == null) {
+            return;
+        }
+
+        BlockPos pos = mc.player.blockPosition();
+        String biome = mc.level
+                .getBiome(pos)
+                .unwrapKey()
+                .map(k -> biomeName(k.location().toString()))
+                .orElse("?");
+        String text = mc.player.getGameProfile().getName()
+                + " ■ x: " + pos.getX() + ", z: " + pos.getZ() + ", y: " + pos.getY()
+                + " ■ " + biome
+                + " ■ Zoom: " + Math.round(zoom * 2048);
+        drawInfoBar(gg, text, 30);
+    }
+
+    /** Barre au-dessus des actions du bas : bloc survolé ■ position ■ biome. */
+    private void renderHoverBar(GuiGraphics gg, Minecraft mc, int mouseX, int mouseY) {
+        int wx = (int) Math.floor(worldX(mouseX));
+        int wz = (int) Math.floor(worldZ(mouseY));
+        ClientMapCache.HoverInfo info = hoverInfoAt(mc, wx, wz);
+        if (info == null) {
+            drawInfoBar(gg, "x: " + wx + ", z: " + wz, height - 40);
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        if (!info.blockId().isEmpty()) {
+            var block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(info.blockId()));
+            sb.append(block.getName().getString()).append(" ■ ");
+        }
+        sb.append("x: ").append(wx).append(", z: ").append(wz).append(", y: ").append(info.y());
+        if (!info.biomeId().isEmpty()) {
+            sb.append(" ■ ").append(biomeName(info.biomeId()));
+        }
+        drawInfoBar(gg, sb.toString(), height - 40);
+    }
+
+    /** Nom localisé d'un biome depuis son identifiant "namespace:path". */
+    private String biomeName(String biomeId) {
+        var loc = ResourceLocation.parse(biomeId);
+        return Component.translatable("biome." + loc.getNamespace() + "." + loc.getPath())
+                .getString();
+    }
+
+    /** Ligne de texte centrée sur fond translucide (style JourneyMap). */
+    private void drawInfoBar(GuiGraphics gg, String text, int y) {
+        int w = font.width(text);
+        int x = (width - w) / 2;
+        gg.fill(x - 4, y - 2, x + w + 4, y + 10, 0xA0101010);
+        gg.drawString(font, text, x, y, 0xE0E0E0);
+    }
+
+    /** Légende des contrôles (Show Keys), en bas à droite. */
+    private void renderLegend(GuiGraphics gg) {
+        List<String> lines = new ArrayList<>();
+        for (KeyMapping key : List.of(
+                ClientSetupEvents.OPEN_FULL_MAP,
+                ClientSetupEvents.TOGGLE_MINIMAP,
+                ClientSetupEvents.CYCLE_LAYER,
+                ClientSetupEvents.ZOOM_IN,
+                ClientSetupEvents.ZOOM_OUT)) {
+            lines.add(key.getTranslatedKeyMessage().getString().toUpperCase(Locale.ROOT) + "  "
+                    + Component.translatable(key.getName()).getString());
+        }
+        lines.add(Component.translatable("sharedjourney.legend.drag").getString());
+        lines.add(Component.translatable("sharedjourney.legend.scroll").getString());
+        lines.add(Component.translatable("sharedjourney.legend.left_click").getString());
+        lines.add(Component.translatable("sharedjourney.legend.right_click").getString());
+
+        int maxW = 0;
+        for (String line : lines) {
+            maxW = Math.max(maxW, font.width(line));
+        }
+        int x = width - maxW - 10;
+        int y = height - 44 - lines.size() * 10;
+        gg.fill(x - 4, y - 4, width - 6, y + lines.size() * 10 + 2, 0xA0101010);
+        for (String line : lines) {
+            gg.drawString(font, line, x, y, 0xE0E0E0);
+            y += 10;
         }
     }
 
@@ -505,13 +739,33 @@ public class FullMapScreen extends Screen {
             }
         }
 
-        // Marqueur joueur
-        int px = (int) Math.floor(mc.player.getX());
-        int pz = (int) Math.floor(mc.player.getZ());
-        gg.fill(px - 2, pz - 2, px + 2, pz + 2, 0xFF000000);
-        gg.fill(px - 1, pz - 1, px + 1, pz + 1, 0xFFFF4040);
-
         pose.popPose();
+
+        // Grille de chunks en coordonnées écran (lignes fines de 1 px),
+        // seulement quand un chunk fait au moins quelques pixels.
+        if (ClientConfig.SHOW_GRID.get() && 16 * zoom >= 4f) {
+            int gridColor = 0x38000000;
+            int firstCx = Math.floorDiv((int) Math.floor(worldX(0)), 16);
+            int lastCx = Math.floorDiv((int) Math.ceil(worldX(width)), 16) + 1;
+            for (int gcx = firstCx; gcx <= lastCx; gcx++) {
+                int sx = (int) Math.round(screenX(gcx * 16));
+                gg.fill(sx, 0, sx + 1, height, gridColor);
+            }
+            int firstCz = Math.floorDiv((int) Math.floor(worldZ(0)), 16);
+            int lastCz = Math.floorDiv((int) Math.ceil(worldZ(height)), 16) + 1;
+            for (int gcz = firstCz; gcz <= lastCz; gcz++) {
+                int sy = (int) Math.round(screenY(gcz * 16));
+                gg.fill(0, sy, width, sy + 1, gridColor);
+            }
+        }
+
+        // Flèche du joueur (taille constante quel que soit le zoom).
+        EntityDots.drawPlayerArrow(
+                gg,
+                (float) screenX(mc.player.getX()),
+                (float) screenY(mc.player.getZ()),
+                mc.player.getYRot() + 180f,
+                1.1f);
 
         // Waypoints par-dessus, en coordonnées écran (taille constante quel que soit le zoom)
         for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
@@ -537,14 +791,8 @@ public class FullMapScreen extends Screen {
             int radius = Math.min(ClientConfig.RADAR_RADIUS.get(), ClientMapCache.radarMaxRadius);
             AABB box = mc.player.getBoundingBox().inflate(radius, 32, radius);
             for (Entity e : mc.level.getEntities(mc.player, box)) {
-                int color;
-                if (e instanceof Player && ClientConfig.RADAR_PLAYERS.get()) {
-                    color = 0xFFFFFFFF;
-                } else if (e instanceof Enemy && ClientConfig.RADAR_HOSTILE.get()) {
-                    color = 0xFFFF4040;
-                } else if (e instanceof Animal && ClientConfig.RADAR_PASSIVE.get()) {
-                    color = 0xFF40FF40;
-                } else {
+                Integer color = EntityDots.colorFor(e);
+                if (color == null) {
                     continue;
                 }
 
@@ -559,8 +807,7 @@ public class FullMapScreen extends Screen {
                     continue;
                 }
 
-                gg.fill(sx - 2, sy - 2, sx + 2, sy + 2, 0xFF000000);
-                gg.fill(sx - 1, sy - 1, sx + 1, sy + 1, color);
+                EntityDots.draw(gg, sx, sy, color);
             }
         }
 

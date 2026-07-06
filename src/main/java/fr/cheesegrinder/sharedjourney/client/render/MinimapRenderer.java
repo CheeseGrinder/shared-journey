@@ -14,8 +14,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.animal.Animal;
-import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
@@ -86,7 +84,9 @@ public final class MinimapRenderer {
         }
 
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
-        if (allowed.contains(MapLayer.CAVE) && UndergroundCheck.isUnderground(mc.level, mc.player)) {
+        if (allowed.contains(MapLayer.CAVE)
+                && ClientConfig.SHOW_CAVE.get()
+                && UndergroundCheck.isUnderground(mc.level, mc.player)) {
             return MapLayer.CAVE;
         }
 
@@ -200,11 +200,17 @@ public final class MinimapRenderer {
                     case TOP_LEFT, BOTTOM_LEFT -> margin;
                     case TOP_RIGHT, BOTTOM_RIGHT -> sw - size - margin;
                 };
+        boolean topAnchored = ClientConfig.MINIMAP_CORNER.get() == ClientConfig.Corner.TOP_LEFT
+                || ClientConfig.MINIMAP_CORNER.get() == ClientConfig.Corner.TOP_RIGHT;
         int y =
                 switch (ClientConfig.MINIMAP_CORNER.get()) {
                     case TOP_LEFT, TOP_RIGHT -> margin;
                     case BOTTOM_LEFT, BOTTOM_RIGHT -> sh - size - margin;
                 };
+        if (topAnchored) {
+            // Réserve la ligne d'heure au-dessus de la carte.
+            y += 11;
+        }
 
         boolean rotate = ClientConfig.MINIMAP_ROTATE.get();
         boolean circle = ClientConfig.MINIMAP_SHAPE.get() == ClientConfig.Shape.CIRCLE;
@@ -280,6 +286,22 @@ public final class MinimapRenderer {
             }
         }
 
+        // ---- Grille de chunks (frontières tous les 16 blocs), dans la pose
+        // du contenu : suit rotation et zoom.
+        if (ClientConfig.SHOW_GRID.get()) {
+            int gridColor = 0x38000000;
+            int gxStart = Math.floorDiv((int) px - reach, 16) * 16;
+            int gzStart = Math.floorDiv((int) pz - reach, 16) * 16;
+            for (int gx = gxStart; gx <= (int) px + reach; gx += 16) {
+                int sx = cx + (int) Math.floor(gx - px);
+                gg.fill(sx, cy - reach, sx + 1, cy + reach, gridColor);
+            }
+            for (int gz = gzStart; gz <= (int) pz + reach; gz += 16) {
+                int sy = cy + (int) Math.floor(gz - pz);
+                gg.fill(cx - reach, sy, cx + reach, sy + 1, gridColor);
+            }
+        }
+
         // ---- Waypoints de la dimension (points colorés, sous le radar)
         for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
             if (!wp.visible()) {
@@ -297,14 +319,8 @@ public final class MinimapRenderer {
             int radius = Math.min(ClientConfig.RADAR_RADIUS.get(), ClientMapCache.radarMaxRadius);
             AABB box = player.getBoundingBox().inflate(radius, 32, radius);
             for (Entity e : player.level().getEntities(player, box)) {
-                int color;
-                if (e instanceof Player && ClientConfig.RADAR_PLAYERS.get()) {
-                    color = 0xFFFFFFFF;
-                } else if (e instanceof Enemy && ClientConfig.RADAR_HOSTILE.get()) {
-                    color = 0xFFFF4040;
-                } else if (e instanceof Animal && ClientConfig.RADAR_PASSIVE.get()) {
-                    color = 0xFF40FF40;
-                } else {
+                Integer color = EntityDots.colorFor(e);
+                if (color == null) {
                     continue;
                 }
 
@@ -313,10 +329,7 @@ public final class MinimapRenderer {
                     continue;
                 }
 
-                int dx = cx + (int) Math.floor(ex);
-                int dy = cy + (int) Math.floor(ez);
-                gg.fill(dx - 1, dy - 1, dx + 2, dy + 2, 0xFF000000);
-                gg.fill(dx, dy, dx + 1, dy + 1, color);
+                EntityDots.draw(gg, cx + (int) Math.floor(ex), cy + (int) Math.floor(ez), color);
             }
         }
 
@@ -331,36 +344,124 @@ public final class MinimapRenderer {
             drawRing(gg, cx, cy, half, half + 1.5f, 0xFF202020);
         }
 
-        // Marqueur joueur au centre. En rotation, le joueur "regarde vers le haut" :
-        // triangle fixe ; sinon flèche orientée selon le yaw.
+        // Flèche du joueur au centre. En rotation, le joueur "regarde vers le
+        // haut" (flèche fixe) ; sinon flèche orientée selon le yaw.
+        EntityDots.drawPlayerArrow(gg, cx, cy, rotate ? 0f : yaw + 180f, 0.85f);
+
+        // Points cardinaux sur le pourtour, suivant la rotation de la carte.
+        drawCardinals(gg, mc, cx, cy, half - 1, rotate ? -yaw - 180f : 0f);
+
+        // Libellés (échelle réduite) : heure + période au-dessus de la carte,
+        // biome et coordonnées en dessous (ou empilés au-dessus si la carte
+        // est ancrée en bas).
+        drawSmallCentered(gg, mc, timeText(mc.level), cx, y - 9, 0xFFFFFF);
+        String biome = mc.level == null
+                ? ""
+                : mc.level
+                        .getBiome(player.blockPosition())
+                        .unwrapKey()
+                        .map(k -> Component.translatable("biome."
+                                        + k.location().getNamespace() + "."
+                                        + k.location().getPath())
+                                .getString())
+                        .orElse("");
+        String coords = player.blockPosition().getX() + ", "
+                + player.blockPosition().getY() + ", "
+                + player.blockPosition().getZ();
+        if (topAnchored) {
+            drawSmallCentered(gg, mc, biome, cx, y + size + 4, 0xC0C0FF);
+            if (ClientConfig.SHOW_COORDS.get()) {
+                drawSmallCentered(gg, mc, coords, cx, y + size + 13, 0xAAAAAA);
+            }
+        } else {
+            drawSmallCentered(gg, mc, biome, cx, y - 18, 0xC0C0FF);
+            if (ClientConfig.SHOW_COORDS.get()) {
+                drawSmallCentered(gg, mc, coords, cx, y - 27, 0xAAAAAA);
+            }
+        }
+    }
+
+    /** Texte centré à échelle réduite (les libellés pleine taille mangent l'écran). */
+    private static void drawSmallCentered(GuiGraphics gg, Minecraft mc, String text, int cx, int y, int color) {
+        if (text.isEmpty()) {
+            return;
+        }
+
         gg.pose().pushPose();
-        gg.pose().translate(cx, cy, 0);
-        if (!rotate) {
-            gg.pose().mulPose(Axis.ZP.rotationDegrees(yaw + 180f));
-        }
-
-        gg.fill(-1, -4, 1, 1, 0xFF000000);
-        gg.fill(-3, 0, 3, 2, 0xFF000000);
-        gg.fill(0, -3, 1, 0, 0xFFFFFFFF);
-        gg.fill(-2, 0, 2, 1, 0xFFFFFFFF);
+        gg.pose().translate(cx, y, 0);
+        gg.pose().scale(0.75f, 0.75f, 1f);
+        gg.drawCenteredString(mc.font, text, 0, 0, color);
         gg.pose().popPose();
+    }
 
-        // Libellés : couche (+bande) et coordonnées, préfixée "Auto" le cas échéant
-        Component label = Component.translatable(layer.translationKey());
-        if (autoMode()) {
-            label = Component.translatable("sharedjourney.layer.auto", label);
+    /** Heure du monde formatée + période (journée, coucher, nuit, lever). */
+    private static String timeText(Level level) {
+        if (level == null) {
+            return "";
         }
-        String text = label.getString() + (layer == MapLayer.CAVE ? " y" + (band * 16) + ".." + (band * 16 + 15) : "");
-        boolean topAnchored = ClientConfig.MINIMAP_CORNER.get() == ClientConfig.Corner.TOP_LEFT
-                || ClientConfig.MINIMAP_CORNER.get() == ClientConfig.Corner.TOP_RIGHT;
-        int textY = topAnchored ? y + size + 3 : y - 24;
-        gg.drawCenteredString(mc.font, text, x + half, textY, 0xFFFFFF);
-        if (ClientConfig.SHOW_COORDS.get()) {
-            String coords = player.blockPosition().getX() + ", "
-                    + player.blockPosition().getY() + ", "
-                    + player.blockPosition().getZ();
-            gg.drawCenteredString(mc.font, coords, x + half, textY + 11, 0xAAAAAA);
+
+        long t = Math.floorMod(level.getDayTime(), 24000L);
+        int hours = (int) ((t / 1000 + 6) % 24);
+        int minutes = (int) (t % 1000 * 60 / 1000);
+        int seconds = (int) (t % 1000 * 3600 / 1000 % 60);
+        return String.format("%02d:%02d:%02d ", hours, minutes, seconds)
+                + Component.translatable(periodKey(t)).getString();
+    }
+
+    private static String periodKey(long dayTime) {
+        if (dayTime >= 22300) {
+            return "sharedjourney.time.sunrise";
         }
+        if (dayTime >= 13700) {
+            return "sharedjourney.time.night";
+        }
+        if (dayTime >= 12000) {
+            return "sharedjourney.time.sunset";
+        }
+        return "sharedjourney.time.day";
+    }
+
+    /**
+     * Décalage horizontal à appliquer aux icônes d'effets de potion vanilla :
+     * quand la minimap occupe le coin haut droit, les icônes glissent à sa
+     * gauche (HudLayoutEvents translate la couche EFFECTS d'autant).
+     */
+    public static int effectIconsShift(Minecraft mc) {
+        if (mc.player == null || mc.options.hideGui || !ClientInputEvents.minimapVisible) {
+            return 0;
+        }
+
+        if (mc.getDebugOverlay().showDebugScreen() || !ClientConfig.MINIMAP_ENABLED.get()) {
+            return 0;
+        }
+
+        if (ClientConfig.MINIMAP_CORNER.get() != ClientConfig.Corner.TOP_RIGHT) {
+            return 0;
+        }
+
+        return ClientConfig.MINIMAP_SIZE.get() + 12;
+    }
+
+    /**
+     * Lettres N/E/S/W sur le pourtour de la minimap. thetaDeg = rotation du
+     * contenu de la carte (0 = nord en haut) ; les lettres suivent.
+     */
+    private static void drawCardinals(GuiGraphics gg, Minecraft mc, int cx, int cy, float radius, float thetaDeg) {
+        double theta = Math.toRadians(thetaDeg);
+        float cos = (float) Math.cos(theta);
+        float sin = (float) Math.sin(theta);
+        // Nord = (0,-1) et Est = (1,0) à l'écran, tournés par la pose du contenu.
+        drawCardinal(gg, mc, "N", cx + sin * radius, cy - cos * radius);
+        drawCardinal(gg, mc, "E", cx + cos * radius, cy + sin * radius);
+        drawCardinal(gg, mc, "S", cx - sin * radius, cy + cos * radius);
+        drawCardinal(gg, mc, "W", cx - cos * radius, cy - sin * radius);
+    }
+
+    private static void drawCardinal(GuiGraphics gg, Minecraft mc, String letter, float x, float y) {
+        int ix = Math.round(x);
+        int iy = Math.round(y);
+        gg.fill(ix - 4, iy - 5, ix + 4, iy + 5, 0xA0202020);
+        gg.drawCenteredString(mc.font, letter, ix, iy - 4, 0xFFFFFF);
     }
 
     // ------------------------------------------------------------------ formes (mode rond)

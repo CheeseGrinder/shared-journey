@@ -30,6 +30,34 @@
   "sharedjourney.regen.bossbar": "Régénération de la carte : %s/%s chunks",
   "sharedjourney.regen.scan": "Régénération de la carte : scan des fichiers de région…",
 
+  "sharedjourney.action.day": "Couche jour",
+  "sharedjourney.action.night": "Couche nuit",
+  "sharedjourney.action.biome": "Couche biomes",
+  "sharedjourney.action.topo": "Couche topographique",
+  "sharedjourney.action.cave": "Couche grottes",
+  "sharedjourney.action.show_cave": "Afficher les grottes (bascule auto sous terre)",
+  "sharedjourney.action.show_mobs": "Afficher les mobs hostiles",
+  "sharedjourney.action.show_animals": "Afficher les animaux",
+  "sharedjourney.action.show_pets": "Afficher les animaux apprivoisés",
+  "sharedjourney.action.show_villagers": "Afficher les villageois",
+  "sharedjourney.action.show_grid": "Afficher la grille de chunks",
+  "sharedjourney.action.show_keys": "Afficher la légende",
+  "sharedjourney.action.close": "Fermer",
+  "sharedjourney.action.locate": "Aller aux coordonnées",
+  "sharedjourney.action.follow": "Centrer sur le joueur",
+  "sharedjourney.action.zoom_in": "Zoom avant",
+  "sharedjourney.action.zoom_out": "Zoom arrière",
+
+  "sharedjourney.time.day": "Journée",
+  "sharedjourney.time.sunset": "Coucher de soleil",
+  "sharedjourney.time.night": "Nuit",
+  "sharedjourney.time.sunrise": "Lever de soleil",
+
+  "sharedjourney.legend.drag": "Glisser  Déplacer la carte",
+  "sharedjourney.legend.scroll": "Molette  Zoom",
+  "sharedjourney.legend.left_click": "Clic gauche  Éditer un waypoint",
+  "sharedjourney.legend.right_click": "Clic droit  Menu contextuel",
+
   "sharedjourney.configuration.title": "Configuration Shared Journey",
   "sharedjourney.configuration.section.sharedjourney.client.toml": "Client (minimap, radar, cache)",
   "sharedjourney.configuration.section.sharedjourney.client.toml.title": "Shared Journey — Client",
@@ -106,6 +134,18 @@
 
   "sharedjourney.configuration.showPassive": "Afficher les mobs passifs",
   "sharedjourney.configuration.showPassive.tooltip": "Afficher les mobs passifs sur le radar.",
+
+  "sharedjourney.configuration.showPets": "Afficher les animaux apprivoisés",
+  "sharedjourney.configuration.showPets.tooltip": "Afficher les animaux apprivoisés sur le radar.",
+
+  "sharedjourney.configuration.showVillagers": "Afficher les villageois",
+  "sharedjourney.configuration.showVillagers.tooltip": "Afficher les villageois sur le radar.",
+
+  "sharedjourney.configuration.showGrid": "Afficher la grille de chunks",
+  "sharedjourney.configuration.showGrid.tooltip": "Superpose la grille de chunks à la minimap et à la carte plein écran.",
+
+  "sharedjourney.configuration.showCave": "Afficher les grottes",
+  "sharedjourney.configuration.showCave.tooltip": "Bascule automatiquement vers les couches grottes quand le joueur est sous terre.",
 
   "sharedjourney.configuration.defaultLayer": "Couche par défaut",
   "sharedjourney.configuration.defaultLayer.tooltip": "Couche affichée à la connexion (DAY, NIGHT, TOPO, BIOME, CAVE).",

@@ -23,6 +23,13 @@ public final class ClientConfig {
     public static ModConfigSpec.BooleanValue RADAR_PLAYERS;
     public static ModConfigSpec.BooleanValue RADAR_HOSTILE;
     public static ModConfigSpec.BooleanValue RADAR_PASSIVE;
+    public static ModConfigSpec.BooleanValue RADAR_PETS;
+    public static ModConfigSpec.BooleanValue RADAR_VILLAGERS;
+
+    /** Grille de chunks superposée à la minimap et à la carte plein écran. */
+    public static ModConfigSpec.BooleanValue SHOW_GRID;
+    /** Autorise la bascule auto vers les couches CAVE quand le joueur est sous terre. */
+    public static ModConfigSpec.BooleanValue SHOW_CAVE;
 
     public static ModConfigSpec.ConfigValue<String> DEFAULT_LAYER;
     /** Sélection automatique de la couche minimap (jour/nuit, grottes sous terre). */
@@ -62,7 +69,14 @@ public final class ClientConfig {
         RADAR_PLAYERS = b.define("showPlayers", true);
         RADAR_HOSTILE = b.define("showHostile", true);
         RADAR_PASSIVE = b.define("showPassive", false);
+        RADAR_PETS = b.define("showPets", true);
+        RADAR_VILLAGERS = b.define("showVillagers", true);
         b.pop();
+
+        SHOW_GRID = b.comment("Grille de chunks superposée à la minimap et à la carte plein écran.")
+                .define("showGrid", false);
+        SHOW_CAVE = b.comment("Bascule auto vers les couches CAVE quand le joueur est sous terre.")
+                .define("showCave", true);
 
         DEFAULT_LAYER = b.comment("Couche affichée par défaut (DAY, NIGHT, TOPO, BIOME, CAVE).")
                 .define("defaultLayer", "DAY");

@@ -30,6 +30,34 @@
   "sharedjourney.regen.bossbar": "Map regeneration: %s/%s chunks",
   "sharedjourney.regen.scan": "Map regeneration: scanning region files…",
 
+  "sharedjourney.action.day": "Day layer",
+  "sharedjourney.action.night": "Night layer",
+  "sharedjourney.action.biome": "Biome layer",
+  "sharedjourney.action.topo": "Topographic layer",
+  "sharedjourney.action.cave": "Cave layer",
+  "sharedjourney.action.show_cave": "Show caves (auto-switch underground)",
+  "sharedjourney.action.show_mobs": "Show hostile mobs",
+  "sharedjourney.action.show_animals": "Show animals",
+  "sharedjourney.action.show_pets": "Show pets",
+  "sharedjourney.action.show_villagers": "Show villagers",
+  "sharedjourney.action.show_grid": "Show chunk grid",
+  "sharedjourney.action.show_keys": "Show legend",
+  "sharedjourney.action.close": "Close",
+  "sharedjourney.action.locate": "Go to coordinates",
+  "sharedjourney.action.follow": "Center on player",
+  "sharedjourney.action.zoom_in": "Zoom in",
+  "sharedjourney.action.zoom_out": "Zoom out",
+
+  "sharedjourney.time.day": "Daytime",
+  "sharedjourney.time.sunset": "Sunset",
+  "sharedjourney.time.night": "Night",
+  "sharedjourney.time.sunrise": "Sunrise",
+
+  "sharedjourney.legend.drag": "Drag  Pan the map",
+  "sharedjourney.legend.scroll": "Wheel  Zoom",
+  "sharedjourney.legend.left_click": "Left click  Edit waypoint",
+  "sharedjourney.legend.right_click": "Right click  Context menu",
+
   "sharedjourney.configuration.title": "Shared Journey Configs",
   "sharedjourney.configuration.section.sharedjourney.client.toml": "Client (minimap, radar, cache)",
   "sharedjourney.configuration.section.sharedjourney.client.toml.title": "Shared Journey — Client",
@@ -106,6 +134,18 @@
 
   "sharedjourney.configuration.showPassive": "Show Passive Mobs",
   "sharedjourney.configuration.showPassive.tooltip": "Show passive mobs on the radar.",
+
+  "sharedjourney.configuration.showPets": "Show Pets",
+  "sharedjourney.configuration.showPets.tooltip": "Show tamed animals on the radar.",
+
+  "sharedjourney.configuration.showVillagers": "Show Villagers",
+  "sharedjourney.configuration.showVillagers.tooltip": "Show villagers on the radar.",
+
+  "sharedjourney.configuration.showGrid": "Show Chunk Grid",
+  "sharedjourney.configuration.showGrid.tooltip": "Overlay the chunk grid on the minimap and the fullscreen map.",
+
+  "sharedjourney.configuration.showCave": "Show Caves",
+  "sharedjourney.configuration.showCave.tooltip": "Automatically switch to cave layers when underground.",
 
   "sharedjourney.configuration.defaultLayer": "Default Layer",
   "sharedjourney.configuration.defaultLayer.tooltip": "Layer displayed when connecting to a server (DAY, NIGHT, TOPO, BIOME, CAVE).",
