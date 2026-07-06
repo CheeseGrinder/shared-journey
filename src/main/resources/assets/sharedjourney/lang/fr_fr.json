@@ -11,6 +11,7 @@
   "sharedjourney.layer.topo": "Topographique",
   "sharedjourney.layer.biome": "Biomes",
   "sharedjourney.layer.cave": "Grottes",
+  "sharedjourney.layer.auto": "Auto : %s",
 
   "sharedjourney.fullmap.hint": "Glisser : déplacer | Molette : zoom | Clic droit : waypoint | Clic sur marqueur : éditer",
   "sharedjourney.fullmap.center": "Centrer",
@@ -101,6 +102,9 @@
 
   "sharedjourney.configuration.defaultLayer": "Couche par défaut",
   "sharedjourney.configuration.defaultLayer.tooltip": "Couche affichée à la connexion (DAY, NIGHT, TOPO, BIOME, CAVE).",
+
+  "sharedjourney.configuration.autoLayer": "Couche automatique",
+  "sharedjourney.configuration.autoLayer.tooltip": "Bascule automatique de la minimap : jour/nuit selon l'heure, grottes sous terre.",
 
   "sharedjourney.configuration.diskCache": "Cache disque",
   "sharedjourney.configuration.diskCache.tooltip": "Met en cache les tuiles reçues sur le disque (.minecraft/sharedjourney_cache/).",

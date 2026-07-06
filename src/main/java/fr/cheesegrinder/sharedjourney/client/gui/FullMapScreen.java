@@ -64,7 +64,7 @@ public class FullMapScreen extends Screen {
             centerX = player.getX();
             centerZ = player.getZ();
         }
-        layer = MinimapRenderer.currentLayer();
+        layer = MinimapRenderer.displayedLayer();
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
         if (!allowed.isEmpty() && !allowed.contains(layer)) {
             layer = allowed.get(0);

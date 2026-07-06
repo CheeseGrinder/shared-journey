@@ -23,6 +23,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
@@ -47,6 +49,7 @@ public final class MinimapRenderer {
     public static final int BACKGROUND = 0xFF36393F;
 
     private static MapLayer currentLayer = null; // null = pas encore initialisée depuis la config
+    private static Boolean autoMode = null;      // null = pas encore initialisé depuis la config
     private static int caveBandIndex = 0;
     private static float zoom = 1.0f; // pixels écran par bloc
 
@@ -61,19 +64,75 @@ public final class MinimapRenderer {
         return currentLayer;
     }
 
-    /** Passe à la couche suivante parmi celles autorisées par le serveur pour la dimension. */
+    /** Le mode auto suit jour/nuit et le passage sous terre. */
+    public static boolean autoMode() {
+        if (autoMode == null) {
+            autoMode = ClientConfig.AUTO_LAYER.get();
+        }
+        return autoMode;
+    }
+
+    /**
+     * Couche réellement affichée. En mode auto : CAVE si le joueur est sous
+     * terre, sinon NIGHT la nuit, sinon DAY — parmi les couches autorisées
+     * par le serveur pour la dimension courante.
+     */
+    public static MapLayer displayedLayer() {
+        Minecraft mc = Minecraft.getInstance();
+        if (!autoMode() || mc.level == null || mc.player == null) {
+            return currentLayer();
+        }
+
+        List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
+        if (allowed.contains(MapLayer.CAVE) && isUnderground(mc.level, mc.player)) {
+            return MapLayer.CAVE;
+        }
+
+        if (allowed.contains(MapLayer.NIGHT) && mc.level.isNight()) {
+            return MapLayer.NIGHT;
+        }
+
+        if (allowed.contains(MapLayer.DAY) || allowed.isEmpty()) {
+            return MapLayer.DAY;
+        }
+
+        return allowed.get(0);
+    }
+
+    /** Même règle que le CaveTracker serveur : la surface est au-dessus des yeux. */
+    private static boolean isUnderground(Level level, Player player) {
+        int surface = level.getHeight(Heightmap.Types.MOTION_BLOCKING,
+                player.blockPosition().getX(), player.blockPosition().getZ());
+        return surface > player.getEyeY();
+    }
+
+    /**
+     * Cycle de couche : Auto -> couche 1 -> ... -> couche N -> Auto.
+     * Choisir une couche à la main suspend le mode auto jusqu'au retour à Auto.
+     */
     public static void cycleLayer() {
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
         if (allowed.isEmpty()) {
             return;
         }
 
-        MapLayer cur = currentLayer();
-        int idx = allowed.indexOf(cur);
-        currentLayer = allowed.get((idx + 1) % allowed.size());
+        if (autoMode()) {
+            autoMode = false;
+            currentLayer = allowed.get(0);
+            return;
+        }
+
+        int idx = allowed.indexOf(currentLayer());
+        if (idx < 0 || idx == allowed.size() - 1) {
+            autoMode = true;
+            return;
+        }
+
+        currentLayer = allowed.get(idx + 1);
     }
 
     public static void setLayer(MapLayer layer) {
+        autoMode = false;
         currentLayer = layer;
     }
 
@@ -121,7 +180,7 @@ public final class MinimapRenderer {
             return;
         }
 
-        MapLayer layer = currentLayer();
+        MapLayer layer = displayedLayer();
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
         if (!allowed.isEmpty() && !allowed.contains(layer)) {
             layer = allowed.get(0);
@@ -275,8 +334,11 @@ public final class MinimapRenderer {
         gg.fill(-2, 0, 2, 1, 0xFFFFFFFF);
         gg.pose().popPose();
 
-        // Libellés : couche (+bande) et coordonnées
+        // Libellés : couche (+bande) et coordonnées, préfixée "Auto" le cas échéant
         Component label = Component.translatable(layer.translationKey());
+        if (autoMode()) {
+            label = Component.translatable("sharedjourney.layer.auto", label);
+        }
         String text = label.getString() + (layer == MapLayer.CAVE ? " y" + (band * 16) + ".." + (band * 16 + 15) : "");
         boolean topAnchored = ClientConfig.MINIMAP_CORNER.get() == ClientConfig.Corner.TOP_LEFT
                 || ClientConfig.MINIMAP_CORNER.get() == ClientConfig.Corner.TOP_RIGHT;

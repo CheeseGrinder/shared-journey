@@ -39,7 +39,7 @@ Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
 | `server.command` | `MapCommands` (`/sj`, `/sharedjourney`)                                                   |
 | `server.event`   | `ServerLifecycleEvents`, `PlayerEvents`, `ChunkEvents`, `ConfigEvents`                    |
 | `server.render`  | `ChunkColorizer` (server-side pixel rendering)                                            |
-| `server.service` | `MapManager` (async engine), `SyncService` (delta sync), `RegenService` (full regen)      |
+| `server.service` | `MapManager` (async engine), `SyncService` (delta sync), `RegenService` (full regen), `CaveTracker` (cave anti-exploit) |
 | `client.command` | `ClientCommands` (`/sj purge`, `/sj cache`, `/sj goto`)                                   |
 | `client.config`  | `ClientConfig`                                                                            |
 | `client.event`   | `ClientSetupEvents` (keys, HUD layer), `ClientInputEvents`, `ClientSessionEvents`         |
@@ -69,6 +69,8 @@ The packages keep the layering discipline of the former multi-module split: `api
 
 - A **region** = 512×512 blocks = 32×32 chunks, addressed by `RegionKey` (dimension + layer + caveBand + rx + rz).
 - **Layers**: `DAY`, `NIGHT`, `TOPO`, `BIOME`, `CAVE`. `CAVE` has vertical bands (floor(y/16)).
+- On-disk layout: `<dim>/<layer>/region_X_Z.png`, with CAVE bands grouped under a parent folder: `<dim>/cave/<band>/` (`RegionStorage.migrateLegacyCaveFolders` migrates the old `cave_<band>` layout on startup, server and client).
+- **Cave anti-exploit**: CAVE bands are only painted where a player actually went underground (`CaveTracker` scans players each second and unlocks a radius around them via `MapManager.unlockCave`; `renderChunk` skips un-unlocked, never-painted cave chunks — including during `regen full`).
 - `RegionIndex` is a `ConcurrentHashMap<RegionKey, Long>` (timestamp registry) serialized to `index.json`.
 
 ## Code Conventions

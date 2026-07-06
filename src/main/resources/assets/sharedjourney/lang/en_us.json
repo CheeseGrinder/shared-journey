@@ -11,6 +11,7 @@
   "sharedjourney.layer.topo": "Topographic",
   "sharedjourney.layer.biome": "Biomes",
   "sharedjourney.layer.cave": "Caves",
+  "sharedjourney.layer.auto": "Auto: %s",
 
   "sharedjourney.fullmap.hint": "Drag: pan | Wheel: zoom | Right-click: new waypoint | Click marker: edit",
   "sharedjourney.fullmap.center": "Center",
@@ -101,6 +102,9 @@
 
   "sharedjourney.configuration.defaultLayer": "Default Layer",
   "sharedjourney.configuration.defaultLayer.tooltip": "Layer displayed when connecting to a server (DAY, NIGHT, TOPO, BIOME, CAVE).",
+
+  "sharedjourney.configuration.autoLayer": "Auto Layer",
+  "sharedjourney.configuration.autoLayer.tooltip": "Automatically switch the minimap: day/night with the time, cave layers when underground.",
 
   "sharedjourney.configuration.diskCache": "Disk Cache",
   "sharedjourney.configuration.diskCache.tooltip": "Cache received map tiles to disk (.minecraft/sharedjourney_cache/).",

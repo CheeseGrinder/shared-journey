@@ -23,6 +23,8 @@ public final class ClientConfig {
     public static ModConfigSpec.BooleanValue RADAR_PASSIVE;
 
     public static ModConfigSpec.ConfigValue<String> DEFAULT_LAYER;
+    /** Sélection automatique de la couche minimap (jour/nuit, grottes sous terre). */
+    public static ModConfigSpec.BooleanValue AUTO_LAYER;
     public static ModConfigSpec.BooleanValue DISK_CACHE_ENABLED;
 
     public enum Corner { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
@@ -52,6 +54,8 @@ public final class ClientConfig {
 
         DEFAULT_LAYER = b.comment("Couche affichée par défaut (DAY, NIGHT, TOPO, BIOME, CAVE).")
                 .define("defaultLayer", "DAY");
+        AUTO_LAYER = b.comment("Bascule automatique de la minimap : jour/nuit selon l'heure, grottes sous terre.")
+                .define("autoLayer", true);
         DISK_CACHE_ENABLED = b.comment("Cache disque des tuiles reçues (.minecraft/sharedjourney_cache/).")
                 .define("diskCache", true);
 
