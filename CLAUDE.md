@@ -38,7 +38,7 @@ Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
 | `common.region`  | `RegionKey`, `RegionIndex`                                                                |
 | `server.command` | `MapCommands` (`/sj`, `/sharedjourney`)                                                   |
 | `server.event`   | `ServerLifecycleEvents`, `PlayerEvents`, `ChunkEvents`, `ConfigEvents`                    |
-| `server.render`  | `ChunkColorizer` (server-side pixel rendering)                                            |
+| `server.render`  | `ChunkColorizer` (facade) + per-layer renderers (`SurfaceRenderer`, `TopoRenderer`, `BiomeRenderer`, `CaveRenderer`), `BiomeTints`, `RenderContext`, `ColorUtil` |
 | `server.service` | `MapManager` (async engine), `SyncService` (delta sync), `RegenService` (full regen), `CaveTracker` (cave anti-exploit) |
 | `client.command` | `ClientCommands` (`/sj purge`, `/sj cache`, `/sj goto`)                                   |
 | `client.config`  | `ClientConfig`                                                                            |
