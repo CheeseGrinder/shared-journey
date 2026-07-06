@@ -1,6 +1,6 @@
 package fr.cheesegrinder.sharedjourney.server.render;
 
-import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import fr.cheesegrinder.sharedjourney.common.config.EngineServerConfig;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.biome.Biome;
@@ -29,7 +29,7 @@ final class BiomeTints {
      * 0 = désactivé, 2 = équivalent vanilla).
      */
     static int blended(BiomeManager zoom, int wx, int y, int wz, Sampler sampler) {
-        int radius = ServerConfig.BIOME_BLEND_RADIUS.get();
+        int radius = EngineServerConfig.BIOME_BLEND_RADIUS.get();
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         if (radius <= 0) {
             return sampler.colorAt(zoom.getBiome(p.set(wx, y, wz)).value(), wx, wz) & 0xFFFFFF;

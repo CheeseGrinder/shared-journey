@@ -2,7 +2,8 @@ package fr.cheesegrinder.sharedjourney.server.service;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.common.config.CommonConfig;
-import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
+import fr.cheesegrinder.sharedjourney.common.config.SyncServerConfig;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 
@@ -91,12 +92,14 @@ public final class SyncService {
 
         Map<ResourceLocation, List<MapLayer>> map = new HashMap<>();
         for (ServerLevel level : server.getAllLevels()) {
-            map.put(level.dimension().location(), new ArrayList<>(ServerConfig.layersFor(level.dimension())));
+            map.put(level.dimension().location(), new ArrayList<>(LayersServerConfig.layersFor(level.dimension())));
         }
         PacketDistributor.sendToPlayer(
                 player,
                 new Payloads.LayerSettingsPayload(
-                        map, new ArrayList<>(ServerConfig.CAVE_BANDS.get()), ServerConfig.RADAR_MAX_RADIUS.get()));
+                        map,
+                        new ArrayList<>(LayersServerConfig.CAVE_BANDS.get()),
+                        SyncServerConfig.RADAR_MAX_RADIUS.get()));
     }
 
     public static void broadcastLayerSettings(MinecraftServer server) {
@@ -123,7 +126,7 @@ public final class SyncService {
             }
 
             // Déphasage par joueur pour lisser la charge.
-            if (gameTime % ServerConfig.SYNC_RATE_TICKS.get() == (player.getId() & 15)) {
+            if (gameTime % SyncServerConfig.SYNC_RATE_TICKS.get() == (player.getId() & 15)) {
                 enqueueDelta(player, false);
             }
             drainQueue(player, st);
@@ -138,17 +141,17 @@ public final class SyncService {
             return;
         }
 
-        int radius = ServerConfig.PUSH_RADIUS_REGIONS.get();
+        int radius = SyncServerConfig.PUSH_RADIUS_REGIONS.get();
         int prx = Math.floorDiv(player.blockPosition().getX(), RegionKey.REGION_BLOCKS);
         int prz = Math.floorDiv(player.blockPosition().getZ(), RegionKey.REGION_BLOCKS);
         var dim = player.level().dimension();
-        EnumSet<MapLayer> layers = ServerConfig.layersFor(dim);
+        EnumSet<MapLayer> layers = LayersServerConfig.layersFor(dim);
 
         for (int rx = prx - radius; rx <= prx + radius; rx++) {
             for (int rz = prz - radius; rz <= prz + radius; rz++) {
                 for (MapLayer layer : layers) {
                     if (layer == MapLayer.CAVE) {
-                        for (int band : ServerConfig.CAVE_BANDS.get()) {
+                        for (int band : LayersServerConfig.CAVE_BANDS.get()) {
                             maybeQueue(st, mgr, new RegionKey(dim, layer, band, rx, rz), force);
                         }
                     } else {
@@ -212,7 +215,7 @@ public final class SyncService {
         }
 
         // max_kb_per_second -> octets par tick (20 ticks/s)
-        int budget = ServerConfig.MAX_KB_PER_SECOND_PER_PLAYER.get() * 1024 / 20;
+        int budget = SyncServerConfig.MAX_KB_PER_SECOND_PER_PLAYER.get() * 1024 / 20;
         int fragSize = CommonConfig.FRAGMENT_SIZE.get();
 
         while (budget > 0) {
@@ -263,7 +266,7 @@ public final class SyncService {
             return;
         }
 
-        if (!ServerConfig.ALLOW_ON_DEMAND_REQUESTS.get()) {
+        if (!SyncServerConfig.ALLOW_ON_DEMAND_REQUESTS.get()) {
             return;
         }
 
@@ -280,7 +283,7 @@ public final class SyncService {
                 continue;
             }
 
-            if (!ServerConfig.layersFor(key.dimension()).contains(key.layer())) {
+            if (!LayersServerConfig.layersFor(key.dimension()).contains(key.layer())) {
                 continue;
             }
 
@@ -303,7 +306,7 @@ public final class SyncService {
             return;
         }
 
-        if (!ServerConfig.ALLOW_ON_DEMAND_REQUESTS.get()) {
+        if (!SyncServerConfig.ALLOW_ON_DEMAND_REQUESTS.get()) {
             return;
         }
 
@@ -373,9 +376,9 @@ public final class SyncService {
 
         if (regionFilter != null) {
             var dim = player.level().dimension();
-            for (MapLayer layer : ServerConfig.layersFor(dim)) {
+            for (MapLayer layer : LayersServerConfig.layersFor(dim)) {
                 if (layer == MapLayer.CAVE) {
-                    for (int band : ServerConfig.CAVE_BANDS.get()) {
+                    for (int band : LayersServerConfig.CAVE_BANDS.get()) {
                         RegionKey key = new RegionKey(dim, layer, band, regionFilter[0], regionFilter[1]);
                         st.sentVersions.remove(key);
                         maybeQueue(st, mgr, key, true);

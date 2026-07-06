@@ -1,6 +1,6 @@
 package fr.cheesegrinder.sharedjourney.server.render;
 
-import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import fr.cheesegrinder.sharedjourney.common.config.EngineServerConfig;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
@@ -105,7 +105,7 @@ final class SurfaceRenderer {
 
     /** Blocs décoratifs invisibles sur la carte (config serveur hiddenBlocks). */
     private static boolean isMapHidden(BlockState state) {
-        return ServerConfig.isHiddenBlock(state);
+        return EngineServerConfig.isHiddenBlock(state);
     }
 
     private static boolean isGrassTinted(BlockState state) {

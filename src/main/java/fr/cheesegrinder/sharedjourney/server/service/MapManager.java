@@ -2,7 +2,8 @@ package fr.cheesegrinder.sharedjourney.server.service;
 
 import fr.cheesegrinder.sharedjourney.api.ChunkLayerRenderer;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
-import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import fr.cheesegrinder.sharedjourney.common.config.EngineServerConfig;
+import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
 import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
@@ -104,7 +105,7 @@ public final class MapManager {
 
         // Formule d'allocation de la spec §4.
         int cores = Runtime.getRuntime().availableProcessors();
-        this.workerCount = Math.max(1, Math.min(cores - 2, ServerConfig.MAX_WORKER_THREADS.get()));
+        this.workerCount = Math.max(1, Math.min(cores - 2, EngineServerConfig.MAX_WORKER_THREADS.get()));
         this.workers = Executors.newFixedThreadPool(workerCount, r -> {
             Thread t = new Thread(r, "SharedJourney-Render");
             t.setDaemon(true);
@@ -155,7 +156,7 @@ public final class MapManager {
      * délègue tout le calcul au pool. Coût main-thread quasi nul.
      */
     public void tick() {
-        int budget = ServerConfig.RENDER_CHUNKS_PER_TICK.get();
+        int budget = EngineServerConfig.RENDER_CHUNKS_PER_TICK.get();
         // Évite d'inonder le pool si le disque/CPU ne suit pas.
         int maxInFlight = workerCount * 8;
         while (budget-- > 0 && tasksInFlight.get() < maxInFlight) {
@@ -239,12 +240,12 @@ public final class MapManager {
 
     /** Rendu de toutes les couches actives d'un chunk (exécuté sur un worker). */
     private void renderChunk(ServerLevel level, ChunkAccess chunk, ChunkAccess[] neighbors) {
-        EnumSet<MapLayer> layers = ServerConfig.layersFor(level.dimension());
+        EnumSet<MapLayer> layers = LayersServerConfig.layersFor(level.dimension());
         ChunkPos cp = chunk.getPos();
         List<RegionKey> touched = new ArrayList<>(layers.size() + 4);
         for (MapLayer layer : layers) {
             if (layer == MapLayer.CAVE) {
-                for (int band : ServerConfig.CAVE_BANDS.get()) {
+                for (int band : LayersServerConfig.CAVE_BANDS.get()) {
                     RegionKey key = RegionKey.of(level.dimension(), layer, band, cp.x, cp.z);
                     CaveUnlock unlock = new CaveUnlock(level.dimension(), band, cp.x, cp.z);
                     // Anti-exploit : une bande de grotte n'est peinte que si un
@@ -279,7 +280,7 @@ public final class MapManager {
 
     /** Un chunk a-t-il déjà été peint (au moins un pixel opaque sur la 1re couche active) ? */
     public boolean isChunkRendered(ServerLevel level, int cx, int cz) {
-        EnumSet<MapLayer> layers = ServerConfig.layersFor(level.dimension());
+        EnumSet<MapLayer> layers = LayersServerConfig.layersFor(level.dimension());
         if (layers.isEmpty()) {
             return true;
         }
@@ -325,7 +326,7 @@ public final class MapManager {
     }
 
     private int firstCaveBand() {
-        var bands = ServerConfig.CAVE_BANDS.get();
+        var bands = LayersServerConfig.CAVE_BANDS.get();
         return bands.isEmpty() ? 0 : bands.getFirst();
     }
 

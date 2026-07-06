@@ -1,7 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.command;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
-import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
 import fr.cheesegrinder.sharedjourney.server.service.MapManager;
 import fr.cheesegrinder.sharedjourney.server.service.RegenService;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
@@ -134,7 +134,7 @@ public final class MapCommands {
                                     .executes(ctx -> {
                                         ServerLevel dim = DimensionArgument.getDimension(ctx, "dimension");
                                         boolean on = BoolArgumentType.getBool(ctx, "actif");
-                                        ServerConfig.setLayer(dim.dimension(), layer, on);
+                                        LayersServerConfig.setLayer(dim.dimension(), layer, on);
                                         SyncService.broadcastLayerSettings(
                                                 ctx.getSource().getServer());
                                         ctx.getSource()

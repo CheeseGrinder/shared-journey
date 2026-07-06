@@ -1,7 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
-import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
 import fr.cheesegrinder.sharedjourney.common.util.UndergroundCheck;
 
 import net.minecraft.server.MinecraftServer;
@@ -43,12 +43,12 @@ public final class CaveTracker {
 
     private static void scanPlayer(MapManager mgr, ServerPlayer player) {
         ServerLevel level = player.serverLevel();
-        if (!ServerConfig.layersFor(level.dimension()).contains(MapLayer.CAVE)) {
+        if (!LayersServerConfig.layersFor(level.dimension()).contains(MapLayer.CAVE)) {
             return;
         }
 
         int band = Math.floorDiv(player.getBlockY(), 16);
-        if (!ServerConfig.CAVE_BANDS.get().contains(band)) {
+        if (!LayersServerConfig.CAVE_BANDS.get().contains(band)) {
             return;
         }
 

@@ -1,6 +1,6 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
-import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 
 import net.minecraft.Util;
@@ -171,7 +171,7 @@ public final class RegenService {
         var targets = new ArrayList<Target>();
         Path worldRoot = server.getWorldPath(LevelResource.ROOT);
         for (ServerLevel level : server.getAllLevels()) {
-            if (ServerConfig.layersFor(level.dimension()).isEmpty()) {
+            if (LayersServerConfig.layersFor(level.dimension()).isEmpty()) {
                 continue;
             }
 
