@@ -166,15 +166,9 @@ public final class ChunkColorizer {
         return (mc == MapColor.NONE ? MapColor.STONE : mc).col;
     }
 
-    /** Blocs décoratifs invisibles sur la carte (on peint le bloc dessous). */
+    /** Blocs décoratifs invisibles sur la carte (config serveur hiddenBlocks). */
     private static boolean isMapHidden(BlockState state) {
-        return state.is(BlockTags.FLOWERS) || state.is(BlockTags.SAPLINGS)
-                || state.is(Blocks.SHORT_GRASS) || state.is(Blocks.TALL_GRASS)
-                || state.is(Blocks.FERN) || state.is(Blocks.LARGE_FERN)
-                || state.is(Blocks.DEAD_BUSH) || state.is(Blocks.BROWN_MUSHROOM)
-                || state.is(Blocks.RED_MUSHROOM) || state.is(Blocks.TORCH)
-                || state.is(Blocks.WALL_TORCH) || state.is(Blocks.SOUL_TORCH)
-                || state.is(Blocks.COBWEB);
+        return ServerConfig.isHiddenBlock(state);
     }
 
     private static boolean isGrassTinted(BlockState state) {

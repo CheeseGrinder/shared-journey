@@ -61,6 +61,10 @@
   "sharedjourney.configuration.biomeBlendRadius": "Rayon de lissage des biomes",
   "sharedjourney.configuration.biomeBlendRadius.tooltip": "Rayon de lissage des couleurs dépendant du biome (eau, herbe, feuillage). 0 = désactivé, 2 = équivalent vanilla.",
 
+  "sharedjourney.configuration.hiddenBlocks": "Blocs masqués",
+  "sharedjourney.configuration.hiddenBlocks.tooltip": "Blocs exclus du rendu de la carte (le bloc du dessous est peint à la place). Format : 'namespace:bloc' ou '#namespace:tag'.",
+  "sharedjourney.configuration.hiddenBlocks.button": "Modifier",
+
   "sharedjourney.configuration.sync": "Synchronisation",
   "sharedjourney.configuration.sync.tooltip": "Paramètres de synchronisation de la carte entre le serveur et les clients.",
   "sharedjourney.configuration.sync.button": "Configurer",

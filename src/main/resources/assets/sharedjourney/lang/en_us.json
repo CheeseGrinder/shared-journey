@@ -61,6 +61,10 @@
   "sharedjourney.configuration.biomeBlendRadius": "Biome Blend Radius",
   "sharedjourney.configuration.biomeBlendRadius.tooltip": "Smoothing radius for biome-dependent colors (water, grass, foliage). 0 = off, 2 = vanilla equivalent.",
 
+  "sharedjourney.configuration.hiddenBlocks": "Hidden Blocks",
+  "sharedjourney.configuration.hiddenBlocks.tooltip": "Blocks excluded from map rendering (the block below is painted instead). Format: 'namespace:block' or '#namespace:tag'.",
+  "sharedjourney.configuration.hiddenBlocks.button": "Edit list",
+
   "sharedjourney.configuration.sync": "Sync",
   "sharedjourney.configuration.sync.tooltip": "Map synchronisation settings between server and clients.",
   "sharedjourney.configuration.sync.button": "Configure",
