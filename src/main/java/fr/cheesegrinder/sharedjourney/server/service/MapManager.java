@@ -7,6 +7,7 @@ import fr.cheesegrinder.sharedjourney.api.ChunkLayerRenderer;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
+import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
@@ -83,10 +84,19 @@ public final class MapManager {
 
     private record QueuedChunk(ResourceKey<Level> dim, int cx, int cz) {}
 
+    /**
+     * Déverrouillages de bandes de grottes en attente de rendu (anti-exploit) :
+     * une bande CAVE n'est peinte que si un joueur l'a réellement explorée.
+     */
+    private final Set<CaveUnlock> caveUnlocks = ConcurrentHashMap.newKeySet();
+
+    private record CaveUnlock(ResourceKey<Level> dim, int band, int cx, int cz) {}
+
     private MapManager(MinecraftServer server, Map<String, ChunkLayerRenderer> customLayers) {
         this.server = server;
         this.customLayers = customLayers;
         this.root = server.getWorldPath(LevelResource.ROOT).resolve("data").resolve("sharedjourney");
+        RegionStorage.migrateLegacyCaveFolders(root);
         this.index.load(root.resolve("index.json"));
 
         // Formule d'allocation de la spec §4.
@@ -211,10 +221,19 @@ public final class MapManager {
         for (MapLayer layer : layers) {
             if (layer == MapLayer.CAVE) {
                 for (int band : ServerConfig.CAVE_BANDS.get()) {
-                    int[] pixels = ChunkColorizer.render(level, chunk, layer, band);
                     RegionKey key = RegionKey.of(level.dimension(), layer, band, cp.x, cp.z);
+                    CaveUnlock unlock = new CaveUnlock(level.dimension(), band, cp.x, cp.z);
+                    // Anti-exploit : une bande de grotte n'est peinte que si un
+                    // joueur l'a explorée (déverrouillage CaveTracker) ou si
+                    // elle l'était déjà (mise à jour d'une zone connue).
+                    if (!caveUnlocks.contains(unlock) && !isChunkPainted(key, cp.x, cp.z)) {
+                        continue;
+                    }
+
+                    int[] pixels = ChunkColorizer.render(level, chunk, layer, band);
                     writeChunk(key, cp.x, cp.z, pixels);
                     touched.add(key);
+                    caveUnlocks.remove(unlock);
                 }
             } else {
                 int[] pixels = ChunkColorizer.render(level, chunk, layer, 0);
@@ -243,8 +262,11 @@ public final class MapManager {
 
         MapLayer probe = layers.iterator().next();
         int band = probe == MapLayer.CAVE ? firstCaveBand() : 0;
-        RegionKey key = RegionKey.of(level.dimension(), probe, band, cx, cz);
+        return isChunkPainted(RegionKey.of(level.dimension(), probe, band, cx, cz), cx, cz);
+    }
 
+    /** Le chunk a-t-il au moins un pixel opaque sur la région donnée ? */
+    private boolean isChunkPainted(RegionKey key, int cx, int cz) {
         // Astuce rapide : si l'index ne connaît pas la région, rien n'a été peint.
         if (index.get(key) < 0 && !regions.containsKey(key)) {
             return false;
@@ -259,6 +281,22 @@ public final class MapManager {
         int pz = Math.floorMod(cz, RegionKey.REGION_CHUNKS) * 16;
         synchronized (img) {
             return (img.pixels[px + pz * RegionKey.REGION_BLOCKS] >>> 24) != 0;
+        }
+    }
+
+    /**
+     * Marque une bande de grotte comme explorée par un joueur (CaveTracker) :
+     * le chunk sera peint sur cette bande au prochain rendu. Sans effet si
+     * la bande y est déjà peinte.
+     */
+    public void unlockCave(ServerLevel level, int band, int cx, int cz) {
+        RegionKey key = RegionKey.of(level.dimension(), MapLayer.CAVE, band, cx, cz);
+        if (isChunkPainted(key, cx, cz)) {
+            return;
+        }
+
+        if (caveUnlocks.add(new CaveUnlock(level.dimension(), band, cx, cz))) {
+            enqueueChunk(level, cx, cz);
         }
     }
 

@@ -25,8 +25,11 @@ public enum MapLayer {
         return "sharedjourney.layer." + name().toLowerCase(Locale.ROOT);
     }
 
-    /** Nom de dossier sur disque. Pour CAVE, dépend de la bande. */
+    /**
+     * Chemin de dossier sur disque (relatif à la dimension). Les bandes CAVE
+     * sont regroupées dans un dossier parent : "cave/<bande>".
+     */
     public String folderName(int caveBand) {
-        return this == CAVE ? "cave_" + caveBand : name().toLowerCase(Locale.ROOT);
+        return this == CAVE ? "cave/" + caveBand : name().toLowerCase(Locale.ROOT);
     }
 }

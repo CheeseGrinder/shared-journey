@@ -5,6 +5,7 @@ import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import com.mojang.logging.LogUtils;
 import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
+import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
@@ -45,6 +46,7 @@ public final class DiskCache {
             id = "unknown";
         }
         currentRoot = mc.gameDirectory.toPath().resolve("sharedjourney_cache").resolve(id);
+        RegionStorage.migrateLegacyCaveFolders(currentRoot);
         index.load(currentRoot.resolve("index.json"));
         LOGGER.info("SharedJourney : cache local '{}' ({} région(s))", id, index.size());
     }
@@ -121,7 +123,7 @@ public final class DiskCache {
     }
 
     /**
-     * Purge le cache local d'un calque ("day", "cave", "cave_2", ou "all")
+     * Purge le cache local d'un calque ("day", "cave", "cave/2", ou "all")
      * pour la session courante (spec §7 : /map purge). Retourne le nombre
      * de fichiers supprimés.
      */

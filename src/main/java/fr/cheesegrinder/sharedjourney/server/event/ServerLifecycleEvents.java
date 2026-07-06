@@ -3,6 +3,7 @@ package fr.cheesegrinder.sharedjourney.server.event;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.api.event.LayerRegisterEvent;
 import fr.cheesegrinder.sharedjourney.server.command.MapCommands;
+import fr.cheesegrinder.sharedjourney.server.service.CaveTracker;
 import fr.cheesegrinder.sharedjourney.server.service.MapManager;
 import fr.cheesegrinder.sharedjourney.server.service.RegenService;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
@@ -55,6 +56,7 @@ public final class ServerLifecycleEvents {
 
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
+        CaveTracker.tick(event.getServer());
         RegenService.tick(event.getServer());
         SyncService.tick(event.getServer());
     }
