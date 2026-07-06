@@ -15,6 +15,7 @@ import com.mojang.math.Axis;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
+import fr.cheesegrinder.sharedjourney.common.util.UndergroundCheck;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
@@ -24,7 +25,6 @@ import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
@@ -84,7 +84,7 @@ public final class MinimapRenderer {
         }
 
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
-        if (allowed.contains(MapLayer.CAVE) && isUnderground(mc.level, mc.player)) {
+        if (allowed.contains(MapLayer.CAVE) && UndergroundCheck.isUnderground(mc.level, mc.player)) {
             return MapLayer.CAVE;
         }
 
@@ -107,13 +107,6 @@ public final class MinimapRenderer {
     private static boolean isNightTime(Level level) {
         long time = Math.floorMod(level.getDayTime(), 24000L);
         return time >= 13000L && time < 23000L;
-    }
-
-    /** Même règle que le CaveTracker serveur : la surface est au-dessus des yeux. */
-    private static boolean isUnderground(Level level, Player player) {
-        int surface = level.getHeight(Heightmap.Types.MOTION_BLOCKING,
-                player.blockPosition().getX(), player.blockPosition().getZ());
-        return surface > player.getEyeY();
     }
 
     /**

@@ -2,11 +2,11 @@ package fr.cheesegrinder.sharedjourney.server.service;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import fr.cheesegrinder.sharedjourney.common.util.UndergroundCheck;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
  * Anti-exploit des grottes : les bandes CAVE ne sont peintes que là où un
@@ -51,11 +51,11 @@ public final class CaveTracker {
             return;
         }
 
-        // Sous terre uniquement : la surface doit être au-dessus des yeux du
-        // joueur, sinon marcher en surface révélerait la bande traversée.
-        int surface = level.getHeight(Heightmap.Types.MOTION_BLOCKING,
-                player.getBlockX(), player.getBlockZ());
-        if (surface <= player.getEyeY()) {
+        // Sous terre uniquement (bloc solide au-dessus des yeux — fluides et
+        // feuilles exclus) : marcher en surface, nager ou plonger en mer
+        // ouverte ne doit pas révéler la bande traversée. Même règle que la
+        // bascule auto de la minimap côté client.
+        if (!UndergroundCheck.isUnderground(level, player)) {
             return;
         }
 

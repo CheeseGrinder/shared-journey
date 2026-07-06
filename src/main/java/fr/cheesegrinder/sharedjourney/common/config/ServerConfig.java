@@ -72,8 +72,10 @@ public final class ServerConfig {
                                 "minecraft:the_nether=CAVE",
                                 "minecraft:the_end=DAY"),
                         () -> "minecraft:overworld=DAY", ServerConfig::isValidMapping);
-        CAVE_BANDS = b.comment("Bandes Y rendues pour CAVE (bande = floor(y/16)). Ex: -1 => y=-16..-1.")
-                .defineListAllowEmpty("caveBands", List.of(-2, -1, 0, 1, 2, 3),
+        CAVE_BANDS = b.comment(
+                        "Bandes Y rendues pour CAVE (bande = floor(y/16)). Ex: -1 => y=-16..-1.",
+                        "Doit couvrir la hauteur du monde : overworld -64..127 => bandes -4..7.")
+                .defineListAllowEmpty("caveBands", List.of(-4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7),
                         () -> 0, o -> o instanceof Integer i && i >= -8 && i <= 20);
         b.pop();
 

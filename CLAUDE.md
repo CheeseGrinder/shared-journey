@@ -35,7 +35,8 @@ Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
 | `api.event`      | Custom NeoForge events: `LayerRegisterEvent`, `WaypointEvent`                             |
 | `common.config`  | `CommonConfig`, `ServerConfig`                                                            |
 | `common.network` | `Payloads` (network packets + `Hooks` indirection)                                        |
-| `common.region`  | `RegionKey`, `RegionIndex`                                                                |
+| `common.region`  | `RegionKey`, `RegionIndex`, `RegionStorage` (disk layout + legacy migration)              |
+| `common.util`    | `UndergroundCheck` (shared client/server "is underground" rule)                           |
 | `server.command` | `MapCommands` (`/sj`, `/sharedjourney`)                                                   |
 | `server.event`   | `ServerLifecycleEvents`, `PlayerEvents`, `ChunkEvents`, `ConfigEvents`                    |
 | `server.render`  | `ChunkColorizer` (facade) + per-layer renderers (`SurfaceRenderer`, `TopoRenderer`, `BiomeRenderer`, `CaveRenderer`), `BiomeTints`, `RenderContext`, `ColorUtil` |
