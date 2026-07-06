@@ -15,7 +15,7 @@ final class ColorUtil {
 
     /** Interpolation linéaire canal par canal entre deux couleurs. */
     static int lerpRgb(int a, int b, float t) {
-        t = Math.max(0f, Math.min(1f, t));
+        t = Math.clamp(t, 0f, 1f);
         int r = (int) (((a >> 16) & 0xFF) + t * (((b >> 16) & 0xFF) - ((a >> 16) & 0xFF)));
         int g = (int) (((a >> 8) & 0xFF) + t * (((b >> 8) & 0xFF) - ((a >> 8) & 0xFF)));
         int bl = (int) ((a & 0xFF) + t * ((b & 0xFF) - (a & 0xFF)));

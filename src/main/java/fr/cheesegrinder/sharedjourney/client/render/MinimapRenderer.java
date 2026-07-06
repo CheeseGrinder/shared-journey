@@ -88,7 +88,7 @@ public final class MinimapRenderer {
             return MapLayer.CAVE;
         }
 
-        if (allowed.contains(MapLayer.NIGHT) && mc.level.isNight()) {
+        if (allowed.contains(MapLayer.NIGHT) && isNightTime(mc.level)) {
             return MapLayer.NIGHT;
         }
 
@@ -97,6 +97,16 @@ public final class MinimapRenderer {
         }
 
         return allowed.get(0);
+    }
+
+    /**
+     * Nuit selon l'heure du monde (13000-23000, bornes de /time set night/day).
+     * Level.isNight() est inutilisable ici : il dépend de skyDarken, qui n'est
+     * mis à jour que côté serveur — côté client il vaut toujours 0.
+     */
+    private static boolean isNightTime(Level level) {
+        long time = Math.floorMod(level.getDayTime(), 24000L);
+        return time >= 13000L && time < 23000L;
     }
 
     /** Même règle que le CaveTracker serveur : la surface est au-dessus des yeux. */

@@ -66,8 +66,8 @@ final class BiomeTints {
 
     /** Interpolation triangulaire chaud-sec / froid / chaud-humide des colormaps. */
     private static int climateBlend(Biome biome, int hotDry, int cold, int hotWet) {
-        float t = Math.max(0f, Math.min(1f, biome.getBaseTemperature()));
-        float d = Math.max(0f, Math.min(1f, biome.getModifiedClimateSettings().downfall()));
+        float t = Math.clamp(biome.getBaseTemperature(), 0f, 1f);
+        float d = Math.clamp(biome.getModifiedClimateSettings().downfall(), 0f, 1f);
         float r = d * t;
         float cw = 1f - t;
         int rr = clamp255(((hotDry >> 16) & 0xFF)
@@ -83,6 +83,6 @@ final class BiomeTints {
     }
 
     private static int clamp255(float v) {
-        return Math.max(0, Math.min(255, (int) v));
+        return Math.clamp((int) v, 0, 255);
     }
 }

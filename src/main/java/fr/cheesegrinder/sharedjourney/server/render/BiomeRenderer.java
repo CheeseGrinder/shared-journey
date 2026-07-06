@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.render;
 
 import net.minecraft.core.Holder;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.biome.Biome;
 
@@ -22,7 +23,7 @@ final class BiomeRenderer {
         var effects = biome.value().getSpecialEffects();
         int rgb = effects.getGrassColorOverride()
                 .orElseGet(() -> hashColor(biome.unwrapKey()
-                        .map(k -> k.location())
+                        .map(ResourceKey::location)
                         .orElse(ResourceLocation.withDefaultNamespace("plains"))));
         return 0xFF000000 | rgb;
     }

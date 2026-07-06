@@ -19,7 +19,7 @@ final class TopoRenderer {
         if (!ctx.chunk.getBlockState(ctx.pos).getFluidState().isEmpty()) {
             // Eau en dégradé de bleu selon profondeur relative au niveau de la mer
             int sea = ctx.level.getSeaLevel();
-            float t = Math.max(0f, Math.min(1f, (sea - y) / 32f));
+            float t = Math.clamp((sea - y) / 32f, 0f, 1f);
             int b = 255 - (int) (t * 140);
             return 0xFF000000 | (30 << 16) | (80 << 8) | b;
         }
@@ -27,7 +27,7 @@ final class TopoRenderer {
         // Dégradé altitude : vert -> jaune/brun -> gris -> blanc
         int min = ctx.level.getSeaLevel();
         int max = ctx.chunk.getMaxBuildHeight();
-        float t = Math.max(0f, Math.min(1f, (y - min) / (float) Math.max(1, max - min)));
+        float t = Math.clamp((y - min) / (float) Math.max(1, max - min), 0f, 1f);
         int rgb;
         if (t < 0.33f) {
             rgb = ColorUtil.lerpRgb(0x2E8B37, 0xC8B454, t / 0.33f);
