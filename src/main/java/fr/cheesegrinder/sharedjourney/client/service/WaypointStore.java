@@ -1,16 +1,19 @@
 package fr.cheesegrinder.sharedjourney.client.service;
 
+import fr.cheesegrinder.sharedjourney.api.Waypoint;
+import fr.cheesegrinder.sharedjourney.api.event.WaypointEvent;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.resources.ResourceLocation;
+
+import net.neoforged.neoforge.common.NeoForge;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.logging.LogUtils;
-import fr.cheesegrinder.sharedjourney.api.Waypoint;
-import fr.cheesegrinder.sharedjourney.api.event.WaypointEvent;
-import net.minecraft.client.Minecraft;
-import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.common.NeoForge;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -46,13 +49,21 @@ public final class WaypointStore {
         if (server != null) {
             id = server.ip.toLowerCase().replaceAll("[^a-z0-9._-]", "_");
         } else if (mc.getSingleplayerServer() != null) {
-            id = "sp_" + mc.getSingleplayerServer().getWorldData().getLevelName()
-                    .toLowerCase().replaceAll("[^a-z0-9._-]", "_");
+            id = "sp_"
+                    + mc.getSingleplayerServer()
+                            .getWorldData()
+                            .getLevelName()
+                            .toLowerCase()
+                            .replaceAll("[^a-z0-9._-]", "_");
         } else {
             id = "unknown";
         }
 
-        file = mc.gameDirectory.toPath().resolve("sharedjourney_cache").resolve(id).resolve("waypoints.json");
+        file = mc.gameDirectory
+                .toPath()
+                .resolve("sharedjourney_cache")
+                .resolve(id)
+                .resolve("waypoints.json");
         load();
     }
 
@@ -69,7 +80,9 @@ public final class WaypointStore {
     }
 
     public static List<Waypoint> forDimension(ResourceLocation dim) {
-        return WAYPOINTS.values().stream().filter(w -> w.dimension().equals(dim)).toList();
+        return WAYPOINTS.values().stream()
+                .filter(w -> w.dimension().equals(dim))
+                .toList();
     }
 
     public static Waypoint get(UUID id) {
@@ -106,7 +119,9 @@ public final class WaypointStore {
     /** Supprime tous les waypoints d'une source donnée (utilisé par le bridge). */
     public static void removeBySource(String source) {
         List<UUID> ids = WAYPOINTS.values().stream()
-                .filter(w -> w.source().equals(source)).map(Waypoint::id).toList();
+                .filter(w -> w.source().equals(source))
+                .map(Waypoint::id)
+                .toList();
         ids.forEach(WaypointStore::remove);
     }
 
@@ -126,15 +141,19 @@ public final class WaypointStore {
 
             for (JsonElement el : arr) {
                 JsonObject o = el.getAsJsonObject();
-                ResourceLocation dim = ResourceLocation.tryParse(o.get("dimension").getAsString());
+                ResourceLocation dim =
+                        ResourceLocation.tryParse(o.get("dimension").getAsString());
                 if (dim == null) {
                     continue;
                 }
 
                 Waypoint wp = new Waypoint(
                         UUID.fromString(o.get("id").getAsString()),
-                        o.get("name").getAsString(), dim,
-                        o.get("x").getAsInt(), o.get("y").getAsInt(), o.get("z").getAsInt(),
+                        o.get("name").getAsString(),
+                        dim,
+                        o.get("x").getAsInt(),
+                        o.get("y").getAsInt(),
+                        o.get("z").getAsInt(),
                         o.get("color").getAsInt(),
                         o.has("source") ? o.get("source").getAsString() : "user",
                         !o.has("visible") || o.get("visible").getAsBoolean());

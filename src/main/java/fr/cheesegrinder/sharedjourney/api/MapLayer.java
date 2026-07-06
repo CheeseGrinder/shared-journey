@@ -1,10 +1,11 @@
 package fr.cheesegrinder.sharedjourney.api;
 
-import java.util.Locale;
-
-import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+
+import io.netty.buffer.ByteBuf;
+
+import java.util.Locale;
 
 /**
  * Couches de rendu de la carte.

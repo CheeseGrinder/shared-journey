@@ -1,20 +1,22 @@
 package fr.cheesegrinder.sharedjourney.client.command;
 
+import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.DiskCache;
 
-import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.arguments.StringArgumentType;
-import com.mojang.brigadier.builder.LiteralArgumentBuilder;
-import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
+
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 
 /**
  * Commandes CLIENT sous les mêmes racines /sharedjourney et /sj (spec §7).
@@ -39,15 +41,21 @@ public final class ClientCommands {
                         .then(Commands.argument("layer", StringArgumentType.word())
                                 .suggests((ctx, sb) -> {
                                     sb.suggest("all");
-                                    sb.suggest("day"); sb.suggest("night");
-                                    sb.suggest("topo"); sb.suggest("biome"); sb.suggest("cave");
+                                    sb.suggest("day");
+                                    sb.suggest("night");
+                                    sb.suggest("topo");
+                                    sb.suggest("biome");
+                                    sb.suggest("cave");
                                     return sb.buildFuture();
                                 })
                                 .executes(ctx -> {
                                     String layer = StringArgumentType.getString(ctx, "layer");
                                     int deleted = DiskCache.purge(layer);
-                                    ctx.getSource().sendSuccess(() -> Component.translatable(
-                                            "sharedjourney.command.purged", deleted, layer), false);
+                                    ctx.getSource()
+                                            .sendSuccess(
+                                                    () -> Component.translatable(
+                                                            "sharedjourney.command.purged", deleted, layer),
+                                                    false);
                                     return deleted;
                                 })))
                 // /sj goto <x> <z> : ouvre la carte centrée sur la position
@@ -62,14 +70,15 @@ public final class ClientCommands {
                                             return 1;
                                         }))))
                 // /sj cache : état du cache local
-                .then(Commands.literal("cache")
-                        .executes(ctx -> {
-                            CommandSourceStack src = ctx.getSource();
-                            src.sendSuccess(() -> Component.literal(
+                .then(Commands.literal("cache").executes(ctx -> {
+                    CommandSourceStack src = ctx.getSource();
+                    src.sendSuccess(
+                            () -> Component.literal(
                                     "Cache local : " + DiskCache.index().size() + " région(s) sur disque, "
                                             + ClientMapCache.loadedCount() + " texture(s) chargée(s), "
-                                            + ClientMapCache.pendingCount() + " en cours de réception"), false);
-                            return 1;
-                        }));
+                                            + ClientMapCache.pendingCount() + " en cours de réception"),
+                            false);
+                    return 1;
+                }));
     }
 }

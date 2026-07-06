@@ -1,14 +1,13 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
-import fr.cheesegrinder.sharedjourney.server.render.ChunkColorizer;
-
-import com.mojang.logging.LogUtils;
 import fr.cheesegrinder.sharedjourney.api.ChunkLayerRenderer;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
+import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
 import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
-import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import fr.cheesegrinder.sharedjourney.server.render.ChunkColorizer;
+
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -17,9 +16,10 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.storage.LevelResource;
+
+import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
-import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -33,6 +33,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.imageio.ImageIO;
 
 /**
  * Source de vérité côté serveur (spec §3.1 et §4).
@@ -81,6 +82,7 @@ public final class MapManager {
 
     /** File de chunks à (re)rendre, dédupliquée (dirty marking, spec §4). */
     private final ArrayDeque<QueuedChunk> renderQueue = new ArrayDeque<>();
+
     private final Set<QueuedChunk> queued = new LinkedHashSet<>();
 
     private record QueuedChunk(ResourceKey<Level> dim, int cx, int cz) {}
@@ -109,8 +111,10 @@ public final class MapManager {
             t.setPriority(Thread.NORM_PRIORITY - 1);
             return t;
         });
-        LOGGER.info("SharedJourney : moteur de rendu initialisé ({} thread(s), index: {} région(s))",
-                workerCount, index.size());
+        LOGGER.info(
+                "SharedJourney : moteur de rendu initialisé ({} thread(s), index: {} région(s))",
+                workerCount,
+                index.size());
     }
 
     private void close() {
@@ -206,8 +210,8 @@ public final class MapManager {
         ChunkAccess[] neighbors = new ChunkAccess[9];
         for (int dz = -1; dz <= 1; dz++) {
             for (int dx = -1; dx <= 1; dx++) {
-                neighbors[(dx + 1) + (dz + 1) * 3] = level.getChunkSource()
-                        .getChunk(cp.x + dx, cp.z + dz, ChunkStatus.BIOMES, false);
+                neighbors[(dx + 1) + (dz + 1) * 3] =
+                        level.getChunkSource().getChunk(cp.x + dx, cp.z + dz, ChunkStatus.BIOMES, false);
             }
         }
         neighbors[4] = chunk;
@@ -218,8 +222,12 @@ public final class MapManager {
                 try {
                     renderChunk(level, chunk, neighbors);
                 } catch (Throwable t) {
-                    LOGGER.error("Echec de rendu du chunk {},{} en {}",
-                            chunk.getPos().x, chunk.getPos().z, level.dimension().location(), t);
+                    LOGGER.error(
+                            "Echec de rendu du chunk {},{} en {}",
+                            chunk.getPos().x,
+                            chunk.getPos().z,
+                            level.dimension().location(),
+                            t);
                 } finally {
                     tasksInFlight.decrementAndGet();
                 }
@@ -331,8 +339,7 @@ public final class MapManager {
 
         synchronized (Objects.requireNonNull(img)) {
             for (int z = 0; z < 16; z++) {
-                System.arraycopy(chunkPixels, z * 16, img.pixels,
-                        ox + (oz + z) * RegionKey.REGION_BLOCKS, 16);
+                System.arraycopy(chunkPixels, z * 16, img.pixels, ox + (oz + z) * RegionKey.REGION_BLOCKS, 16);
             }
             img.version = Math.max(img.version + 1, System.currentTimeMillis());
             img.dirty = true;
@@ -389,10 +396,9 @@ public final class MapManager {
 
     private static byte[] encodePng(int[] pixels) {
         try {
-            BufferedImage bi = new BufferedImage(RegionKey.REGION_BLOCKS, RegionKey.REGION_BLOCKS,
-                    BufferedImage.TYPE_INT_ARGB);
-            bi.setRGB(0, 0, RegionKey.REGION_BLOCKS, RegionKey.REGION_BLOCKS,
-                    pixels, 0, RegionKey.REGION_BLOCKS);
+            BufferedImage bi =
+                    new BufferedImage(RegionKey.REGION_BLOCKS, RegionKey.REGION_BLOCKS, BufferedImage.TYPE_INT_ARGB);
+            bi.setRGB(0, 0, RegionKey.REGION_BLOCKS, RegionKey.REGION_BLOCKS, pixels, 0, RegionKey.REGION_BLOCKS);
             ByteArrayOutputStream bos = new ByteArrayOutputStream(64 * 1024);
             ImageIO.write(bi, "png", bos);
             return bos.toByteArray();
@@ -413,8 +419,14 @@ public final class MapManager {
             try {
                 BufferedImage bi = ImageIO.read(file.toFile());
                 RegionImage loaded = new RegionImage();
-                bi.getRGB(0, 0, RegionKey.REGION_BLOCKS, RegionKey.REGION_BLOCKS,
-                        loaded.pixels, 0, RegionKey.REGION_BLOCKS);
+                bi.getRGB(
+                        0,
+                        0,
+                        RegionKey.REGION_BLOCKS,
+                        RegionKey.REGION_BLOCKS,
+                        loaded.pixels,
+                        0,
+                        RegionKey.REGION_BLOCKS);
                 long v = index.get(key);
                 loaded.version = v >= 0 ? v : Files.getLastModifiedTime(file).toMillis();
                 RegionImage prev = regions.putIfAbsent(key, loaded);

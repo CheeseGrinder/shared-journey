@@ -3,11 +3,12 @@ package fr.cheesegrinder.sharedjourney.client.gui;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
-import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
+import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
+
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -15,10 +16,10 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.monster.Enemy;
@@ -27,6 +28,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
+
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.ArrayList;
@@ -89,14 +91,18 @@ public class FullMapScreen extends Screen {
     @Override
     protected void init() {
         layerButton = addRenderableWidget(Button.builder(layerLabel(), b -> cycleLayer())
-                .bounds(width / 2 - 60, height - 26, 120, 20).build());
+                .bounds(width / 2 - 60, height - 26, 120, 20)
+                .build());
         bandMinus = addRenderableWidget(Button.builder(Component.literal("-"), b -> changeBand(-1))
-                .bounds(width / 2 - 90, height - 26, 20, 20).build());
+                .bounds(width / 2 - 90, height - 26, 20, 20)
+                .build());
         bandPlus = addRenderableWidget(Button.builder(Component.literal("+"), b -> changeBand(+1))
-                .bounds(width / 2 + 70, height - 26, 20, 20).build());
-        addRenderableWidget(Button.builder(
-                        Component.translatable("sharedjourney.fullmap.center"), b -> centerOnPlayer())
-                .bounds(width - 86, height - 26, 80, 20).build());
+                .bounds(width / 2 + 70, height - 26, 20, 20)
+                .build());
+        addRenderableWidget(
+                Button.builder(Component.translatable("sharedjourney.fullmap.center"), b -> centerOnPlayer())
+                        .bounds(width - 86, height - 26, 80, 20)
+                        .build());
         contextButtons.clear(); // init() recrée tous les widgets (resize)
         updateBandButtons();
     }
@@ -252,9 +258,11 @@ public class FullMapScreen extends Screen {
 
     private void addContextButton(int x, int y, int w, int h, String key, Runnable action) {
         Button b = Button.builder(Component.translatable(key), btn -> {
-            closeContextMenu();
-            action.run();
-        }).bounds(x, y, w, h).build();
+                    closeContextMenu();
+                    action.run();
+                })
+                .bounds(x, y, w, h)
+                .build();
         contextButtons.add(b);
         addRenderableWidget(b);
     }
@@ -267,8 +275,7 @@ public class FullMapScreen extends Screen {
     /** Y de surface si le chunk est chargé côté client, sinon -1. */
     private int surfaceYAt(int wx, int wz) {
         var mc = Minecraft.getInstance();
-        LevelChunk chunk = mc.level == null ? null
-                : mc.level.getChunkSource().getChunkNow(wx >> 4, wz >> 4);
+        LevelChunk chunk = mc.level == null ? null : mc.level.getChunkSource().getChunkNow(wx >> 4, wz >> 4);
         if (chunk == null) {
             return -1;
         }
@@ -284,8 +291,7 @@ public class FullMapScreen extends Screen {
 
         int y = surfaceYAt(wx, wz);
         String yArg = y >= 0 ? String.valueOf(y) : "~";
-        mc.player.connection.sendUnsignedCommand(
-                "tp @s " + (wx + 0.5) + " " + yArg + " " + (wz + 0.5));
+        mc.player.connection.sendUnsignedCommand("tp @s " + (wx + 0.5) + " " + yArg + " " + (wz + 0.5));
         onClose();
     }
 
@@ -297,9 +303,12 @@ public class FullMapScreen extends Screen {
 
         int y = surfaceYAt(wx, wz);
         int wy = y >= 0 ? y : mc.player.blockPosition().getY();
-        Waypoint wp = Waypoint.create("X:" + wx + " Z:" + wz,
-                mc.level.dimension().location(), new BlockPos(wx, wy, wz),
-                0xFFFFFF & ThreadLocalRandom.current().nextInt(), "user");
+        Waypoint wp = Waypoint.create(
+                "X:" + wx + " Z:" + wz,
+                mc.level.dimension().location(),
+                new BlockPos(wx, wy, wz),
+                0xFFFFFF & ThreadLocalRandom.current().nextInt(),
+                "user");
         mc.setScreen(new WaypointEditScreen(this, wp, true));
     }
 
@@ -307,13 +316,11 @@ public class FullMapScreen extends Screen {
     private void logCoords(int wx, int wz) {
         var mc = Minecraft.getInstance();
         Component msg = Component.translatable("sharedjourney.coords.chat", wx, wz)
-                .withStyle(style -> style
-                        .withColor(ChatFormatting.AQUA)
+                .withStyle(style -> style.withColor(ChatFormatting.AQUA)
                         .withUnderlined(true)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,
-                                "/sj goto " + wx + " " + wz))
-                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                                Component.translatable("sharedjourney.coords.open"))));
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/sj goto " + wx + " " + wz))
+                        .withHoverEvent(new HoverEvent(
+                                HoverEvent.Action.SHOW_TEXT, Component.translatable("sharedjourney.coords.open"))));
         mc.gui.getChat().addMessage(msg);
         onClose(); // referme la carte pour laisser voir le chat
     }
@@ -331,11 +338,14 @@ public class FullMapScreen extends Screen {
         if (chunk != null) {
             int top = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, wx & 15, wz & 15);
             BlockPos pos = new BlockPos(wx, top, wz);
-            String biomeId = mc.level.getBiome(pos).unwrapKey()
+            String biomeId = mc.level
+                    .getBiome(pos)
+                    .unwrapKey()
                     .map(k -> k.location().toString())
                     .orElse("");
             BlockState state = chunk.getBlockState(pos);
-            String blockId = state.isAir() ? ""
+            String blockId = state.isAir()
+                    ? ""
                     : BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
             return new ClientMapCache.HoverInfo(top, biomeId, blockId);
         }
@@ -410,8 +420,12 @@ public class FullMapScreen extends Screen {
             infoY += 12;
             if (!info.biomeId().isEmpty()) {
                 var loc = ResourceLocation.parse(info.biomeId());
-                gg.drawString(font, Component.translatable(
-                        "biome." + loc.getNamespace() + "." + loc.getPath()), 6, infoY, 0xC0C0FF);
+                gg.drawString(
+                        font,
+                        Component.translatable("biome." + loc.getNamespace() + "." + loc.getPath()),
+                        6,
+                        infoY,
+                        0xC0C0FF);
                 infoY += 12;
             }
             if (!info.blockId().isEmpty()) {
@@ -429,8 +443,12 @@ public class FullMapScreen extends Screen {
         // Nom du waypoint survolé
         Waypoint hovered = nearestWaypoint(mouseX, mouseY);
         if (hovered != null) {
-            gg.renderTooltip(font, Component.literal(hovered.name()
-                    + " (" + hovered.x() + ", " + hovered.y() + ", " + hovered.z() + ")"), mouseX, mouseY);
+            gg.renderTooltip(
+                    font,
+                    Component.literal(
+                            hovered.name() + " (" + hovered.x() + ", " + hovered.y() + ", " + hovered.z() + ")"),
+                    mouseX,
+                    mouseY);
         }
     }
 
@@ -465,10 +483,16 @@ public class FullMapScreen extends Screen {
                 RegionKey key = new RegionKey(dim, layer, layer == MapLayer.CAVE ? band : 0, rx, rz);
                 ClientMapCache.Region region = ClientMapCache.getOrLoad(key);
                 if (region != null) {
-                    gg.blit(region.texture(),
-                            rx * RegionKey.REGION_BLOCKS, rz * RegionKey.REGION_BLOCKS,
-                            0f, 0f, RegionKey.REGION_BLOCKS, RegionKey.REGION_BLOCKS,
-                            RegionKey.REGION_BLOCKS, RegionKey.REGION_BLOCKS);
+                    gg.blit(
+                            region.texture(),
+                            rx * RegionKey.REGION_BLOCKS,
+                            rz * RegionKey.REGION_BLOCKS,
+                            0f,
+                            0f,
+                            RegionKey.REGION_BLOCKS,
+                            RegionKey.REGION_BLOCKS,
+                            RegionKey.REGION_BLOCKS,
+                            RegionKey.REGION_BLOCKS);
                 }
                 // Demande si absente ou potentiellement périmée (throttlée)
                 long now = System.currentTimeMillis();
@@ -516,14 +540,11 @@ public class FullMapScreen extends Screen {
                 int color;
                 if (e instanceof Player && ClientConfig.RADAR_PLAYERS.get()) {
                     color = 0xFFFFFFFF;
-                }
-                else if (e instanceof Enemy && ClientConfig.RADAR_HOSTILE.get()) {
+                } else if (e instanceof Enemy && ClientConfig.RADAR_HOSTILE.get()) {
                     color = 0xFFFF4040;
-                }
-                else if (e instanceof Animal && ClientConfig.RADAR_PASSIVE.get()) {
+                } else if (e instanceof Animal && ClientConfig.RADAR_PASSIVE.get()) {
                     color = 0xFF40FF40;
-                }
-                else {
+                } else {
                     continue;
                 }
 

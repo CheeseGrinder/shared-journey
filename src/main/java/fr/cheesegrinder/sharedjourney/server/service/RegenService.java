@@ -1,8 +1,8 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
-import com.mojang.logging.LogUtils;
-import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
+
 import net.minecraft.Util;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -16,6 +16,8 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.storage.LevelResource;
+
+import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
 import java.io.DataInputStream;
@@ -158,8 +160,10 @@ public final class RegenService {
 
         scanning = true;
         final int myEpoch = ++epoch;
-        bossBar = new ServerBossEvent(Component.translatable("sharedjourney.regen.scan"),
-                BossEvent.BossBarColor.GREEN, BossEvent.BossBarOverlay.PROGRESS);
+        bossBar = new ServerBossEvent(
+                Component.translatable("sharedjourney.regen.scan"),
+                BossEvent.BossBarColor.GREEN,
+                BossEvent.BossBarOverlay.PROGRESS);
         bossBar.setProgress(0f);
 
         // Chemins résolus sur le main thread ; lecture des fichiers en async.
@@ -171,63 +175,73 @@ public final class RegenService {
                 continue;
             }
 
-            Path regionDir = DimensionType.getStorageFolder(level.dimension(), worldRoot).resolve("region");
+            Path regionDir =
+                    DimensionType.getStorageFolder(level.dimension(), worldRoot).resolve("region");
             targets.add(new Target(level.dimension(), regionDir));
         }
 
-        CompletableFuture.runAsync(() -> {
-            ArrayDeque<Batch> q = new ArrayDeque<>();
-            int count = 0;
-            for (Target target : targets) {
-                if (!Files.isDirectory(target.regionDir())) {
-                    continue;
-                }
+        CompletableFuture.runAsync(
+                        () -> {
+                            ArrayDeque<Batch> q = new ArrayDeque<>();
+                            int count = 0;
+                            for (Target target : targets) {
+                                if (!Files.isDirectory(target.regionDir())) {
+                                    continue;
+                                }
 
-                try (Stream<Path> files = Files.list(target.regionDir())) {
-                    for (Path file : (Iterable<Path>) files::iterator) {
-                        Matcher m = MCA_NAME.matcher(file.getFileName().toString());
-                        if (!m.matches()) {
-                            continue;
+                                try (Stream<Path> files = Files.list(target.regionDir())) {
+                                    for (Path file : (Iterable<Path>) files::iterator) {
+                                        Matcher m = MCA_NAME.matcher(
+                                                file.getFileName().toString());
+                                        if (!m.matches()) {
+                                            continue;
+                                        }
+
+                                        long[] mask = readPresenceMask(file);
+                                        if (mask == null) {
+                                            continue;
+                                        }
+
+                                        Batch batch = new Batch(
+                                                target.dim(),
+                                                Integer.parseInt(m.group(1)),
+                                                Integer.parseInt(m.group(2)),
+                                                mask);
+                                        int n = batch.count();
+                                        if (n > 0) {
+                                            q.add(batch);
+                                            count += n;
+                                        }
+                                    }
+                                } catch (IOException e) {
+                                    LOGGER.warn("SharedJourney : échec du scan de {}", target.regionDir(), e);
+                                }
+                            }
+                            final int finalCount = count;
+                            server.execute(() -> {
+                                // Annulée ou remplacée pendant le scan : on jette le résultat.
+                                if (epoch != myEpoch || !scanning) {
+                                    return;
+                                }
+
+                                scanning = false;
+                                install(q, finalCount);
+                                LOGGER.info(
+                                        "SharedJourney : scan terminé, {} chunk(s) à rendre dans {} région(s)",
+                                        finalCount,
+                                        q.size());
+                            });
+                        },
+                        Util.backgroundExecutor())
+                .exceptionally(t -> {
+                    LOGGER.error("SharedJourney : échec du scan des fichiers de région", t);
+                    server.execute(() -> {
+                        if (epoch == myEpoch && scanning) {
+                            cancel();
                         }
-
-                        long[] mask = readPresenceMask(file);
-                        if (mask == null) {
-                            continue;
-                        }
-
-                        Batch batch = new Batch(target.dim(),
-                                Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), mask);
-                        int n = batch.count();
-                        if (n > 0) {
-                            q.add(batch);
-                            count += n;
-                        }
-                    }
-                } catch (IOException e) {
-                    LOGGER.warn("SharedJourney : échec du scan de {}", target.regionDir(), e);
-                }
-            }
-            final int finalCount = count;
-            server.execute(() -> {
-                // Annulée ou remplacée pendant le scan : on jette le résultat.
-                if (epoch != myEpoch || !scanning) {
-                    return;
-                }
-
-                scanning = false;
-                install(q, finalCount);
-                LOGGER.info("SharedJourney : scan terminé, {} chunk(s) à rendre dans {} région(s)",
-                        finalCount, q.size());
-            });
-        }, Util.backgroundExecutor()).exceptionally(t -> {
-            LOGGER.error("SharedJourney : échec du scan des fichiers de région", t);
-            server.execute(() -> {
-                if (epoch == myEpoch && scanning) {
-                    cancel();
-                }
-            });
-            return null;
-        });
+                    });
+                    return null;
+                });
         return true;
     }
 
@@ -239,8 +253,7 @@ public final class RegenService {
         total = count;
         done = 0;
         if (bossBar == null) {
-            bossBar = new ServerBossEvent(barName(),
-                    BossEvent.BossBarColor.GREEN, BossEvent.BossBarOverlay.PROGRESS);
+            bossBar = new ServerBossEvent(barName(), BossEvent.BossBarColor.GREEN, BossEvent.BossBarOverlay.PROGRESS);
         }
         bossBar.setName(barName());
         bossBar.setProgress(0f);
@@ -257,9 +270,8 @@ public final class RegenService {
             new DataInputStream(in).readFully(header);
             long[] mask = new long[16];
             for (int i = 0; i < 1024; i++) {
-                int offset = ((header[i * 4] & 0xFF) << 16)
-                        | ((header[i * 4 + 1] & 0xFF) << 8)
-                        | (header[i * 4 + 2] & 0xFF);
+                int offset =
+                        ((header[i * 4] & 0xFF) << 16) | ((header[i * 4 + 1] & 0xFF) << 8) | (header[i * 4 + 2] & 0xFF);
                 int sectors = header[i * 4 + 3] & 0xFF;
                 if (offset != 0 && sectors != 0) {
                     mask[i >> 6] |= 1L << (i & 63);
@@ -338,8 +350,7 @@ public final class RegenService {
         }
 
         // Fin : attend que le pool de rendu ait terminé avant de retirer la bar.
-        if (queue != null && queue.isEmpty() && current == null
-                && mgr.queueSize() == 0 && mgr.tasksInFlight() == 0) {
+        if (queue != null && queue.isEmpty() && current == null && mgr.queueSize() == 0 && mgr.tasksInFlight() == 0) {
             cancel();
         }
     }
@@ -381,12 +392,16 @@ public final class RegenService {
      */
     private static boolean isChunkFull(ServerLevel level, int cx, int cz) {
         try {
-            Optional<CompoundTag> tag = level.getChunkSource().chunkMap
-                    .read(new ChunkPos(cx, cz)).join();
+            Optional<CompoundTag> tag =
+                    level.getChunkSource().chunkMap.read(new ChunkPos(cx, cz)).join();
             return tag.isPresent() && tag.get().getString("Status").endsWith("full");
         } catch (Exception e) {
-            LOGGER.warn("SharedJourney : statut illisible pour le chunk {},{} en {}",
-                    cx, cz, level.dimension().location(), e);
+            LOGGER.warn(
+                    "SharedJourney : statut illisible pour le chunk {},{} en {}",
+                    cx,
+                    cz,
+                    level.dimension().location(),
+                    e);
             return false;
         }
     }

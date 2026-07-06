@@ -1,16 +1,18 @@
 package fr.cheesegrinder.sharedjourney.common.network;
 
-import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
-
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
+import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
+
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
+
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
+
 import org.jetbrains.annotations.NotNull;
 
 import java.io.ByteArrayInputStream;
@@ -52,9 +54,9 @@ public final class Payloads {
     // ---------------------------------------------------------------- S2C : couches actives
 
     /** Couches actives par dimension + bandes CAVE (envoyé au login et à chaque reload). */
-    public record LayerSettingsPayload(Map<ResourceLocation, List<MapLayer>> layersByDim,
-                                       List<Integer> caveBands,
-                                       int radarMaxRadius) implements CustomPacketPayload {
+    public record LayerSettingsPayload(
+            Map<ResourceLocation, List<MapLayer>> layersByDim, List<Integer> caveBands, int radarMaxRadius)
+            implements CustomPacketPayload {
         public static final Type<LayerSettingsPayload> TYPE = new Type<>(id("layer_settings"));
 
         public static final StreamCodec<FriendlyByteBuf, LayerSettingsPayload> CODEC = StreamCodec.of(
@@ -91,7 +93,8 @@ public final class Payloads {
                     return new LayerSettingsPayload(map, bands, buf.readVarInt());
                 });
 
-        @Override public @NotNull Type<? extends CustomPacketPayload> type() {
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
             return TYPE;
         }
     }
@@ -99,8 +102,8 @@ public final class Payloads {
     // ---------------------------------------------------------------- S2C : données de région
 
     /** Fragment de PNG de région, compressé GZIP côté flux complet (spec §5.3). */
-    public record RegionDataPayload(RegionKey key, long version, int part, int totalParts,
-                                    byte[] data) implements CustomPacketPayload {
+    public record RegionDataPayload(RegionKey key, long version, int part, int totalParts, byte[] data)
+            implements CustomPacketPayload {
         public static final Type<RegionDataPayload> TYPE = new Type<>(id("region_data"));
 
         public static final StreamCodec<FriendlyByteBuf, RegionDataPayload> CODEC = StreamCodec.of(
@@ -113,10 +116,13 @@ public final class Payloads {
                 },
                 buf -> new RegionDataPayload(
                         RegionKey.STREAM_CODEC.decode(buf),
-                        buf.readVarLong(), buf.readVarInt(), buf.readVarInt(),
+                        buf.readVarLong(),
+                        buf.readVarInt(),
+                        buf.readVarInt(),
                         buf.readByteArray()));
 
-        @Override public @NotNull Type<? extends CustomPacketPayload> type() {
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
             return TYPE;
         }
     }
@@ -132,20 +138,21 @@ public final class Payloads {
         public static final Type<ClientIndexPayload> TYPE = new Type<>(id("client_index"));
 
         public static final StreamCodec<FriendlyByteBuf, ClientIndexPayload> CODEC = StreamCodec.of(
-                (buf, p) -> buf.writeByteArray(p.gzippedIndex),
-                buf -> new ClientIndexPayload(buf.readByteArray()));
+                (buf, p) -> buf.writeByteArray(p.gzippedIndex), buf -> new ClientIndexPayload(buf.readByteArray()));
 
-        @Override public @NotNull Type<? extends CustomPacketPayload> type() {
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
             return TYPE;
         }
 
         /** Sérialisation compacte : lignes "indexKey=timestamp", GZIP. */
         public static byte[] encodeIndex(Map<RegionKey, Long> entries) {
             StringBuilder sb = new StringBuilder(entries.size() * 48);
-            entries.forEach((k, v) -> sb.append(k.indexKey()).append('=').append(v).append('\n'));
+            entries.forEach(
+                    (k, v) -> sb.append(k.indexKey()).append('=').append(v).append('\n'));
 
             try (var bos = new ByteArrayOutputStream();
-                 var gz = new GZIPOutputStream(bos)) {
+                    var gz = new GZIPOutputStream(bos)) {
                 gz.write(sb.toString().getBytes(StandardCharsets.UTF_8));
                 gz.finish();
 
@@ -175,10 +182,13 @@ public final class Payloads {
                         continue;
                     }
 
-                    try { out.put(key, Long.parseLong(line.substring(eq + 1))); }
-                    catch (NumberFormatException ignored) {}
+                    try {
+                        out.put(key, Long.parseLong(line.substring(eq + 1)));
+                    } catch (NumberFormatException ignored) {
+                    }
                 }
-            } catch (IOException ignored) {}
+            } catch (IOException ignored) {
+            }
             return out;
         }
     }
@@ -186,8 +196,7 @@ public final class Payloads {
     // ---------------------------------------------------------------- C2S : requête de régions
 
     /** Le client demande des régions (plein écran) avec la version qu'il possède (-1 sinon). */
-    public record RegionRequestPayload(List<RegionKey> keys, List<Long> knownVersions)
-            implements CustomPacketPayload {
+    public record RegionRequestPayload(List<RegionKey> keys, List<Long> knownVersions) implements CustomPacketPayload {
         public static final Type<RegionRequestPayload> TYPE = new Type<>(id("region_request"));
 
         public static final StreamCodec<FriendlyByteBuf, RegionRequestPayload> CODEC = StreamCodec.of(
@@ -209,7 +218,8 @@ public final class Payloads {
                     return new RegionRequestPayload(keys, versions);
                 });
 
-        @Override public @NotNull Type<? extends CustomPacketPayload> type() {
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
             return TYPE;
         }
     }
@@ -227,7 +237,8 @@ public final class Payloads {
                 },
                 buf -> new MapInfoRequestPayload(buf.readInt(), buf.readInt()));
 
-        @Override public @NotNull Type<? extends CustomPacketPayload> type() {
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
             return TYPE;
         }
     }
@@ -245,10 +256,11 @@ public final class Payloads {
                     buf.writeUtf(p.biomeId);
                     buf.writeUtf(p.blockId);
                 },
-                buf -> new MapInfoReplyPayload(buf.readInt(), buf.readInt(), buf.readInt(),
-                        buf.readUtf(), buf.readUtf()));
+                buf -> new MapInfoReplyPayload(
+                        buf.readInt(), buf.readInt(), buf.readInt(), buf.readUtf(), buf.readUtf()));
 
-        @Override public @NotNull Type<? extends CustomPacketPayload> type() {
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
             return TYPE;
         }
     }
@@ -256,24 +268,37 @@ public final class Payloads {
     // ---------------------------------------------------------------- enregistrement
 
     public static void register(final RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar(SharedJourneyConstants.MOD_ID).versioned("1");
+        PayloadRegistrar registrar =
+                event.registrar(SharedJourneyConstants.MOD_ID).versioned("1");
 
-        registrar.playToClient(LayerSettingsPayload.TYPE, LayerSettingsPayload.CODEC,
+        registrar.playToClient(
+                LayerSettingsPayload.TYPE,
+                LayerSettingsPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientLayerSettings.accept(payload)));
 
-        registrar.playToClient(RegionDataPayload.TYPE, RegionDataPayload.CODEC,
+        registrar.playToClient(
+                RegionDataPayload.TYPE,
+                RegionDataPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientRegionData.accept(payload)));
 
-        registrar.playToServer(RegionRequestPayload.TYPE, RegionRequestPayload.CODEC,
+        registrar.playToServer(
+                RegionRequestPayload.TYPE,
+                RegionRequestPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.serverRegionRequest.accept(ctx.player(), payload)));
 
-        registrar.playToServer(ClientIndexPayload.TYPE, ClientIndexPayload.CODEC,
+        registrar.playToServer(
+                ClientIndexPayload.TYPE,
+                ClientIndexPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.serverClientIndex.accept(ctx.player(), payload)));
 
-        registrar.playToClient(MapInfoReplyPayload.TYPE, MapInfoReplyPayload.CODEC,
+        registrar.playToClient(
+                MapInfoReplyPayload.TYPE,
+                MapInfoReplyPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientMapInfoReply.accept(payload)));
 
-        registrar.playToServer(MapInfoRequestPayload.TYPE, MapInfoRequestPayload.CODEC,
+        registrar.playToServer(
+                MapInfoRequestPayload.TYPE,
+                MapInfoRequestPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.serverMapInfoRequest.accept(ctx.player(), payload)));
     }
 }

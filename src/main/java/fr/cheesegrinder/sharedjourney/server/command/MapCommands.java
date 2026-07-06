@@ -1,15 +1,11 @@
 package fr.cheesegrinder.sharedjourney.server.command;
 
+import fr.cheesegrinder.sharedjourney.api.MapLayer;
+import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
 import fr.cheesegrinder.sharedjourney.server.service.MapManager;
 import fr.cheesegrinder.sharedjourney.server.service.RegenService;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
 
-import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.BoolArgumentType;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.builder.LiteralArgumentBuilder;
-import fr.cheesegrinder.sharedjourney.api.MapLayer;
-import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.DimensionArgument;
@@ -18,6 +14,11 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
+
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 
 import java.util.Collection;
 import java.util.Locale;
@@ -66,33 +67,37 @@ public final class MapCommands {
                         .requires(src -> src.hasPermission(2))
                         .executes(ctx -> {
                             ServerPlayer p = EntityArgument.getPlayer(ctx, "joueur");
-                            ctx.getSource().sendSuccess(
-                                    () -> Component.literal(SyncService.statsFor(p)), false);
+                            ctx.getSource().sendSuccess(() -> Component.literal(SyncService.statsFor(p)), false);
                             return 1;
                         })));
 
         // ---- /map admin ... (OP)
-        LiteralArgumentBuilder<CommandSourceStack> admin = Commands.literal("admin")
-                .requires(src -> src.hasPermission(2));
+        LiteralArgumentBuilder<CommandSourceStack> admin =
+                Commands.literal("admin").requires(src -> src.hasPermission(2));
 
         // sync force <joueurs|all> [rx rz]
-        admin.then(Commands.literal("sync").then(Commands.literal("force")
-                .then(Commands.literal("all")
-                        .executes(ctx -> forceAll(ctx.getSource(), null))
-                        .then(Commands.argument("rx", IntegerArgumentType.integer())
-                                .then(Commands.argument("rz", IntegerArgumentType.integer())
-                                        .executes(ctx -> forceAll(ctx.getSource(), new int[]{
-                                                IntegerArgumentType.getInteger(ctx, "rx"),
-                                                IntegerArgumentType.getInteger(ctx, "rz")})))))
-                .then(Commands.argument("joueurs", EntityArgument.players())
-                        .executes(ctx -> force(ctx.getSource(),
-                                EntityArgument.getPlayers(ctx, "joueurs"), null))
-                        .then(Commands.argument("rx", IntegerArgumentType.integer())
-                                .then(Commands.argument("rz", IntegerArgumentType.integer())
-                                        .executes(ctx -> force(ctx.getSource(),
-                                                EntityArgument.getPlayers(ctx, "joueurs"), new int[]{
-                                                        IntegerArgumentType.getInteger(ctx, "rx"),
-                                                        IntegerArgumentType.getInteger(ctx, "rz")})))))));
+        admin.then(Commands.literal("sync")
+                .then(Commands.literal("force")
+                        .then(Commands.literal("all")
+                                .executes(ctx -> forceAll(ctx.getSource(), null))
+                                .then(Commands.argument("rx", IntegerArgumentType.integer())
+                                        .then(Commands.argument("rz", IntegerArgumentType.integer())
+                                                .executes(ctx -> forceAll(ctx.getSource(), new int[] {
+                                                    IntegerArgumentType.getInteger(ctx, "rx"),
+                                                    IntegerArgumentType.getInteger(ctx, "rz")
+                                                })))))
+                        .then(Commands.argument("joueurs", EntityArgument.players())
+                                .executes(
+                                        ctx -> force(ctx.getSource(), EntityArgument.getPlayers(ctx, "joueurs"), null))
+                                .then(Commands.argument("rx", IntegerArgumentType.integer())
+                                        .then(Commands.argument("rz", IntegerArgumentType.integer())
+                                                .executes(ctx -> force(
+                                                        ctx.getSource(),
+                                                        EntityArgument.getPlayers(ctx, "joueurs"),
+                                                        new int[] {
+                                                            IntegerArgumentType.getInteger(ctx, "rx"),
+                                                            IntegerArgumentType.getInteger(ctx, "rz")
+                                                        })))))));
 
         // rerender <rayonChunks>
         admin.then(Commands.literal("rerender")
@@ -116,8 +121,7 @@ public final class MapCommands {
                                 }
                             }
                             final int total = count;
-                            src.sendSuccess(() -> Component.literal(
-                                    total + " chunk(s) mis en file de re-rendu"), true);
+                            src.sendSuccess(() -> Component.literal(total + " chunk(s) mis en file de re-rendu"), true);
                             return count;
                         })));
 
@@ -131,10 +135,15 @@ public final class MapCommands {
                                         ServerLevel dim = DimensionArgument.getDimension(ctx, "dimension");
                                         boolean on = BoolArgumentType.getBool(ctx, "actif");
                                         ServerConfig.setLayer(dim.dimension(), layer, on);
-                                        SyncService.broadcastLayerSettings(ctx.getSource().getServer());
-                                        ctx.getSource().sendSuccess(() -> Component.literal(
-                                                "Couche " + layer + " " + (on ? "activée" : "désactivée")
-                                                        + " pour " + dim.dimension().location()), true);
+                                        SyncService.broadcastLayerSettings(
+                                                ctx.getSource().getServer());
+                                        ctx.getSource()
+                                                .sendSuccess(
+                                                        () -> Component.literal("Couche " + layer + " "
+                                                                + (on ? "activée" : "désactivée") + " pour "
+                                                                + dim.dimension()
+                                                                        .location()),
+                                                        true);
                                         return 1;
                                     }))));
         }
@@ -145,8 +154,9 @@ public final class MapCommands {
         admin.then(Commands.literal("regen")
                 .executes(ctx -> {
                     if (RegenService.isRunning()) {
-                        ctx.getSource().sendFailure(Component.literal(
-                                "Une régénération est déjà en cours (/sj admin regen cancel pour l'annuler)"));
+                        ctx.getSource()
+                                .sendFailure(Component.literal(
+                                        "Une régénération est déjà en cours (/sj admin regen cancel pour l'annuler)"));
                         return 0;
                     }
                     int total = RegenService.start(ctx.getSource().getServer());
@@ -154,22 +164,28 @@ public final class MapCommands {
                         ctx.getSource().sendFailure(Component.literal("Moteur de carte indisponible"));
                         return 0;
                     }
-                    ctx.getSource().sendSuccess(() -> Component.literal(
-                            "Régénération lancée : " + total + " chunk(s) à re-rendre"), true);
+                    ctx.getSource()
+                            .sendSuccess(
+                                    () -> Component.literal("Régénération lancée : " + total + " chunk(s) à re-rendre"),
+                                    true);
                     return total;
                 })
                 .then(Commands.literal("full").executes(ctx -> {
                     if (RegenService.isRunning()) {
-                        ctx.getSource().sendFailure(Component.literal(
-                                "Une régénération est déjà en cours (/sj admin regen cancel pour l'annuler)"));
+                        ctx.getSource()
+                                .sendFailure(Component.literal(
+                                        "Une régénération est déjà en cours (/sj admin regen cancel pour l'annuler)"));
                         return 0;
                     }
                     if (!RegenService.startFull(ctx.getSource().getServer())) {
                         ctx.getSource().sendFailure(Component.literal("Moteur de carte indisponible"));
                         return 0;
                     }
-                    ctx.getSource().sendSuccess(() -> Component.literal(
-                            "Scan des fichiers de région lancé — le rendu démarre dès la fin du scan"), true);
+                    ctx.getSource()
+                            .sendSuccess(
+                                    () -> Component.literal(
+                                            "Scan des fichiers de région lancé — le rendu démarre dès la fin du scan"),
+                                    true);
                     return 1;
                 }))
                 .then(Commands.literal("cancel").executes(ctx -> {
@@ -207,9 +223,10 @@ public final class MapCommands {
             int queued = SyncService.forceSync(p, region == null, region);
             total += queued;
             String suffix = region == null ? " (rayon complet)" : " (région " + region[0] + "," + region[1] + ")";
-            src.sendSuccess(() -> Component.literal(
-                    "Sync forcée pour " + p.getGameProfile().getName() + suffix
-                            + " — " + queued + " région(s) en file"), true);
+            src.sendSuccess(
+                    () -> Component.literal("Sync forcée pour "
+                            + p.getGameProfile().getName() + suffix + " — " + queued + " région(s) en file"),
+                    true);
         }
         return total;
     }

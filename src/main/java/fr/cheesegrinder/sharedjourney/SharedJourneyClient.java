@@ -1,9 +1,10 @@
 package fr.cheesegrinder.sharedjourney;
 
+import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapBridge;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.net.ClientNetHandler;
-import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapBridge;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;

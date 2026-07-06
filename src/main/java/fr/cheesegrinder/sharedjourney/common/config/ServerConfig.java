@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.common.config;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
+
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
@@ -9,6 +10,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 import java.util.ArrayList;
@@ -32,20 +34,24 @@ public final class ServerConfig {
 
     /** Couches partagées par dimension : "namespace:dim=DAY,NIGHT,TOPO,BIOME,CAVE". */
     public static ModConfigSpec.ConfigValue<List<? extends String>> SHARED_LAYERS;
+
     public static ModConfigSpec.ConfigValue<List<? extends String>> DEFAULT_LAYERS;
     public static ModConfigSpec.ConfigValue<List<? extends Integer>> CAVE_BANDS;
 
     /** Threads du pool de génération : min(coeurs-2, maxWorkerThreads), plancher 1 (spec §4). */
     public static ModConfigSpec.IntValue MAX_WORKER_THREADS;
+
     public static ModConfigSpec.IntValue PUSH_RADIUS_REGIONS;
     /** Limite de bande passante par joueur (spec §5 : max_kb_per_second). */
     public static ModConfigSpec.IntValue MAX_KB_PER_SECOND_PER_PLAYER;
+
     public static ModConfigSpec.IntValue SYNC_RATE_TICKS;
     public static ModConfigSpec.IntValue RENDER_CHUNKS_PER_TICK;
     /** Rayon de lissage des couleurs de biome (eau, herbe, feuillage) : 0 = désactivé. */
     public static ModConfigSpec.IntValue BIOME_BLEND_RADIUS;
     /** Blocs exclus du rendu de la carte : "namespace:bloc" ou "#namespace:tag". */
     public static ModConfigSpec.ConfigValue<List<? extends String>> HIDDEN_BLOCKS;
+
     public static ModConfigSpec.BooleanValue ALLOW_ON_DEMAND_REQUESTS;
     /** Rayon max du radar toléré côté serveur (anti-triche, plafonne le client). */
     public static ModConfigSpec.IntValue RADAR_MAX_RADIUS;
@@ -62,34 +68,47 @@ public final class ServerConfig {
 
         b.push("layers");
         DEFAULT_LAYERS = b.comment("Couches actives par défaut pour les dimensions non listées.")
-                .defineListAllowEmpty("defaultLayers", List.of("DAY", "NIGHT", "TOPO", "BIOME"),
-                        () -> "DAY", ServerConfig::isValidLayer);
+                .defineListAllowEmpty(
+                        "defaultLayers",
+                        List.of("DAY", "NIGHT", "TOPO", "BIOME"),
+                        () -> "DAY",
+                        ServerConfig::isValidLayer);
         SHARED_LAYERS = b.comment(
                         "Couches partagées par dimension, format 'namespace:dimension=LAYER1,LAYER2'.",
                         "Exemple: 'minecraft:overworld=DAY,NIGHT,TOPO,BIOME,CAVE', 'minecraft:the_nether=CAVE'.")
-                .defineListAllowEmpty("sharedLayers",
-                        List.of("minecraft:overworld=DAY,NIGHT,TOPO,BIOME,CAVE",
+                .defineListAllowEmpty(
+                        "sharedLayers",
+                        List.of(
+                                "minecraft:overworld=DAY,NIGHT,TOPO,BIOME,CAVE",
                                 "minecraft:the_nether=CAVE",
                                 "minecraft:the_end=DAY"),
-                        () -> "minecraft:overworld=DAY", ServerConfig::isValidMapping);
+                        () -> "minecraft:overworld=DAY",
+                        ServerConfig::isValidMapping);
         CAVE_BANDS = b.comment(
                         "Bandes Y rendues pour CAVE (bande = floor(y/16)). Ex: -1 => y=-16..-1.",
                         "Doit couvrir la hauteur du monde : overworld -64..127 => bandes -4..7.")
-                .defineListAllowEmpty("caveBands", List.of(-4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7),
-                        () -> 0, o -> o instanceof Integer i && i >= -8 && i <= 20);
+                .defineListAllowEmpty(
+                        "caveBands",
+                        List.of(-4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7),
+                        () -> 0,
+                        o -> o instanceof Integer i && i >= -8 && i <= 20);
         b.pop();
 
         b.push("engine");
-        MAX_WORKER_THREADS = b.comment("Plafond de threads du pool de génération (formule: min(coeurs-2, ceci), min 1).")
+        MAX_WORKER_THREADS = b.comment(
+                        "Plafond de threads du pool de génération (formule: min(coeurs-2, ceci), min 1).")
                 .defineInRange("maxWorkerThreads", 4, 1, 32);
         RENDER_CHUNKS_PER_TICK = b.comment("Chunks soumis au pool de rendu au maximum par tick serveur.")
                 .defineInRange("renderChunksPerTick", 32, 1, 512);
-        BIOME_BLEND_RADIUS = b.comment("Rayon de lissage des couleurs de biome (eau, herbe, feuillage). 0 = désactivé, 2 = équivalent vanilla.")
+        BIOME_BLEND_RADIUS = b.comment(
+                        "Rayon de lissage des couleurs de biome (eau, herbe, feuillage). 0 = désactivé, 2 = équivalent vanilla.")
                 .defineInRange("biomeBlendRadius", 2, 0, 7);
         HIDDEN_BLOCKS = b.comment(
                         "Blocs exclus du rendu de la carte : le bloc situé dessous est peint à la place.",
                         "Format : 'namespace:bloc' ou '#namespace:tag'. Ex : 'minecraft:short_grass', '#minecraft:flowers'.")
-                .defineListAllowEmpty("hiddenBlocks", List.of(
+                .defineListAllowEmpty(
+                        "hiddenBlocks",
+                        List.of(
                                 "#minecraft:flowers",
                                 "#minecraft:saplings",
                                 "minecraft:short_grass",
@@ -104,7 +123,8 @@ public final class ServerConfig {
                                 "minecraft:soul_torch",
                                 "minecraft:soul_wall_torch",
                                 "minecraft:cobweb"),
-                        () -> "minecraft:short_grass", ServerConfig::isValidBlockEntry);
+                        () -> "minecraft:short_grass",
+                        ServerConfig::isValidBlockEntry);
         b.pop();
 
         b.push("sync");
@@ -114,7 +134,8 @@ public final class ServerConfig {
                 .defineInRange("maxKbPerSecondPerPlayer", 512, 32, 8192);
         SYNC_RATE_TICKS = b.comment("Intervalle entre deux calculs de delta de sync par joueur (ticks).")
                 .defineInRange("syncRateTicks", 40, 5, 1200);
-        ALLOW_ON_DEMAND_REQUESTS = b.comment("Autoriser le client à demander des régions hors rayon (carte plein écran).")
+        ALLOW_ON_DEMAND_REQUESTS = b.comment(
+                        "Autoriser le client à demander des régions hors rayon (carte plein écran).")
                 .define("allowOnDemandRequests", true);
         RADAR_MAX_RADIUS = b.comment("Rayon max (blocs) autorisé pour le radar d'entités des clients.")
                 .defineInRange("radarMaxRadius", 64, 0, 128);

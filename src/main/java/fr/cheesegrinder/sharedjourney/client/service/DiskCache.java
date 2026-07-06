@@ -1,14 +1,15 @@
 package fr.cheesegrinder.sharedjourney.client.service;
 
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
-
-import com.mojang.logging.LogUtils;
 import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
+
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
+
+import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -134,9 +135,8 @@ public final class DiskCache {
 
         String needle = layerName.toLowerCase(Locale.ROOT);
         int[] deleted = {0};
-        var removedKeys = needle.equals("all")
-                ? index.snapshot().keySet().stream().toList()
-                : index.removeLayer(needle);
+        var removedKeys =
+                needle.equals("all") ? index.snapshot().keySet().stream().toList() : index.removeLayer(needle);
         if (needle.equals("all")) {
             removedKeys.forEach(index::remove);
         }
@@ -145,7 +145,8 @@ public final class DiskCache {
                 if (Files.deleteIfExists(pathOf(key))) {
                     deleted[0]++;
                 }
-            } catch (IOException ignored) {}
+            } catch (IOException ignored) {
+            }
             ClientMapCache.evict(key);
         }
         flushIndex();
@@ -156,7 +157,8 @@ public final class DiskCache {
         String dim = key.dimension().location().getNamespace().equals("minecraft")
                 ? key.dimension().location().getPath()
                 : key.dimension().location().toString().replace(':', '_');
-        return currentRoot.resolve(dim)
+        return currentRoot
+                .resolve(dim)
                 .resolve(key.layer().folderName(key.caveBand()))
                 .resolve(key.fileName());
     }

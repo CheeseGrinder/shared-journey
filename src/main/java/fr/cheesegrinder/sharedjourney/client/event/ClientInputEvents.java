@@ -3,7 +3,9 @@ package fr.cheesegrinder.sharedjourney.client.event;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.gui.FullMapScreen;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
+
 import net.minecraft.client.Minecraft;
+
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -28,7 +30,7 @@ public final class ClientInputEvents {
     private ClientInputEvents() {}
 
     public static void openMapAt(double x, double z) {
-        pendingMapOpen = new double[]{x, z};
+        pendingMapOpen = new double[] {x, z};
     }
 
     @SubscribeEvent

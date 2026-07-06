@@ -13,11 +13,13 @@ public final class ClientConfig {
     public static ModConfigSpec.EnumValue<Shape> MINIMAP_SHAPE;
     /** Rotation dynamique de la minimap avec le regard du joueur (spec §6.1). */
     public static ModConfigSpec.BooleanValue MINIMAP_ROTATE;
+
     public static ModConfigSpec.BooleanValue SHOW_COORDS;
 
     public static ModConfigSpec.BooleanValue RADAR_ENABLED;
     /** Rayon souhaité — plafonné par le serveur (radarMaxRadius). */
     public static ModConfigSpec.IntValue RADAR_RADIUS;
+
     public static ModConfigSpec.BooleanValue RADAR_PLAYERS;
     public static ModConfigSpec.BooleanValue RADAR_HOSTILE;
     public static ModConfigSpec.BooleanValue RADAR_PASSIVE;
@@ -25,11 +27,20 @@ public final class ClientConfig {
     public static ModConfigSpec.ConfigValue<String> DEFAULT_LAYER;
     /** Sélection automatique de la couche minimap (jour/nuit, grottes sous terre). */
     public static ModConfigSpec.BooleanValue AUTO_LAYER;
+
     public static ModConfigSpec.BooleanValue DISK_CACHE_ENABLED;
 
-    public enum Corner { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
+    public enum Corner {
+        TOP_LEFT,
+        TOP_RIGHT,
+        BOTTOM_LEFT,
+        BOTTOM_RIGHT
+    }
 
-    public enum Shape { CIRCLE, SQUARE }
+    public enum Shape {
+        CIRCLE,
+        SQUARE
+    }
 
     static {
         ModConfigSpec.Builder b = new ModConfigSpec.Builder();
@@ -39,14 +50,15 @@ public final class ClientConfig {
         MINIMAP_SIZE = b.comment("Taille de la minimap en pixels écran.").defineInRange("size", 128, 64, 320);
         MINIMAP_CORNER = b.defineEnum("corner", Corner.TOP_RIGHT);
         MINIMAP_SHAPE = b.comment("Forme de la minimap : ronde ou carrée.").defineEnum("shape", Shape.CIRCLE);
-        MINIMAP_ROTATE = b.comment("La carte tourne avec le joueur (sinon nord fixe).").define("rotateWithPlayer", false);
+        MINIMAP_ROTATE =
+                b.comment("La carte tourne avec le joueur (sinon nord fixe).").define("rotateWithPlayer", false);
         SHOW_COORDS = b.define("showCoordinates", true);
         b.pop();
 
         b.push("radar");
         RADAR_ENABLED = b.define("enabled", true);
-        RADAR_RADIUS = b.comment("Rayon du radar en blocs (plafonné par le serveur).")
-                .defineInRange("radius", 48, 8, 128);
+        RADAR_RADIUS =
+                b.comment("Rayon du radar en blocs (plafonné par le serveur).").defineInRange("radius", 48, 8, 128);
         RADAR_PLAYERS = b.define("showPlayers", true);
         RADAR_HOSTILE = b.define("showHostile", true);
         RADAR_PASSIVE = b.define("showPassive", false);

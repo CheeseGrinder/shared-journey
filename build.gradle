@@ -4,6 +4,7 @@
 plugins {
     id 'java-library'
     id 'net.neoforged.moddev' version '2.0.141'
+    id 'com.diffplug.spotless' version '8.8.0'
 }
 
 base { archivesName = mod_id }
@@ -29,6 +30,19 @@ repositories {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+// Formatage : `gradlew spotlessApply` pour formater, `spotlessCheck` pour vérifier
+// (branché sur `check`/`build`). Moteur : Palantir Java Format (4 espaces, 120 col).
+spotless {
+    java {
+        target 'src/main/java/**/*.java'
+        palantirJavaFormat()
+        removeUnusedImports()
+        importOrder('fr.cheesegrinder', 'net.minecraft', 'net.neoforged', '', 'java|javax')
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
 }
 
 // 'localRuntime' : dépendances présentes UNIQUEMENT dans les runs de dev

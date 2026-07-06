@@ -7,8 +7,10 @@ import fr.cheesegrinder.sharedjourney.server.service.CaveTracker;
 import fr.cheesegrinder.sharedjourney.server.service.MapManager;
 import fr.cheesegrinder.sharedjourney.server.service.RegenService;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
+
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModLoader;
 import net.neoforged.fml.common.EventBusSubscriber;

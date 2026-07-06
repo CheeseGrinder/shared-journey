@@ -1,9 +1,9 @@
 package fr.cheesegrinder.sharedjourney.server.event;
 
-import com.mojang.logging.LogUtils;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.common.config.CommonConfig;
 import fr.cheesegrinder.sharedjourney.server.service.MapManager;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
+
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.level.BlockEvent;
@@ -18,6 +19,8 @@ import net.neoforged.neoforge.event.level.BlockGrowFeatureEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.ExplosionEvent;
 import net.neoforged.neoforge.event.level.PistonEvent;
+
+import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -38,6 +41,7 @@ public final class ChunkEvents {
      * le démarrage du serveur) : mémorisés puis rejoués au ServerStarted.
      */
     private static final List<EarlyChunk> EARLY_CHUNKS = new ArrayList<>();
+
     private record EarlyChunk(ResourceKey<Level> dim, int cx, int cz) {}
 
     private ChunkEvents() {}
@@ -168,8 +172,11 @@ public final class ChunkEvents {
         int cz = event.getPos().getZ() >> 4;
         mgr.enqueueChunk(level, cx, cz);
         if (CommonConfig.DEBUG_LOGGING.get()) {
-            LOGGER.info("SharedJourney : chunk {},{} marqué à re-rendre ({})",
-                    cx, cz, level.dimension().location());
+            LOGGER.info(
+                    "SharedJourney : chunk {},{} marqué à re-rendre ({})",
+                    cx,
+                    cz,
+                    level.dimension().location());
         }
     }
 }

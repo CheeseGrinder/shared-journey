@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.render;
 
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeManager;
@@ -53,14 +54,14 @@ final class BiomeTints {
 
     static int grassColor(Biome biome, int wx, int wz) {
         var fx = biome.getSpecialEffects();
-        int base = fx.getGrassColorOverride()
-                .orElseGet(() -> climateBlend(biome, 0xBFB755, 0x80B497, 0x47CD33));
+        int base = fx.getGrassColorOverride().orElseGet(() -> climateBlend(biome, 0xBFB755, 0x80B497, 0x47CD33));
         // Modificateur vanilla (marais, forêt sombre) — fonctionne côté serveur.
         return fx.getGrassColorModifier().modifyColor(wx, wz, base) & 0xFFFFFF;
     }
 
     static int foliageColor(Biome biome) {
-        return biome.getSpecialEffects().getFoliageColorOverride()
+        return biome.getSpecialEffects()
+                .getFoliageColorOverride()
                 .orElseGet(() -> climateBlend(biome, 0xAEA42A, 0x60A17B, 0x1ABF00));
     }
 
@@ -76,9 +77,8 @@ final class BiomeTints {
         int gg = clamp255(((hotDry >> 8) & 0xFF)
                 + cw * (((cold >> 8) & 0xFF) - ((hotDry >> 8) & 0xFF))
                 + r * (((hotWet >> 8) & 0xFF) - ((hotDry >> 8) & 0xFF)));
-        int bb = clamp255((hotDry & 0xFF)
-                + cw * ((cold & 0xFF) - (hotDry & 0xFF))
-                + r * ((hotWet & 0xFF) - (hotDry & 0xFF)));
+        int bb = clamp255(
+                (hotDry & 0xFF) + cw * ((cold & 0xFF) - (hotDry & 0xFF)) + r * ((hotWet & 0xFF) - (hotDry & 0xFF)));
         return (rr << 16) | (gg << 8) | bb;
     }
 

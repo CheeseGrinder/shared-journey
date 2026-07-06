@@ -1,12 +1,15 @@
 package fr.cheesegrinder.sharedjourney.client.compat;
 
-import com.mojang.logging.LogUtils;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
+
 import net.neoforged.fml.ModList;
+
+import com.mojang.logging.LogUtils;
 import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 
@@ -52,14 +55,12 @@ public final class JourneyMapBridge {
 
     /** Annotations plugin connues (v2 puis v1/legacy). */
     private static final String[] PLUGIN_ANNOTATIONS = {
-            "Ljourneymap/api/v2/client/JourneyMapPlugin;",
-            "Ljourneymap/client/api/JourneyMapPlugin;"
+        "Ljourneymap/api/v2/client/JourneyMapPlugin;", "Ljourneymap/client/api/JourneyMapPlugin;"
     };
 
     /** Interfaces IClientAPI correspondantes. */
     private static final String[] CLIENT_API_INTERFACES = {
-            "journeymap.api.v2.client.IClientAPI",
-            "journeymap.client.api.IClientAPI"
+        "journeymap.api.v2.client.IClientAPI", "journeymap.client.api.IClientAPI"
     };
 
     private static boolean initialized;
@@ -100,8 +101,10 @@ public final class JourneyMapBridge {
         if (loadedPlugins.isEmpty()) {
             LOGGER.info("[Bridge JM] Aucun plugin JourneyMap tiers détecté (ou API JourneyMap absente du classpath).");
         } else {
-            LOGGER.info("[Bridge JM] {} plugin(s) JourneyMap initialisé(s) via SharedJourney : {}",
-                    loadedPlugins.size(), loadedPlugins);
+            LOGGER.info(
+                    "[Bridge JM] {} plugin(s) JourneyMap initialisé(s) via SharedJourney : {}",
+                    loadedPlugins.size(),
+                    loadedPlugins);
         }
     }
 
@@ -113,8 +116,7 @@ public final class JourneyMapBridge {
             return false;
         }
 
-        return tryLoad("journeymap.common.Journeymap") != null
-                || tryLoad("journeymap.client.JourneymapClient") != null;
+        return tryLoad("journeymap.common.Journeymap") != null || tryLoad("journeymap.client.JourneymapClient") != null;
     }
 
     private static Class<?> tryLoad(String name) {
@@ -129,12 +131,11 @@ public final class JourneyMapBridge {
     private static Set<String> scanPlugins(String annotationDescriptor) {
         Set<String> classes = new HashSet<>();
         Type annotationType = Type.getType(annotationDescriptor);
-        ModList.get().getAllScanData().forEach(scan ->
-                scan.getAnnotations().forEach(a -> {
-                    if (annotationType.equals(a.annotationType())) {
-                        classes.add(a.clazz().getClassName());
-                    }
-                }));
+        ModList.get().getAllScanData().forEach(scan -> scan.getAnnotations().forEach(a -> {
+            if (annotationType.equals(a.annotationType())) {
+                classes.add(a.clazz().getClassName());
+            }
+        }));
         return classes;
     }
 
@@ -151,18 +152,18 @@ public final class JourneyMapBridge {
                 if (id instanceof String s && !s.isBlank()) {
                     modId = s;
                 }
-            } catch (Throwable ignored) {}
+            } catch (Throwable ignored) {
+            }
 
             Object apiProxy = Proxy.newProxyInstance(
-                    apiInterface.getClassLoader(),
-                    new Class<?>[]{apiInterface},
-                    new ClientApiHandler(modId));
+                    apiInterface.getClassLoader(), new Class<?>[] {apiInterface}, new ClientApiHandler(modId));
 
             // IClientPlugin.initialize(IClientAPI) — on cherche la méthode par nom
             // et compatibilité de paramètre pour tolérer les variations d'API.
             Method init = null;
             for (Method m : pluginClass.getMethods()) {
-                if (m.getName().equals("initialize") && m.getParameterCount() == 1
+                if (m.getName().equals("initialize")
+                        && m.getParameterCount() == 1
                         && m.getParameterTypes()[0].isAssignableFrom(apiInterface)) {
                     init = m;
                     break;
@@ -192,6 +193,7 @@ public final class JourneyMapBridge {
         private final String modId;
         /** JM guid/objet -> notre UUID, pour retrouver les waypoints à supprimer. */
         private final Map<String, UUID> knownWaypoints = new ConcurrentHashMap<>();
+
         private final Set<String> warnedMethods = ConcurrentHashMap.newKeySet();
 
         ClientApiHandler(String modId) {
@@ -204,8 +206,12 @@ public final class JourneyMapBridge {
             try {
                 switch (name) {
                     // ---- identité / capacités
-                    case "playerAccepts" -> { return true; }
-                    case "getModId" -> { return modId; }
+                    case "playerAccepts" -> {
+                        return true;
+                    }
+                    case "getModId" -> {
+                        return modId;
+                    }
 
                     // ---- waypoints v2
                     case "addWaypoint" -> {
@@ -217,16 +223,19 @@ public final class JourneyMapBridge {
                         removeWaypoint(args[args.length - 1]);
                         return null;
                     }
-                    case "getAllWaypoints", "getWaypoints" -> { return List.of(); }
-                    case "getWaypoint" -> { return null; }
+                    case "getAllWaypoints", "getWaypoints" -> {
+                        return List.of();
+                    }
+                    case "getWaypoint" -> {
+                        return null;
+                    }
 
                     // ---- Displayable générique (v1 et overlays v2)
                     case "show" -> {
                         Object displayable = args[0];
                         if (isWaypoint(displayable)) {
                             addOrUpdate(displayable);
-                        }
-                        else {
+                        } else {
                             warnOnce("show:" + displayable.getClass().getSimpleName());
                         }
 
@@ -250,16 +259,27 @@ public final class JourneyMapBridge {
                     }
 
                     // ---- événements / affichage : no-op tolérant
-                    case "subscribe", "unsubscribe", "toggleDisplay", "setWorldId",
-                         "requestMapTile", "flagPlayerSprite", "toggleWaypoints" -> {
+                    case "subscribe",
+                            "unsubscribe",
+                            "toggleDisplay",
+                            "setWorldId",
+                            "requestMapTile",
+                            "flagPlayerSprite",
+                            "toggleWaypoints" -> {
                         warnOnce(name);
                         return null;
                     }
 
                     // ---- Object
-                    case "toString" -> { return "SharedJourney IClientAPI bridge (" + modId + ")"; }
-                    case "hashCode" -> { return System.identityHashCode(proxy); }
-                    case "equals" -> { return proxy == args[0]; }
+                    case "toString" -> {
+                        return "SharedJourney IClientAPI bridge (" + modId + ")";
+                    }
+                    case "hashCode" -> {
+                        return System.identityHashCode(proxy);
+                    }
+                    case "equals" -> {
+                        return proxy == args[0];
+                    }
                 }
             } catch (Throwable t) {
                 LOGGER.warn("[Bridge JM] Erreur en traitant {}.{} : {}", modId, name, t.toString());
@@ -292,15 +312,13 @@ public final class JourneyMapBridge {
             int color = intOf(call(jmWaypoint, "getColor"), 0x00FFFF & (name.hashCode() | 0x404040));
             ResourceLocation dim = dimOf(jmWaypoint);
 
-            UUID id = knownWaypoints.computeIfAbsent(guid,
-                    g -> UUID.nameUUIDFromBytes((modId + "|" + g).getBytes()));
-            Waypoint wp = new Waypoint(id, name, dim, pos.getX(), pos.getY(), pos.getZ(),
-                    color & 0xFFFFFF, modId, true);
+            UUID id = knownWaypoints.computeIfAbsent(guid, g -> UUID.nameUUIDFromBytes((modId + "|" + g).getBytes()));
+            Waypoint wp =
+                    new Waypoint(id, name, dim, pos.getX(), pos.getY(), pos.getZ(), color & 0xFFFFFF, modId, true);
             // add() poste WaypointEvent.Added (annulable) ; update si déjà présent.
             if (WaypointStore.get(id) != null) {
                 WaypointStore.update(wp);
-            }
-            else {
+            } else {
                 WaypointStore.add(wp);
             }
         }
@@ -320,7 +338,8 @@ public final class JourneyMapBridge {
 
             if (guid == null) {
                 BlockPos pos = posOf(wp);
-                guid = pos == null ? String.valueOf(System.identityHashCode(wp))
+                guid = pos == null
+                        ? String.valueOf(System.identityHashCode(wp))
                         : pos.getX() + "," + pos.getY() + "," + pos.getZ();
             }
             return String.valueOf(guid);
@@ -349,11 +368,9 @@ public final class JourneyMapBridge {
             String first = null;
             if (dims instanceof Collection<?> c && !c.isEmpty()) {
                 first = String.valueOf(c.iterator().next());
-            }
-            else if (dims instanceof String[] arr && arr.length > 0) {
+            } else if (dims instanceof String[] arr && arr.length > 0) {
                 first = arr[0];
-            }
-            else {
+            } else {
                 Object d = call(wp, "getDimension");
                 if (d != null) {
                     first = String.valueOf(d);
@@ -365,7 +382,8 @@ public final class JourneyMapBridge {
             }
 
             var mc = Minecraft.getInstance();
-            return mc.level != null ? mc.level.dimension().location()
+            return mc.level != null
+                    ? mc.level.dimension().location()
                     : ResourceLocation.withDefaultNamespace("overworld");
         }
 

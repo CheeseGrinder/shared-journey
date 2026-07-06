@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.render;
 
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.FoliageColor;
@@ -29,7 +30,9 @@ final class SurfaceRenderer {
         BlockState state = ctx.chunk.getBlockState(pos);
         // La végétation décorative (fleurs, herbes, pousses...) ne doit pas
         // apparaître sur la carte : on peint le bloc situé dessous.
-        while (y > ctx.chunk.getMinBuildHeight() && isMapHidden(state) && state.getFluidState().isEmpty()) {
+        while (y > ctx.chunk.getMinBuildHeight()
+                && isMapHidden(state)
+                && state.getFluidState().isEmpty()) {
             y--;
             pos.set(wx, y, wz);
             state = ctx.chunk.getBlockState(pos);
@@ -39,7 +42,10 @@ final class SurfaceRenderer {
         if (!state.getFluidState().isEmpty()) {
             int depth = 0;
             while (y - depth > ctx.chunk.getMinBuildHeight()
-                    && !ctx.chunk.getBlockState(pos.set(wx, y - depth, wz)).getFluidState().isEmpty()
+                    && !ctx.chunk
+                            .getBlockState(pos.set(wx, y - depth, wz))
+                            .getFluidState()
+                            .isEmpty()
                     && depth < 24) {
                 depth++;
             }
@@ -80,7 +86,8 @@ final class SurfaceRenderer {
                 tint = FoliageColor.getEvergreenColor();
             } else if (state.is(Blocks.MANGROVE_LEAVES)) {
                 tint = FoliageColor.getMangroveColor();
-            } else if (state.is(Blocks.CHERRY_LEAVES) || state.is(Blocks.AZALEA_LEAVES)
+            } else if (state.is(Blocks.CHERRY_LEAVES)
+                    || state.is(Blocks.AZALEA_LEAVES)
                     || state.is(Blocks.FLOWERING_AZALEA_LEAVES)) {
                 tint = -1; // texture non teintée
             } else {

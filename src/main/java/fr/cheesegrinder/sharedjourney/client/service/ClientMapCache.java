@@ -1,13 +1,15 @@
 package fr.cheesegrinder.sharedjourney.client.service;
 
-import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.logging.LogUtils;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
+
+import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
 import java.io.ByteArrayInputStream;
@@ -77,8 +79,10 @@ public final class ClientMapCache {
         final long version;
         final byte[][] parts;
         int received;
+
         Assembly(long version, int total) {
-            this.version = version; this.parts = new byte[total][];
+            this.version = version;
+            this.parts = new byte[total][];
         }
     }
 
@@ -158,8 +162,11 @@ public final class ClientMapCache {
             return;
         }
 
-        Assembly asm = PENDING.compute(key, (k, existing) ->
-                (existing == null || existing.version < version) ? new Assembly(version, totalParts) : existing);
+        Assembly asm = PENDING.compute(
+                key,
+                (k, existing) -> (existing == null || existing.version < version)
+                        ? new Assembly(version, totalParts)
+                        : existing);
         if (asm.version != version || part < 0 || part >= asm.parts.length) {
             return;
         }
@@ -181,7 +188,6 @@ public final class ClientMapCache {
                 System.arraycopy(p, 0, png, off, p.length);
                 off += p.length;
             }
-
 
             uploadTexture(key, version, png);
             DiskCache.store(key, version, png); // persistance locale (spec §3.2)

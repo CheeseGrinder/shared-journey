@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.render;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
+
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.BiomeManager;
@@ -18,29 +19,30 @@ public final class ChunkColorizer {
     private ChunkColorizer() {}
 
     /** Rendu d'un chunk complet -> tableau 256 pixels ARGB (index = x + z*16). */
-    public static int[] render(ServerLevel level, ChunkAccess chunk, ChunkAccess[] neighbors,
-                               MapLayer layer, int caveBand) {
+    public static int[] render(
+            ServerLevel level, ChunkAccess chunk, ChunkAccess[] neighbors, MapLayer layer, int caveBand) {
         int[] out = new int[256];
         ChunkPos cp = chunk.getPos();
         // Zoom de biomes du jeu (frontières irrégulières bloc par bloc), branché
         // sur le chunk ET ses voisins : sûr depuis un thread de rendu, et fidèle
         // jusqu'aux bordures. Sans lui, les biomes apparaissent en patchs carrés
         // de 4x4 blocs à bords droits.
-        BiomeManager zoom = new BiomeManager(neighborSource(chunk, neighbors),
-                BiomeManager.obfuscateSeed(level.getSeed()));
+        BiomeManager zoom =
+                new BiomeManager(neighborSource(chunk, neighbors), BiomeManager.obfuscateSeed(level.getSeed()));
         RenderContext ctx = new RenderContext(level, chunk, zoom);
 
         for (int lx = 0; lx < 16; lx++) {
             for (int lz = 0; lz < 16; lz++) {
                 int wx = cp.getMinBlockX() + lx;
                 int wz = cp.getMinBlockZ() + lz;
-                int argb = switch (layer) {
-                    case DAY   -> SurfaceRenderer.render(ctx, wx, wz, false);
-                    case NIGHT -> SurfaceRenderer.render(ctx, wx, wz, true);
-                    case TOPO  -> TopoRenderer.render(ctx, wx, wz);
-                    case BIOME -> BiomeRenderer.render(ctx, wx, wz);
-                    case CAVE  -> CaveRenderer.render(ctx, wx, wz, caveBand);
-                };
+                int argb =
+                        switch (layer) {
+                            case DAY -> SurfaceRenderer.render(ctx, wx, wz, false);
+                            case NIGHT -> SurfaceRenderer.render(ctx, wx, wz, true);
+                            case TOPO -> TopoRenderer.render(ctx, wx, wz);
+                            case BIOME -> BiomeRenderer.render(ctx, wx, wz);
+                            case CAVE -> CaveRenderer.render(ctx, wx, wz, caveBand);
+                        };
                 out[lx + lz * 16] = argb;
             }
         }

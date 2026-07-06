@@ -1,10 +1,11 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
-import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.config.CommonConfig;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -16,6 +17,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.Heightmap;
+
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.ArrayList;
@@ -89,12 +91,12 @@ public final class SyncService {
 
         Map<ResourceLocation, List<MapLayer>> map = new HashMap<>();
         for (ServerLevel level : server.getAllLevels()) {
-            map.put(level.dimension().location(),
-                    new ArrayList<>(ServerConfig.layersFor(level.dimension())));
+            map.put(level.dimension().location(), new ArrayList<>(ServerConfig.layersFor(level.dimension())));
         }
-        PacketDistributor.sendToPlayer(player, new Payloads.LayerSettingsPayload(
-                map, new ArrayList<>(ServerConfig.CAVE_BANDS.get()),
-                ServerConfig.RADAR_MAX_RADIUS.get()));
+        PacketDistributor.sendToPlayer(
+                player,
+                new Payloads.LayerSettingsPayload(
+                        map, new ArrayList<>(ServerConfig.CAVE_BANDS.get()), ServerConfig.RADAR_MAX_RADIUS.get()));
     }
 
     public static void broadcastLayerSettings(MinecraftServer server) {
@@ -237,8 +239,8 @@ public final class SyncService {
             byte[] slice = new byte[len];
             System.arraycopy(st.currentData, st.currentOffset, slice, 0, len);
 
-            PacketDistributor.sendToPlayer(player,
-                    new Payloads.RegionDataPayload(st.currentKey, st.currentVersion, part, total, slice));
+            PacketDistributor.sendToPlayer(
+                    player, new Payloads.RegionDataPayload(st.currentKey, st.currentVersion, part, total, slice));
 
             st.currentOffset += len;
             budget -= len;
@@ -345,13 +347,14 @@ public final class SyncService {
     private static void sendMapInfo(ServerPlayer player, ChunkAccess chunk, int x, int z) {
         int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x & 15, z & 15);
         BlockState state = chunk.getBlockState(new BlockPos(x, y, z));
-        String biomeId = chunk.getNoiseBiome(x >> 2, y >> 2, z >> 2).unwrapKey()
+        String biomeId = chunk.getNoiseBiome(x >> 2, y >> 2, z >> 2)
+                .unwrapKey()
                 .map(k -> k.location().toString())
                 .orElse("");
-        String blockId = state.isAir() ? ""
+        String blockId = state.isAir()
+                ? ""
                 : BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-        PacketDistributor.sendToPlayer(player,
-                new Payloads.MapInfoReplyPayload(x, z, y, biomeId, blockId));
+        PacketDistributor.sendToPlayer(player, new Payloads.MapInfoReplyPayload(x, z, y, biomeId, blockId));
     }
 
     // ------------------------------------------------------------------ administration / stats
@@ -404,8 +407,12 @@ public final class SyncService {
         return String.format(
                 "%s : %d régions envoyées, %.1f Ko, file: %d, handshake: %d entrées, requêtes: %d, forcées: %d, dernier envoi: %s",
                 player.getGameProfile().getName(),
-                st.regionsSent, st.bytesSent / 1024.0, st.queueSize(),
-                st.handshakeEntries, st.requestsReceived, st.forcedCount,
+                st.regionsSent,
+                st.bytesSent / 1024.0,
+                st.queueSize(),
+                st.handshakeEntries,
+                st.requestsReceived,
+                st.forcedCount,
                 ago < 0 ? "jamais" : "il y a " + ago + "s");
     }
 
@@ -415,6 +422,7 @@ public final class SyncService {
         final Map<RegionKey, Long> sentVersions = new ConcurrentHashMap<>();
         /** ConcurrentLinkedQueue conformément à la spec §5.2. */
         private final ConcurrentLinkedQueue<RegionKey> queue = new ConcurrentLinkedQueue<>();
+
         private final Set<RegionKey> queuedSet = ConcurrentHashMap.newKeySet();
 
         RegionKey currentKey;

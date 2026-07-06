@@ -1,21 +1,14 @@
 package fr.cheesegrinder.sharedjourney.client.render;
 
+import fr.cheesegrinder.sharedjourney.api.MapLayer;
+import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
-
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.BufferUploader;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.Tesselator;
-import com.mojang.blaze3d.vertex.VertexFormat;
-import com.mojang.math.Axis;
-import fr.cheesegrinder.sharedjourney.api.MapLayer;
-import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.util.UndergroundCheck;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
@@ -26,6 +19,14 @@ import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
+
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.math.Axis;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
@@ -49,14 +50,15 @@ public final class MinimapRenderer {
     public static final int BACKGROUND = 0xFF36393F;
 
     private static MapLayer currentLayer = null; // null = pas encore initialisée depuis la config
-    private static Boolean autoMode = null;      // null = pas encore initialisé depuis la config
+    private static Boolean autoMode = null; // null = pas encore initialisé depuis la config
     private static int caveBandIndex = 0;
     private static float zoom = 1.0f; // pixels écran par bloc
 
     public static MapLayer currentLayer() {
         if (currentLayer == null) {
             try {
-                currentLayer = MapLayer.valueOf(ClientConfig.DEFAULT_LAYER.get().trim().toUpperCase(Locale.ROOT));
+                currentLayer =
+                        MapLayer.valueOf(ClientConfig.DEFAULT_LAYER.get().trim().toUpperCase(Locale.ROOT));
             } catch (IllegalArgumentException e) {
                 currentLayer = MapLayer.DAY;
             }
@@ -193,14 +195,16 @@ public final class MinimapRenderer {
         int margin = 6;
         int sw = gg.guiWidth();
         int sh = gg.guiHeight();
-        int x = switch (ClientConfig.MINIMAP_CORNER.get()) {
-            case TOP_LEFT, BOTTOM_LEFT -> margin;
-            case TOP_RIGHT, BOTTOM_RIGHT -> sw - size - margin;
-        };
-        int y = switch (ClientConfig.MINIMAP_CORNER.get()) {
-            case TOP_LEFT, TOP_RIGHT -> margin;
-            case BOTTOM_LEFT, BOTTOM_RIGHT -> sh - size - margin;
-        };
+        int x =
+                switch (ClientConfig.MINIMAP_CORNER.get()) {
+                    case TOP_LEFT, BOTTOM_LEFT -> margin;
+                    case TOP_RIGHT, BOTTOM_RIGHT -> sw - size - margin;
+                };
+        int y =
+                switch (ClientConfig.MINIMAP_CORNER.get()) {
+                    case TOP_LEFT, TOP_RIGHT -> margin;
+                    case BOTTOM_LEFT, BOTTOM_RIGHT -> sh - size - margin;
+                };
 
         boolean rotate = ClientConfig.MINIMAP_ROTATE.get();
         boolean circle = ClientConfig.MINIMAP_SHAPE.get() == ClientConfig.Shape.CIRCLE;
@@ -263,9 +267,16 @@ public final class MinimapRenderer {
 
                 int drawX = cx + (int) Math.floor(rx * (double) RegionKey.REGION_BLOCKS - px);
                 int drawY = cy + (int) Math.floor(rz * (double) RegionKey.REGION_BLOCKS - pz);
-                gg.blit(region.texture(), drawX, drawY, 0f, 0f,
-                        RegionKey.REGION_BLOCKS, RegionKey.REGION_BLOCKS,
-                        RegionKey.REGION_BLOCKS, RegionKey.REGION_BLOCKS);
+                gg.blit(
+                        region.texture(),
+                        drawX,
+                        drawY,
+                        0f,
+                        0f,
+                        RegionKey.REGION_BLOCKS,
+                        RegionKey.REGION_BLOCKS,
+                        RegionKey.REGION_BLOCKS,
+                        RegionKey.REGION_BLOCKS);
             }
         }
 
@@ -289,14 +300,11 @@ public final class MinimapRenderer {
                 int color;
                 if (e instanceof Player && ClientConfig.RADAR_PLAYERS.get()) {
                     color = 0xFFFFFFFF;
-                }
-                else if (e instanceof Enemy && ClientConfig.RADAR_HOSTILE.get()) {
+                } else if (e instanceof Enemy && ClientConfig.RADAR_HOSTILE.get()) {
                     color = 0xFFFF4040;
-                }
-                else if (e instanceof Animal && ClientConfig.RADAR_PASSIVE.get()) {
+                } else if (e instanceof Animal && ClientConfig.RADAR_PASSIVE.get()) {
                     color = 0xFF40FF40;
-                }
-                else {
+                } else {
                     continue;
                 }
 
@@ -349,7 +357,8 @@ public final class MinimapRenderer {
         gg.drawCenteredString(mc.font, text, x + half, textY, 0xFFFFFF);
         if (ClientConfig.SHOW_COORDS.get()) {
             String coords = player.blockPosition().getX() + ", "
-                    + player.blockPosition().getY() + ", " + player.blockPosition().getZ();
+                    + player.blockPosition().getY() + ", "
+                    + player.blockPosition().getZ();
             gg.drawCenteredString(mc.font, coords, x + half, textY + 11, 0xAAAAAA);
         }
     }
@@ -361,13 +370,13 @@ public final class MinimapRenderer {
         Matrix4f mat = gg.pose().last().pose();
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        BufferBuilder buf = Tesselator.getInstance().begin(
-                VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder buf =
+                Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
         buf.addVertex(mat, cx, cy, 0).setColor(argb);
         for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
             double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
-            buf.addVertex(mat, cx + (float) (Math.cos(a) * radius),
-                    cy + (float) (Math.sin(a) * radius), 0).setColor(argb);
+            buf.addVertex(mat, cx + (float) (Math.cos(a) * radius), cy + (float) (Math.sin(a) * radius), 0)
+                    .setColor(argb);
         }
         BufferUploader.drawWithShader(buf.buildOrThrow());
     }
@@ -377,8 +386,8 @@ public final class MinimapRenderer {
         Matrix4f mat = gg.pose().last().pose();
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        BufferBuilder buf = Tesselator.getInstance().begin(
-                VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder buf =
+                Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
         for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
             double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
             float c = (float) Math.cos(a), s = (float) Math.sin(a);
@@ -400,8 +409,8 @@ public final class MinimapRenderer {
         RenderSystem.enableDepthTest();
         RenderSystem.depthMask(true);
         RenderSystem.setShader(GameRenderer::getPositionShader);
-        BufferBuilder buf = Tesselator.getInstance().begin(
-                VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION);
+        BufferBuilder buf =
+                Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION);
         float z = 100f; // devant le contenu (z = 0)
         for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
             double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
@@ -422,8 +431,7 @@ public final class MinimapRenderer {
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
         RenderSystem.depthMask(true);
         RenderSystem.setShader(GameRenderer::getPositionShader);
-        BufferBuilder buf = Tesselator.getInstance().begin(
-                VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
+        BufferBuilder buf = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
         float z = -9000f; // très loin derrière tout le rendu GUI
         buf.addVertex(mat, x0, y0, z);
         buf.addVertex(mat, x0, y1, z);

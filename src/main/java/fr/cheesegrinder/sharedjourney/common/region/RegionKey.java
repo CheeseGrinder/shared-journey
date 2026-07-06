@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.common.region;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
+
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -18,8 +19,12 @@ public record RegionKey(ResourceKey<Level> dimension, MapLayer layer, int caveBa
     public static final int REGION_CHUNKS = 32;
 
     public static RegionKey of(ResourceKey<Level> dim, MapLayer layer, int caveBand, int chunkX, int chunkZ) {
-        return new RegionKey(dim, layer, layer == MapLayer.CAVE ? caveBand : 0,
-                Math.floorDiv(chunkX, REGION_CHUNKS), Math.floorDiv(chunkZ, REGION_CHUNKS));
+        return new RegionKey(
+                dim,
+                layer,
+                layer == MapLayer.CAVE ? caveBand : 0,
+                Math.floorDiv(chunkX, REGION_CHUNKS),
+                Math.floorDiv(chunkZ, REGION_CHUNKS));
     }
 
     /** Nom de fichier conforme à la spec : region_X_Z.png */
@@ -44,9 +49,12 @@ public record RegionKey(ResourceKey<Level> dimension, MapLayer layer, int caveBa
         }
 
         try {
-            return new RegionKey(ResourceKey.create(Registries.DIMENSION, dim),
-                    MapLayer.valueOf(p[1]), Integer.parseInt(p[2]),
-                    Integer.parseInt(p[3]), Integer.parseInt(p[4]));
+            return new RegionKey(
+                    ResourceKey.create(Registries.DIMENSION, dim),
+                    MapLayer.valueOf(p[1]),
+                    Integer.parseInt(p[2]),
+                    Integer.parseInt(p[3]),
+                    Integer.parseInt(p[4]));
         } catch (IllegalArgumentException e) {
             return null;
         }
@@ -64,7 +72,11 @@ public record RegionKey(ResourceKey<Level> dimension, MapLayer layer, int caveBa
                 ResourceLocation dim = buf.readResourceLocation();
                 MapLayer layer = MapLayer.values()[buf.readVarInt()];
 
-                return new RegionKey(ResourceKey.create(Registries.DIMENSION, dim), layer,
-                        buf.readVarInt(), buf.readVarInt(), buf.readVarInt());
+                return new RegionKey(
+                        ResourceKey.create(Registries.DIMENSION, dim),
+                        layer,
+                        buf.readVarInt(),
+                        buf.readVarInt(),
+                        buf.readVarInt());
             });
 }

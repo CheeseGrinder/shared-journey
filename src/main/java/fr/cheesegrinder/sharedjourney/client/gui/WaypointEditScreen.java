@@ -2,11 +2,12 @@ package fr.cheesegrinder.sharedjourney.client.gui;
 
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
+
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -17,8 +18,8 @@ import net.minecraft.network.chat.Component;
 public class WaypointEditScreen extends Screen {
 
     private static final int[] PALETTE = {
-            0xFF4040, 0xFF9040, 0xFFE040, 0x60FF60, 0x40E0D0,
-            0x4090FF, 0x9060FF, 0xFF60C0, 0xFFFFFF, 0x909090
+        0xFF4040, 0xFF9040, 0xFFE040, 0x60FF60, 0x40E0D0,
+        0x4090FF, 0x9060FF, 0xFF60C0, 0xFFFFFF, 0x909090
     };
 
     private final Screen parent;
@@ -54,23 +55,26 @@ public class WaypointEditScreen extends Screen {
             final int color = PALETTE[i];
             addRenderableWidget(Button.builder(Component.empty(), b -> waypoint = waypoint.withColor(color))
                     .bounds(px + i * 22, y + 28, 20, 20)
-                    .tooltip(Tooltip.create(
-                            Component.literal(String.format("#%06X", color))))
+                    .tooltip(Tooltip.create(Component.literal(String.format("#%06X", color))))
                     .build());
         }
 
         // Visibilité
         addRenderableWidget(Button.builder(visibilityLabel(), b -> {
-            waypoint = waypoint.withVisible(!waypoint.visible());
-            b.setMessage(visibilityLabel());
-        }).bounds(cx - 100, y + 56, 200, 20).build());
+                    waypoint = waypoint.withVisible(!waypoint.visible());
+                    b.setMessage(visibilityLabel());
+                })
+                .bounds(cx - 100, y + 56, 200, 20)
+                .build());
 
         // Valider / Supprimer / Annuler
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> save())
-                .bounds(cx - 100, y + 84, 95, 20).build());
+                .bounds(cx - 100, y + 84, 95, 20)
+                .build());
         if (creating) {
             addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> close())
-                    .bounds(cx + 5, y + 84, 95, 20).build());
+                    .bounds(cx + 5, y + 84, 95, 20)
+                    .build());
         } else {
             addRenderableWidget(Button.builder(
                             Component.translatable("sharedjourney.waypoint.delete")
@@ -79,22 +83,24 @@ public class WaypointEditScreen extends Screen {
                                 WaypointStore.remove(waypoint.id());
                                 close();
                             })
-                    .bounds(cx + 5, y + 84, 95, 20).build());
+                    .bounds(cx + 5, y + 84, 95, 20)
+                    .build());
         }
     }
 
     private Component visibilityLabel() {
-        return Component.translatable(waypoint.visible()
-                ? "sharedjourney.waypoint.visible" : "sharedjourney.waypoint.hidden");
+        return Component.translatable(
+                waypoint.visible() ? "sharedjourney.waypoint.visible" : "sharedjourney.waypoint.hidden");
     }
 
     private void save() {
-        String name = nameBox.getValue().isBlank() ? waypoint.name() : nameBox.getValue().trim();
+        String name = nameBox.getValue().isBlank()
+                ? waypoint.name()
+                : nameBox.getValue().trim();
         waypoint = waypoint.withName(name);
         if (creating) {
             WaypointStore.add(waypoint);
-        }
-        else {
+        } else {
             WaypointStore.update(waypoint);
         }
 
@@ -111,8 +117,7 @@ public class WaypointEditScreen extends Screen {
         int cx = width / 2;
         int y = height / 2 - 40;
         gg.drawCenteredString(font, title, cx, y - 30, 0xFFFFFF);
-        gg.drawCenteredString(font, waypoint.x() + ", " + waypoint.y() + ", " + waypoint.z(),
-                cx, y - 16, 0xAAAAAA);
+        gg.drawCenteredString(font, waypoint.x() + ", " + waypoint.y() + ", " + waypoint.z(), cx, y - 16, 0xAAAAAA);
         // Aperçu de la couleur courante au-dessus de la palette
         int px = cx - (PALETTE.length * 22 - 2) / 2;
         for (int i = 0; i < PALETTE.length; i++) {

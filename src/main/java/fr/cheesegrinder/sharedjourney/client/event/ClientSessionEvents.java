@@ -5,6 +5,7 @@ import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.DiskCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -25,7 +26,8 @@ public final class ClientSessionEvents {
         WaypointStore.openSession();
         // Handshake : envoi du résumé de l'index local. Le serveur ne
         // renverra que les régions manquantes ou plus récentes.
-        byte[] encoded = Payloads.ClientIndexPayload.encodeIndex(DiskCache.index().snapshot());
+        byte[] encoded =
+                Payloads.ClientIndexPayload.encodeIndex(DiskCache.index().snapshot());
         PacketDistributor.sendToServer(new Payloads.ClientIndexPayload(encoded));
     }
 

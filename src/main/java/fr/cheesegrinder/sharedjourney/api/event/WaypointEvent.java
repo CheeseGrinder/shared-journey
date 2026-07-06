@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.api.event;
 
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
+
 import net.neoforged.bus.api.Event;
 import net.neoforged.bus.api.ICancellableEvent;
 

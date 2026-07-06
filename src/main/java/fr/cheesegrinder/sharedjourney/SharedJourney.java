@@ -1,15 +1,17 @@
 package fr.cheesegrinder.sharedjourney;
 
-import com.mojang.logging.LogUtils;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.config.CommonConfig;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
+
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
+
+import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
 /**
