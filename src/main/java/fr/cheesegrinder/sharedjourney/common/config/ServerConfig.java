@@ -2,9 +2,11 @@ package fr.cheesegrinder.sharedjourney.common.config;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -83,27 +85,49 @@ public final class ServerConfig {
     }
 
     private static boolean isValidLayer(Object o) {
-        if (!(o instanceof String s)) return false;
-        try { MapLayer.valueOf(s.trim().toUpperCase(Locale.ROOT)); return true; }
-        catch (IllegalArgumentException e) { return false; }
+        if (!(o instanceof String s)) {
+            return false;
+        }
+
+        try {
+            MapLayer.valueOf(s.trim().toUpperCase(Locale.ROOT));
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private static boolean isValidMapping(Object o) {
-        if (!(o instanceof String s) || !s.contains("=")) return false;
+        if (!(o instanceof String s) || !s.contains("=")) {
+            return false;
+        }
+
         String[] parts = s.split("=", 2);
-        if (net.minecraft.resources.ResourceLocation.tryParse(parts[0].trim()) == null) return false;
-        for (String l : parts[1].split(",")) if (!isValidLayer(l)) return false;
+        if (ResourceLocation.tryParse(parts[0].trim()) == null) {
+            return false;
+        }
+
+        for (String l : parts[1].split(",")) {
+            if (!isValidLayer(l)) {
+                return false;
+            }
+        }
+
         return true;
     }
 
-    public static void invalidateCache() { PARSED.clear(); }
+    public static void invalidateCache() {
+        PARSED.clear();
+    }
 
     public static EnumSet<MapLayer> layersFor(ResourceKey<Level> dim) {
         String id = dim.location().toString();
         return PARSED.computeIfAbsent(id, k -> {
             for (String entry : SHARED_LAYERS.get()) {
                 String[] parts = entry.split("=", 2);
-                if (parts[0].trim().equals(k)) return parseLayers(parts[1]);
+                if (parts[0].trim().equals(k)) {
+                    return parseLayers(parts[1]);
+                }
             }
             EnumSet<MapLayer> def = EnumSet.noneOf(MapLayer.class);
             DEFAULT_LAYERS.get().forEach(s -> def.add(MapLayer.valueOf(s.trim().toUpperCase(Locale.ROOT))));
@@ -115,7 +139,9 @@ public final class ServerConfig {
         EnumSet<MapLayer> set = EnumSet.noneOf(MapLayer.class);
         for (String l : csv.split(",")) {
             String t = l.trim();
-            if (!t.isEmpty()) set.add(MapLayer.valueOf(t.toUpperCase(Locale.ROOT)));
+            if (!t.isEmpty()) {
+                set.add(MapLayer.valueOf(t.toUpperCase(Locale.ROOT)));
+            }
         }
         return set;
     }
@@ -124,17 +150,26 @@ public final class ServerConfig {
     public static void setLayer(ResourceKey<Level> dim, MapLayer layer, boolean enabled) {
         String id = dim.location().toString();
         EnumSet<MapLayer> current = EnumSet.copyOf(layersFor(dim));
-        if (enabled) current.add(layer); else current.remove(layer);
+        if (enabled) {
+            current.add(layer);
+        } else {
+            current.remove(layer);
+        }
 
-        java.util.List<String> newList = new java.util.ArrayList<>();
+        List<String> newList = new ArrayList<>();
         boolean found = false;
         for (String entry : SHARED_LAYERS.get()) {
             if (entry.split("=", 2)[0].trim().equals(id)) {
                 newList.add(id + "=" + join(current));
                 found = true;
-            } else newList.add(entry);
+            } else {
+                newList.add(entry);
+            }
         }
-        if (!found) newList.add(id + "=" + join(current));
+        if (!found) {
+            newList.add(id + "=" + join(current));
+        }
+
         SHARED_LAYERS.set(newList);
         invalidateCache();
     }

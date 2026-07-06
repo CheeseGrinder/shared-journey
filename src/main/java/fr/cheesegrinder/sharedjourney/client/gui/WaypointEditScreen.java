@@ -1,8 +1,9 @@
 package fr.cheesegrinder.sharedjourney.client.gui;
 
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
-import fr.cheesegrinder.sharedjourney.client.WaypointStore;
+import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -53,7 +54,7 @@ public class WaypointEditScreen extends Screen {
             final int color = PALETTE[i];
             addRenderableWidget(Button.builder(Component.empty(), b -> waypoint = waypoint.withColor(color))
                     .bounds(px + i * 22, y + 28, 20, 20)
-                    .tooltip(net.minecraft.client.gui.components.Tooltip.create(
+                    .tooltip(Tooltip.create(
                             Component.literal(String.format("#%06X", color))))
                     .build());
         }
@@ -90,8 +91,13 @@ public class WaypointEditScreen extends Screen {
     private void save() {
         String name = nameBox.getValue().isBlank() ? waypoint.name() : nameBox.getValue().trim();
         waypoint = waypoint.withName(name);
-        if (creating) WaypointStore.add(waypoint);
-        else WaypointStore.update(waypoint);
+        if (creating) {
+            WaypointStore.add(waypoint);
+        }
+        else {
+            WaypointStore.update(waypoint);
+        }
+
         close();
     }
 
@@ -116,5 +122,7 @@ public class WaypointEditScreen extends Screen {
     }
 
     @Override
-    public boolean isPauseScreen() { return false; }
+    public boolean isPauseScreen() {
+        return false;
+    }
 }

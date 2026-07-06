@@ -1,4 +1,4 @@
-package fr.cheesegrinder.sharedjourney.client;
+package fr.cheesegrinder.sharedjourney.client.service;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -43,11 +43,15 @@ public final class WaypointStore {
         Minecraft mc = Minecraft.getInstance();
         String id;
         var server = mc.getCurrentServer();
-        if (server != null) id = server.ip.toLowerCase().replaceAll("[^a-z0-9._-]", "_");
-        else if (mc.getSingleplayerServer() != null)
+        if (server != null) {
+            id = server.ip.toLowerCase().replaceAll("[^a-z0-9._-]", "_");
+        } else if (mc.getSingleplayerServer() != null) {
             id = "sp_" + mc.getSingleplayerServer().getWorldData().getLevelName()
                     .toLowerCase().replaceAll("[^a-z0-9._-]", "_");
-        else id = "unknown";
+        } else {
+            id = "unknown";
+        }
+
         file = mc.gameDirectory.toPath().resolve("sharedjourney_cache").resolve(id).resolve("waypoints.json");
         load();
     }
@@ -60,19 +64,26 @@ public final class WaypointStore {
 
     // ------------------------------------------------------------------ CRUD
 
-    public static List<Waypoint> all() { return new ArrayList<>(WAYPOINTS.values()); }
+    public static List<Waypoint> all() {
+        return new ArrayList<>(WAYPOINTS.values());
+    }
 
     public static List<Waypoint> forDimension(ResourceLocation dim) {
         return WAYPOINTS.values().stream().filter(w -> w.dimension().equals(dim)).toList();
     }
 
-    public static Waypoint get(UUID id) { return WAYPOINTS.get(id); }
+    public static Waypoint get(UUID id) {
+        return WAYPOINTS.get(id);
+    }
 
     /** Ajoute un waypoint. Retourne false si un listener a annulé l'ajout. */
     public static boolean add(Waypoint wp) {
         WaypointEvent.Added event = new WaypointEvent.Added(wp);
         NeoForge.EVENT_BUS.post(event);
-        if (event.isCanceled()) return false;
+        if (event.isCanceled()) {
+            return false;
+        }
+
         WAYPOINTS.put(wp.id(), wp);
         save();
         return true;
@@ -103,14 +114,23 @@ public final class WaypointStore {
 
     private static void load() {
         WAYPOINTS.clear();
-        if (file == null || !Files.exists(file)) return;
+        if (file == null || !Files.exists(file)) {
+            return;
+        }
+
         try {
             JsonArray arr = GSON.fromJson(Files.readString(file), JsonArray.class);
-            if (arr == null) return;
+            if (arr == null) {
+                return;
+            }
+
             for (JsonElement el : arr) {
                 JsonObject o = el.getAsJsonObject();
                 ResourceLocation dim = ResourceLocation.tryParse(o.get("dimension").getAsString());
-                if (dim == null) continue;
+                if (dim == null) {
+                    continue;
+                }
+
                 Waypoint wp = new Waypoint(
                         UUID.fromString(o.get("id").getAsString()),
                         o.get("name").getAsString(), dim,
@@ -126,7 +146,10 @@ public final class WaypointStore {
     }
 
     private static void save() {
-        if (file == null) return;
+        if (file == null) {
+            return;
+        }
+
         JsonArray arr = new JsonArray();
         for (Waypoint wp : WAYPOINTS.values()) {
             JsonObject o = new JsonObject();

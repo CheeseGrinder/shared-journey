@@ -1,4 +1,6 @@
-package fr.cheesegrinder.sharedjourney.common;
+package fr.cheesegrinder.sharedjourney.common.network;
+
+import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
@@ -9,13 +11,20 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
+import org.jetbrains.annotations.NotNull;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 /**
  * Paquets réseau (spec §5). Le module common ne connaît ni le client ni le
@@ -65,16 +74,24 @@ public final class Payloads {
                         ResourceLocation dim = buf.readResourceLocation();
                         int m = buf.readVarInt();
                         List<MapLayer> layers = new ArrayList<>(m);
-                        for (int j = 0; j < m; j++) layers.add(MapLayer.values()[buf.readVarInt()]);
+                        for (int j = 0; j < m; j++) {
+                            layers.add(MapLayer.values()[buf.readVarInt()]);
+                        }
+
                         map.put(dim, layers);
                     }
                     int nb = buf.readVarInt();
                     List<Integer> bands = new ArrayList<>(nb);
-                    for (int i = 0; i < nb; i++) bands.add(buf.readVarInt());
+                    for (int i = 0; i < nb; i++) {
+                        bands.add(buf.readVarInt());
+                    }
+
                     return new LayerSettingsPayload(map, bands, buf.readVarInt());
                 });
 
-        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+        @Override public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
     }
 
     // ---------------------------------------------------------------- S2C : données de région
@@ -97,7 +114,9 @@ public final class Payloads {
                         buf.readVarLong(), buf.readVarInt(), buf.readVarInt(),
                         buf.readByteArray()));
 
-        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+        @Override public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
     }
 
     // ---------------------------------------------------------------- C2S : handshake d'index
@@ -114,36 +133,50 @@ public final class Payloads {
                 (buf, p) -> buf.writeByteArray(p.gzippedIndex),
                 buf -> new ClientIndexPayload(buf.readByteArray()));
 
-        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+        @Override public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
 
         /** Sérialisation compacte : lignes "indexKey=timestamp", GZIP. */
         public static byte[] encodeIndex(Map<RegionKey, Long> entries) {
             StringBuilder sb = new StringBuilder(entries.size() * 48);
             entries.forEach((k, v) -> sb.append(k.indexKey()).append('=').append(v).append('\n'));
-            try (var bos = new java.io.ByteArrayOutputStream();
-                 var gz = new java.util.zip.GZIPOutputStream(bos)) {
-                gz.write(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            try (var bos = new ByteArrayOutputStream();
+                 var gz = new GZIPOutputStream(bos)) {
+                gz.write(sb.toString().getBytes(StandardCharsets.UTF_8));
                 gz.finish();
+
                 return bos.toByteArray();
-            } catch (java.io.IOException e) {
+            } catch (IOException e) {
                 return new byte[0];
             }
         }
 
         public Map<RegionKey, Long> decodeIndex(int maxEntries) {
             Map<RegionKey, Long> out = new HashMap<>();
-            try (var gis = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(gzippedIndex))) {
-                String text = new String(gis.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+
+            try (var gis = new GZIPInputStream(new ByteArrayInputStream(gzippedIndex))) {
+                String text = new String(gis.readAllBytes(), StandardCharsets.UTF_8);
                 for (String line : text.split("\n")) {
-                    if (out.size() >= maxEntries) break;
+                    if (out.size() >= maxEntries) {
+                        break;
+                    }
+
                     int eq = line.lastIndexOf('=');
-                    if (eq <= 0) continue;
+                    if (eq <= 0) {
+                        continue;
+                    }
+
                     RegionKey key = RegionKey.fromIndexKey(line.substring(0, eq));
-                    if (key == null) continue;
+                    if (key == null) {
+                        continue;
+                    }
+
                     try { out.put(key, Long.parseLong(line.substring(eq + 1))); }
                     catch (NumberFormatException ignored) {}
                 }
-            } catch (java.io.IOException ignored) {}
+            } catch (IOException ignored) {}
             return out;
         }
     }
@@ -174,7 +207,9 @@ public final class Payloads {
                     return new RegionRequestPayload(keys, versions);
                 });
 
-        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+        @Override public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
     }
 
     // ---------------------------------------------------------------- enregistrement

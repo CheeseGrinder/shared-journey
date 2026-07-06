@@ -1,4 +1,4 @@
-package fr.cheesegrinder.sharedjourney.common;
+package fr.cheesegrinder.sharedjourney.common.region;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import net.minecraft.core.registries.Registries;
@@ -34,9 +34,15 @@ public record RegionKey(ResourceKey<Level> dimension, MapLayer layer, int caveBa
 
     public static RegionKey fromIndexKey(String s) {
         String[] p = s.split("\\|");
-        if (p.length != 5) return null;
+        if (p.length != 5) {
+            return null;
+        }
+
         ResourceLocation dim = ResourceLocation.tryParse(p[0]);
-        if (dim == null) return null;
+        if (dim == null) {
+            return null;
+        }
+
         try {
             return new RegionKey(ResourceKey.create(Registries.DIMENSION, dim),
                     MapLayer.valueOf(p[1]), Integer.parseInt(p[2]),
@@ -57,6 +63,7 @@ public record RegionKey(ResourceKey<Level> dimension, MapLayer layer, int caveBa
             buf -> {
                 ResourceLocation dim = buf.readResourceLocation();
                 MapLayer layer = MapLayer.values()[buf.readVarInt()];
+
                 return new RegionKey(ResourceKey.create(Registries.DIMENSION, dim), layer,
                         buf.readVarInt(), buf.readVarInt(), buf.readVarInt());
             });

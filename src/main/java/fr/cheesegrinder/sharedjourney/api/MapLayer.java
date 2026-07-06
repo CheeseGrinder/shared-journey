@@ -1,5 +1,7 @@
 package fr.cheesegrinder.sharedjourney.api;
 
+import java.util.Locale;
+
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -20,11 +22,11 @@ public enum MapLayer {
             ByteBufCodecs.VAR_INT.map(i -> MapLayer.values()[i], MapLayer::ordinal);
 
     public String translationKey() {
-        return "sharedjourney.layer." + name().toLowerCase(java.util.Locale.ROOT);
+        return "sharedjourney.layer." + name().toLowerCase(Locale.ROOT);
     }
 
     /** Nom de dossier sur disque. Pour CAVE, dépend de la bande. */
     public String folderName(int caveBand) {
-        return this == CAVE ? "cave_" + caveBand : name().toLowerCase(java.util.Locale.ROOT);
+        return this == CAVE ? "cave_" + caveBand : name().toLowerCase(Locale.ROOT);
     }
 }

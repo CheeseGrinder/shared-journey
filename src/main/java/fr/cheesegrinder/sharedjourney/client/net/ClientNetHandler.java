@@ -1,6 +1,10 @@
-package fr.cheesegrinder.sharedjourney.client;
+package fr.cheesegrinder.sharedjourney.client.net;
 
-import fr.cheesegrinder.sharedjourney.common.Payloads;
+import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
+import fr.cheesegrinder.sharedjourney.client.service.DiskCache;
+import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
+
+import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 
 /** Réception des paquets côté client (thread client via enqueueWork). */
 public final class ClientNetHandler {

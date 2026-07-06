@@ -1,8 +1,10 @@
-package fr.cheesegrinder.sharedjourney.client;
+package fr.cheesegrinder.sharedjourney.client.service;
+
+import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 
 import com.mojang.logging.LogUtils;
-import fr.cheesegrinder.sharedjourney.common.RegionIndex;
-import fr.cheesegrinder.sharedjourney.common.RegionKey;
+import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
+import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
@@ -52,9 +54,13 @@ public final class DiskCache {
         currentRoot = null;
     }
 
-    public static boolean isOpen() { return currentRoot != null; }
+    public static boolean isOpen() {
+        return currentRoot != null;
+    }
 
-    public static RegionIndex index() { return index; }
+    public static RegionIndex index() {
+        return index;
+    }
 
     private static String sanitize(String s) {
         return s.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9._-]", "_");
@@ -64,7 +70,10 @@ public final class DiskCache {
 
     /** Écrit un PNG de région reçu du serveur (asynchrone) et met à jour l'index. */
     public static void store(RegionKey key, long version, byte[] png) {
-        if (currentRoot == null || !ClientConfig.DISK_CACHE_ENABLED.get()) return;
+        if (currentRoot == null || !ClientConfig.DISK_CACHE_ENABLED.get()) {
+            return;
+        }
+
         index.put(key, version);
         Path file = pathOf(key);
         Util.ioPool().execute(() -> {
@@ -79,9 +88,15 @@ public final class DiskCache {
 
     /** Lit un PNG du cache disque, ou null. (Appel bloquant : lecture locale rapide.) */
     public static byte[] read(RegionKey key) {
-        if (currentRoot == null) return null;
+        if (currentRoot == null) {
+            return null;
+        }
+
         Path file = pathOf(key);
-        if (!Files.exists(file)) return null;
+        if (!Files.exists(file)) {
+            return null;
+        }
+
         try {
             return Files.readAllBytes(file);
         } catch (IOException e) {
@@ -94,7 +109,10 @@ public final class DiskCache {
     }
 
     public static void flushIndex() {
-        if (currentRoot == null) return;
+        if (currentRoot == null) {
+            return;
+        }
+
         try {
             index.save(currentRoot.resolve("index.json"));
         } catch (IOException e) {
@@ -108,7 +126,10 @@ public final class DiskCache {
      * de fichiers supprimés.
      */
     public static int purge(String layerName) {
-        if (currentRoot == null) return 0;
+        if (currentRoot == null) {
+            return 0;
+        }
+
         String needle = layerName.toLowerCase(Locale.ROOT);
         int[] deleted = {0};
         var removedKeys = needle.equals("all")
@@ -119,7 +140,9 @@ public final class DiskCache {
         }
         for (RegionKey key : removedKeys) {
             try {
-                if (Files.deleteIfExists(pathOf(key))) deleted[0]++;
+                if (Files.deleteIfExists(pathOf(key))) {
+                    deleted[0]++;
+                }
             } catch (IOException ignored) {}
             ClientMapCache.evict(key);
         }

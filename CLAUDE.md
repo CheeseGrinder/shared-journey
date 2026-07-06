@@ -24,16 +24,30 @@ There are no unit or integration tests.
 
 ## Project Structure
 
-Single Gradle module at the root (`src/main/java`, `src/main/resources`, `src/main/templates`), plus one subproject:
+Single Gradle module at the root (`src/main/java`, `src/main/resources`, `src/main/templates`), plus one subproject (`jmshim/`: declares modId `journeymap` as an empty mod so JourneyMap integrations activate — MUST stay a separate JAR).
 
-| Location  | Role                                                                             |
-|-----------|----------------------------------------------------------------------------------|
-| `...sharedjourney.api`    | Public interfaces: `Waypoint`, `MapLayer`, `ChunkLayerRenderer`, NeoForge events |
-| `...sharedjourney.common` | Shared data: `RegionKey`, `RegionIndex`, `Payloads` (network packets), configs   |
-| `...sharedjourney.server` | Async rendering engine: `ChunkColorizer`, `MapManager`, `SyncService`            |
-| `...sharedjourney.client` | Client cache, minimap/fullmap GUI, waypoint store, JourneyMap bridge             |
-| `...sharedjourney`        | `@Mod` entry points (`SharedJourney`, `SharedJourneyClient`)                     |
-| `jmshim/` (subproject)    | Declares modId `journeymap` (empty mod) so JourneyMap integrations activate — MUST stay a separate JAR |
+Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
+
+| Package          | Contents                                                                                  |
+|------------------|-------------------------------------------------------------------------------------------|
+| *(root)*         | `@Mod` entry points: `SharedJourney`, `SharedJourneyClient`                               |
+| `api`            | Public interfaces: `Waypoint`, `MapLayer`, `ChunkLayerRenderer`, `SharedJourneyConstants` |
+| `api.event`      | Custom NeoForge events: `LayerRegisterEvent`, `WaypointEvent`                             |
+| `common.config`  | `CommonConfig`, `ServerConfig`                                                            |
+| `common.network` | `Payloads` (network packets + `Hooks` indirection)                                        |
+| `common.region`  | `RegionKey`, `RegionIndex`                                                                |
+| `server.command` | `MapCommands` (`/sj`, `/sharedjourney`)                                                   |
+| `server.event`   | `ServerLifecycleEvents`, `PlayerEvents`, `ChunkEvents`, `ConfigEvents`                    |
+| `server.render`  | `ChunkColorizer` (server-side pixel rendering)                                            |
+| `server.service` | `MapManager` (async engine), `SyncService` (delta sync), `RegenService` (full regen)      |
+| `client.command` | `ClientCommands` (`/sj purge`, `/sj cache`, `/sj goto`)                                   |
+| `client.config`  | `ClientConfig`                                                                            |
+| `client.event`   | `ClientSetupEvents` (keys, HUD layer), `ClientInputEvents`, `ClientSessionEvents`         |
+| `client.gui`     | `FullMapScreen`, `WaypointEditScreen`                                                     |
+| `client.net`     | `ClientNetHandler` (payload handlers)                                                     |
+| `client.render`  | `MinimapRenderer` (HUD minimap)                                                           |
+| `client.service` | `ClientMapCache`, `DiskCache`, `WaypointStore`                                            |
+| `client.compat`  | `JourneyMapBridge` (reflection proxy)                                                     |
 
 The packages keep the layering discipline of the former multi-module split: `api` has no dependencies, `common` depends only on `api`, `server` and `client` depend on `common` and never on each other.
 

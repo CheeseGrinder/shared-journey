@@ -30,5 +30,7 @@ public record Waypoint(UUID id, String name, ResourceLocation dimension,
         return new Waypoint(id, name, dimension, x, y, z, colorRgb, source, v);
     }
 
-    public BlockPos pos() { return new BlockPos(x, y, z); }
+    public BlockPos pos() {
+        return new BlockPos(x, y, z);
+    }
 }

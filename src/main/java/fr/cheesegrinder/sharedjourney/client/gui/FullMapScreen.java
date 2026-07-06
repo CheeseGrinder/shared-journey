@@ -2,12 +2,12 @@ package fr.cheesegrinder.sharedjourney.client.gui;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
-import fr.cheesegrinder.sharedjourney.client.ClientConfig;
-import fr.cheesegrinder.sharedjourney.client.ClientMapCache;
-import fr.cheesegrinder.sharedjourney.client.MinimapRenderer;
-import fr.cheesegrinder.sharedjourney.client.WaypointStore;
-import fr.cheesegrinder.sharedjourney.common.Payloads;
-import fr.cheesegrinder.sharedjourney.common.RegionKey;
+import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
+import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
+import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
+import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -29,6 +29,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Carte plein écran (spec §6.2) :
@@ -58,14 +59,17 @@ public class FullMapScreen extends Screen {
 
     public FullMapScreen() {
         super(Component.literal("SharedJourney"));
-        var player = net.minecraft.client.Minecraft.getInstance().player;
+        var player = Minecraft.getInstance().player;
         if (player != null) {
             centerX = player.getX();
             centerZ = player.getZ();
         }
         layer = MinimapRenderer.currentLayer();
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
-        if (!allowed.isEmpty() && !allowed.contains(layer)) layer = allowed.get(0);
+        if (!allowed.isEmpty() && !allowed.contains(layer)) {
+            layer = allowed.get(0);
+        }
+
         bandIndex = Math.max(0, ClientMapCache.caveBands.indexOf(MinimapRenderer.currentCaveBand()));
     }
 
@@ -92,7 +96,7 @@ public class FullMapScreen extends Screen {
     }
 
     private void centerOnPlayer() {
-        var player = net.minecraft.client.Minecraft.getInstance().player;
+        var player = Minecraft.getInstance().player;
         if (player != null) {
             centerX = player.getX();
             centerZ = player.getZ();
@@ -110,7 +114,10 @@ public class FullMapScreen extends Screen {
 
     private void cycleLayer() {
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
-        if (allowed.isEmpty()) return;
+        if (allowed.isEmpty()) {
+            return;
+        }
+
         int idx = allowed.indexOf(layer);
         layer = allowed.get((idx + 1) % allowed.size());
         MinimapRenderer.setLayer(layer);
@@ -120,14 +127,20 @@ public class FullMapScreen extends Screen {
 
     private void changeBand(int delta) {
         List<Integer> bands = ClientMapCache.caveBands;
-        if (bands.isEmpty()) return;
+        if (bands.isEmpty()) {
+            return;
+        }
+
         bandIndex = Math.floorMod(bandIndex + delta, bands.size());
         layerButton.setMessage(layerLabel());
     }
 
     private int currentBand() {
         List<Integer> bands = ClientMapCache.caveBands;
-        if (bands.isEmpty()) return 0;
+        if (bands.isEmpty()) {
+            return 0;
+        }
+
         bandIndex = Math.min(bandIndex, bands.size() - 1);
         return bands.get(Math.max(0, bandIndex));
     }
@@ -140,20 +153,31 @@ public class FullMapScreen extends Screen {
 
     // ------------------------------------------------------------------ conversions écran <-> monde
 
-    private double worldX(double mouseX) { return centerX + (mouseX - width / 2.0) / zoom; }
+    private double worldX(double mouseX) {
+        return centerX + (mouseX - width / 2.0) / zoom;
+    }
 
-    private double worldZ(double mouseY) { return centerZ + (mouseY - height / 2.0) / zoom; }
+    private double worldZ(double mouseY) {
+        return centerZ + (mouseY - height / 2.0) / zoom;
+    }
 
-    private double screenX(double wx) { return width / 2.0 + (wx - centerX) * zoom; }
+    private double screenX(double wx) {
+        return width / 2.0 + (wx - centerX) * zoom;
+    }
 
-    private double screenY(double wz) { return height / 2.0 + (wz - centerZ) * zoom; }
+    private double screenY(double wz) {
+        return height / 2.0 + (wz - centerZ) * zoom;
+    }
 
     // ------------------------------------------------------------------ interactions
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         dragged = false;
-        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+        if (super.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+
         closeContextMenu(); // clic hors du menu : on le referme
         return false;
     }
@@ -171,9 +195,14 @@ public class FullMapScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (super.mouseReleased(mouseX, mouseY, button)) return true;
-        var mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc.level == null || mc.player == null) return false;
+        if (super.mouseReleased(mouseX, mouseY, button)) {
+            return true;
+        }
+
+        var mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null) {
+            return false;
+        }
 
         if (button == 0 && !dragged) {
             // Clic gauche : édition du waypoint le plus proche du curseur
@@ -195,7 +224,10 @@ public class FullMapScreen extends Screen {
     private void openContextMenu(double mouseX, double mouseY) {
         closeContextMenu();
         var mc = Minecraft.getInstance();
-        if (mc.player == null || mc.level == null) return;
+        if (mc.player == null || mc.level == null) {
+            return;
+        }
+
         int wx = (int) Math.floor(worldX(mouseX));
         int wz = (int) Math.floor(worldZ(mouseY));
         // Le TP passe par /tp : réservé aux joueurs op (niveau 2, connu du client).
@@ -231,13 +263,19 @@ public class FullMapScreen extends Screen {
         var mc = Minecraft.getInstance();
         LevelChunk chunk = mc.level == null ? null
                 : mc.level.getChunkSource().getChunkNow(wx >> 4, wz >> 4);
-        if (chunk == null) return -1;
+        if (chunk == null) {
+            return -1;
+        }
+
         return chunk.getHeight(Heightmap.Types.WORLD_SURFACE, wx & 15, wz & 15) + 1;
     }
 
     private void teleportTo(int wx, int wz) {
         var mc = Minecraft.getInstance();
-        if (mc.player == null) return;
+        if (mc.player == null) {
+            return;
+        }
+
         int y = surfaceYAt(wx, wz);
         String yArg = y >= 0 ? String.valueOf(y) : "~";
         mc.player.connection.sendUnsignedCommand(
@@ -247,12 +285,15 @@ public class FullMapScreen extends Screen {
 
     private void createWaypointAt(int wx, int wz) {
         var mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null) return;
+        if (mc.level == null || mc.player == null) {
+            return;
+        }
+
         int y = surfaceYAt(wx, wz);
         int wy = y >= 0 ? y : mc.player.blockPosition().getY();
         Waypoint wp = Waypoint.create("X:" + wx + " Z:" + wz,
                 mc.level.dimension().location(), new BlockPos(wx, wy, wz),
-                0xFFFFFF & java.util.concurrent.ThreadLocalRandom.current().nextInt(), "user");
+                0xFFFFFF & ThreadLocalRandom.current().nextInt(), "user");
         mc.setScreen(new WaypointEditScreen(this, wp, true));
     }
 
@@ -272,8 +313,11 @@ public class FullMapScreen extends Screen {
     }
 
     private Waypoint nearestWaypoint(double mouseX, double mouseY) {
-        var mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc.level == null) return null;
+        var mc = Minecraft.getInstance();
+        if (mc.level == null) {
+            return null;
+        }
+
         Waypoint best = null;
         double bestDist = WAYPOINT_CLICK_PX * WAYPOINT_CLICK_PX;
         for (Waypoint wp : WaypointStore.forDimension(mc.level.dimension().location())) {
@@ -311,7 +355,7 @@ public class FullMapScreen extends Screen {
         // client, biome + bloc de surface (comme JourneyMap).
         int wx = (int) Math.floor(worldX(mouseX));
         int wz = (int) Math.floor(worldZ(mouseY));
-        var mc = net.minecraft.client.Minecraft.getInstance();
+        var mc = Minecraft.getInstance();
         int infoY = 6;
         LevelChunk hoverChunk = mc.level == null ? null
                 : mc.level.getChunkSource().getChunkNow(wx >> 4, wz >> 4);
@@ -349,8 +393,10 @@ public class FullMapScreen extends Screen {
 
     private void renderBackgroundLayers(GuiGraphics gg) {
         gg.fill(0, 0, width, height, MinimapRenderer.BACKGROUND);
-        var mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc.level == null || mc.player == null) return;
+        var mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null) {
+            return;
+        }
 
         var dim = mc.level.dimension();
         int band = layer == MapLayer.CAVE ? currentBand() : 0;
@@ -402,10 +448,16 @@ public class FullMapScreen extends Screen {
 
         // Waypoints par-dessus, en coordonnées écran (taille constante quel que soit le zoom)
         for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
-            if (!wp.visible()) continue;
+            if (!wp.visible()) {
+                continue;
+            }
+
             int sx = (int) Math.round(screenX(wp.x() + 0.5));
             int sy = (int) Math.round(screenY(wp.z() + 0.5));
-            if (sx < -8 || sx > width + 8 || sy < -8 || sy > height + 8) continue;
+            if (sx < -8 || sx > width + 8 || sy < -8 || sy > height + 8) {
+                continue;
+            }
+
             gg.fill(sx - 3, sy - 3, sx + 4, sy + 4, 0xFF000000);
             gg.fill(sx - 2, sy - 2, sx + 3, sy + 3, 0xFF000000 | wp.colorRgb());
             if (zoom >= 0.5f) {
@@ -419,15 +471,30 @@ public class FullMapScreen extends Screen {
             AABB box = mc.player.getBoundingBox().inflate(radius, 32, radius);
             for (Entity e : mc.level.getEntities(mc.player, box)) {
                 int color;
-                if (e instanceof Player && ClientConfig.RADAR_PLAYERS.get()) color = 0xFFFFFFFF;
-                else if (e instanceof Enemy && ClientConfig.RADAR_HOSTILE.get()) color = 0xFFFF4040;
-                else if (e instanceof Animal && ClientConfig.RADAR_PASSIVE.get()) color = 0xFF40FF40;
-                else continue;
+                if (e instanceof Player && ClientConfig.RADAR_PLAYERS.get()) {
+                    color = 0xFFFFFFFF;
+                }
+                else if (e instanceof Enemy && ClientConfig.RADAR_HOSTILE.get()) {
+                    color = 0xFFFF4040;
+                }
+                else if (e instanceof Animal && ClientConfig.RADAR_PASSIVE.get()) {
+                    color = 0xFF40FF40;
+                }
+                else {
+                    continue;
+                }
+
                 double ex = e.getX() - mc.player.getX(), ez = e.getZ() - mc.player.getZ();
-                if (ex * ex + ez * ez > (double) radius * radius) continue;
+                if (ex * ex + ez * ez > (double) radius * radius) {
+                    continue;
+                }
+
                 int sx = (int) Math.round(screenX(e.getX()));
                 int sy = (int) Math.round(screenY(e.getZ()));
-                if (sx < -4 || sx > width + 4 || sy < -4 || sy > height + 4) continue;
+                if (sx < -4 || sx > width + 4 || sy < -4 || sy > height + 4) {
+                    continue;
+                }
+
                 gg.fill(sx - 2, sy - 2, sx + 2, sy + 2, 0xFF000000);
                 gg.fill(sx - 1, sy - 1, sx + 1, sy + 1, color);
             }
@@ -444,5 +511,7 @@ public class FullMapScreen extends Screen {
     }
 
     @Override
-    public boolean isPauseScreen() { return false; }
+    public boolean isPauseScreen() {
+        return false;
+    }
 }

@@ -13,22 +13,32 @@ public abstract class WaypointEvent extends Event {
 
     private final Waypoint waypoint;
 
-    protected WaypointEvent(Waypoint waypoint) { this.waypoint = waypoint; }
+    protected WaypointEvent(Waypoint waypoint) {
+        this.waypoint = waypoint;
+    }
 
-    public Waypoint getWaypoint() { return waypoint; }
+    public Waypoint getWaypoint() {
+        return waypoint;
+    }
 
     /** Posté avant l'ajout ; annulable (le waypoint ne sera pas ajouté). */
     public static class Added extends WaypointEvent implements ICancellableEvent {
-        public Added(Waypoint waypoint) { super(waypoint); }
+        public Added(Waypoint waypoint) {
+            super(waypoint);
+        }
     }
 
     /** Posté après suppression. */
     public static class Removed extends WaypointEvent {
-        public Removed(Waypoint waypoint) { super(waypoint); }
+        public Removed(Waypoint waypoint) {
+            super(waypoint);
+        }
     }
 
     /** Posté après modification (nom, couleur, visibilité). */
     public static class Updated extends WaypointEvent {
-        public Updated(Waypoint waypoint) { super(waypoint); }
+        public Updated(Waypoint waypoint) {
+            super(waypoint);
+        }
     }
 }

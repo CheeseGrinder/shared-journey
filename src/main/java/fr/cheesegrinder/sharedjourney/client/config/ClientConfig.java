@@ -1,4 +1,4 @@
-package fr.cheesegrinder.sharedjourney.client;
+package fr.cheesegrinder.sharedjourney.client.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 

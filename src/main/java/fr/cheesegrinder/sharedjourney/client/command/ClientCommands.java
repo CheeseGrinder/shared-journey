@@ -1,4 +1,8 @@
-package fr.cheesegrinder.sharedjourney.client;
+package fr.cheesegrinder.sharedjourney.client.command;
+
+import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
+import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
+import fr.cheesegrinder.sharedjourney.client.service.DiskCache;
 
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -52,7 +56,7 @@ public final class ClientCommands {
                         .then(Commands.argument("x", IntegerArgumentType.integer())
                                 .then(Commands.argument("z", IntegerArgumentType.integer())
                                         .executes(ctx -> {
-                                            ClientEvents.openMapAt(
+                                            ClientInputEvents.openMapAt(
                                                     IntegerArgumentType.getInteger(ctx, "x") + 0.5,
                                                     IntegerArgumentType.getInteger(ctx, "z") + 0.5);
                                             return 1;

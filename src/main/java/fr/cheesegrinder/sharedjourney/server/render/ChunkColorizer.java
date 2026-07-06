@@ -1,4 +1,4 @@
-package fr.cheesegrinder.sharedjourney.server;
+package fr.cheesegrinder.sharedjourney.server.render;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import net.minecraft.core.BlockPos;
@@ -6,6 +6,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.FoliageColor;
 import net.minecraft.world.level.LightLayer;
@@ -54,7 +55,9 @@ public final class ChunkColorizer {
     private static int renderSurface(ServerLevel level, ChunkAccess chunk,
                                      BlockPos.MutableBlockPos pos, int wx, int wz, boolean night) {
         int y = surfaceY(chunk, wx, wz);
-        if (y <= chunk.getMinBuildHeight()) return 0xFF000000;
+        if (y <= chunk.getMinBuildHeight()) {
+            return 0xFF000000;
+        }
 
         pos.set(wx, y, wz);
         BlockState state = chunk.getBlockState(pos);
@@ -109,13 +112,23 @@ public final class ChunkColorizer {
         if (state.is(BlockTags.LEAVES) || state.is(Blocks.VINE)) {
             // Essences à teinte fixe (comme vanilla), sinon feuillage du biome.
             int tint;
-            if (state.is(Blocks.BIRCH_LEAVES)) tint = FoliageColor.getBirchColor();
-            else if (state.is(Blocks.SPRUCE_LEAVES)) tint = FoliageColor.getEvergreenColor();
-            else if (state.is(Blocks.MANGROVE_LEAVES)) tint = FoliageColor.getMangroveColor();
-            else if (state.is(Blocks.CHERRY_LEAVES) || state.is(Blocks.AZALEA_LEAVES)
-                    || state.is(Blocks.FLOWERING_AZALEA_LEAVES)) tint = -1; // texture non teintée
-            else tint = foliageColor(biome);
-            if (tint >= 0) return scaleRgb(tint & 0xFFFFFF, 0.85f); // textures de feuilles sombres
+            if (state.is(Blocks.BIRCH_LEAVES)) {
+                tint = FoliageColor.getBirchColor();
+            } else if (state.is(Blocks.SPRUCE_LEAVES)) {
+                tint = FoliageColor.getEvergreenColor();
+            } else if (state.is(Blocks.MANGROVE_LEAVES)) {
+                tint = FoliageColor.getMangroveColor();
+            } else if (state.is(Blocks.CHERRY_LEAVES) || state.is(Blocks.AZALEA_LEAVES)
+                    || state.is(Blocks.FLOWERING_AZALEA_LEAVES)) {
+                tint = -1; // texture non teintée
+            } else {
+                tint = foliageColor(biome);
+            }
+
+            // Textures de feuilles sombres : teinte atténuée.
+            if (tint >= 0) {
+                return scaleRgb(tint & 0xFFFFFF, 0.85f);
+            }
         }
         MapColor mc = state.getMapColor(level, pos);
         return (mc == MapColor.NONE ? MapColor.STONE : mc).col;
@@ -189,7 +202,9 @@ public final class ChunkColorizer {
     private static int renderTopo(ServerLevel level, ChunkAccess chunk,
                                   BlockPos.MutableBlockPos pos, int wx, int wz) {
         int y = surfaceY(chunk, wx, wz);
-        if (y <= chunk.getMinBuildHeight()) return 0xFF000000;
+        if (y <= chunk.getMinBuildHeight()) {
+            return 0xFF000000;
+        }
 
         pos.set(wx, y, wz);
         if (!chunk.getBlockState(pos).getFluidState().isEmpty()) {
@@ -205,12 +220,21 @@ public final class ChunkColorizer {
         int max = chunk.getMaxBuildHeight();
         float t = Math.max(0f, Math.min(1f, (y - min) / (float) Math.max(1, max - min)));
         int rgb;
-        if (t < 0.33f)      rgb = lerpRgb(0x2E8B37, 0xC8B454, t / 0.33f);
-        else if (t < 0.66f) rgb = lerpRgb(0xC8B454, 0x8A7355, (t - 0.33f) / 0.33f);
-        else                rgb = lerpRgb(0x8A7355, 0xF2F2F2, (t - 0.66f) / 0.34f);
+        if (t < 0.33f) {
+            rgb = lerpRgb(0x2E8B37, 0xC8B454, t / 0.33f);
+        }
+        else if (t < 0.66f) {
+            rgb = lerpRgb(0xC8B454, 0x8A7355, (t - 0.33f) / 0.33f);
+        }
+        else {
+            rgb = lerpRgb(0x8A7355, 0xF2F2F2, (t - 0.66f) / 0.34f);
+        }
 
         // Courbes de niveau tous les 8 blocs
-        if (y % 8 == 0) rgb = scaleRgb(rgb, 0.72f);
+        if (y % 8 == 0) {
+            rgb = scaleRgb(rgb, 0.72f);
+        }
+
         return 0xFF000000 | rgb;
     }
 
@@ -263,7 +287,10 @@ public final class ChunkColorizer {
                 int base = (mc == MapColor.NONE ? MapColor.STONE : mc).col;
                 // Lave visible en orange
                 BlockState above = chunk.getBlockState(pos.set(wx, y + 1, wz));
-                if (above.getFluidState().is(net.minecraft.tags.FluidTags.LAVA)) base = 0xD45A12;
+                if (above.getFluidState().is(FluidTags.LAVA)) {
+                    base = 0xD45A12;
+                }
+
                 float depth = (yTop - (y + 1)) / 16.0f;
                 return 0xFF000000 | scaleRgb(base, 1.0f - depth * 0.45f);
             }
@@ -289,7 +316,10 @@ public final class ChunkColorizer {
         }
         // Voisin : ne force pas le chargement, retombe sur la même hauteur si absent.
         var neighbor = level.getChunkSource().getChunkNow(wx >> 4, wz >> 4);
-        if (neighbor == null) return surfaceY(chunk, wx, cp.getMinBlockZ());
+        if (neighbor == null) {
+            return surfaceY(chunk, wx, cp.getMinBlockZ());
+        }
+
         return neighbor.getHeight(Heightmap.Types.WORLD_SURFACE, wx & 15, wz & 15);
     }
 

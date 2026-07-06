@@ -1,7 +1,7 @@
-package fr.cheesegrinder.sharedjourney.server;
+package fr.cheesegrinder.sharedjourney.server.service;
 
 import com.mojang.logging.LogUtils;
-import fr.cheesegrinder.sharedjourney.common.RegionKey;
+import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
 import net.minecraft.Util;
 import net.minecraft.nbt.CompoundTag;
@@ -24,6 +24,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -67,7 +68,10 @@ public final class RegenService {
     private record Batch(ResourceKey<Level> dim, int rx, int rz, long[] mask) {
         int count() {
             int n = 0;
-            for (long w : mask) n += Long.bitCount(w);
+            for (long w : mask) {
+                n += Long.bitCount(w);
+            }
+
             return n;
         }
     }
@@ -86,7 +90,9 @@ public final class RegenService {
 
     private RegenService() {}
 
-    public static boolean isRunning() { return queue != null || scanning; }
+    public static boolean isRunning() {
+        return queue != null || scanning;
+    }
 
     // ------------------------------------------------------------------ démarrage
 
@@ -97,7 +103,9 @@ public final class RegenService {
      */
     public static int start(MinecraftServer server) {
         MapManager mgr = MapManager.get();
-        if (mgr == null || isRunning()) return -1;
+        if (mgr == null || isRunning()) {
+            return -1;
+        }
 
         // Régions uniques, toutes couches/bandes confondues.
         record RegionPos(ResourceKey<Level> dim, int rx, int rz) {}
@@ -110,7 +118,10 @@ public final class RegenService {
         int count = 0;
         for (RegionPos region : regions) {
             ServerLevel level = server.getLevel(region.dim());
-            if (level == null) continue;
+            if (level == null) {
+                continue;
+            }
+
             long[] mask = new long[16];
             int regionCount = 0;
             for (int cz = 0; cz < RegionKey.REGION_CHUNKS; cz++) {
@@ -141,7 +152,9 @@ public final class RegenService {
      * pas prêt ou une regen déjà en cours.
      */
     public static boolean startFull(MinecraftServer server) {
-        if (MapManager.get() == null || isRunning()) return false;
+        if (MapManager.get() == null || isRunning()) {
+            return false;
+        }
 
         scanning = true;
         final int myEpoch = ++epoch;
@@ -151,10 +164,13 @@ public final class RegenService {
 
         // Chemins résolus sur le main thread ; lecture des fichiers en async.
         record Target(ResourceKey<Level> dim, Path regionDir) {}
-        var targets = new java.util.ArrayList<Target>();
+        var targets = new ArrayList<Target>();
         Path worldRoot = server.getWorldPath(LevelResource.ROOT);
         for (ServerLevel level : server.getAllLevels()) {
-            if (ServerConfig.layersFor(level.dimension()).isEmpty()) continue;
+            if (ServerConfig.layersFor(level.dimension()).isEmpty()) {
+                continue;
+            }
+
             Path regionDir = DimensionType.getStorageFolder(level.dimension(), worldRoot).resolve("region");
             targets.add(new Target(level.dimension(), regionDir));
         }
@@ -163,13 +179,22 @@ public final class RegenService {
             ArrayDeque<Batch> q = new ArrayDeque<>();
             int count = 0;
             for (Target target : targets) {
-                if (!Files.isDirectory(target.regionDir())) continue;
+                if (!Files.isDirectory(target.regionDir())) {
+                    continue;
+                }
+
                 try (Stream<Path> files = Files.list(target.regionDir())) {
                     for (Path file : (Iterable<Path>) files::iterator) {
                         Matcher m = MCA_NAME.matcher(file.getFileName().toString());
-                        if (!m.matches()) continue;
+                        if (!m.matches()) {
+                            continue;
+                        }
+
                         long[] mask = readPresenceMask(file);
-                        if (mask == null) continue;
+                        if (mask == null) {
+                            continue;
+                        }
+
                         Batch batch = new Batch(target.dim(),
                                 Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), mask);
                         int n = batch.count();
@@ -185,7 +210,10 @@ public final class RegenService {
             final int finalCount = count;
             server.execute(() -> {
                 // Annulée ou remplacée pendant le scan : on jette le résultat.
-                if (epoch != myEpoch || !scanning) return;
+                if (epoch != myEpoch || !scanning) {
+                    return;
+                }
+
                 scanning = false;
                 install(q, finalCount);
                 LOGGER.info("SharedJourney : scan terminé, {} chunk(s) à rendre dans {} région(s)",
@@ -194,7 +222,9 @@ public final class RegenService {
         }, Util.backgroundExecutor()).exceptionally(t -> {
             LOGGER.error("SharedJourney : échec du scan des fichiers de région", t);
             server.execute(() -> {
-                if (epoch == myEpoch && scanning) cancel();
+                if (epoch == myEpoch && scanning) {
+                    cancel();
+                }
             });
             return null;
         });
@@ -231,7 +261,9 @@ public final class RegenService {
                         | ((header[i * 4 + 1] & 0xFF) << 8)
                         | (header[i * 4 + 2] & 0xFF);
                 int sectors = header[i * 4 + 3] & 0xFF;
-                if (offset != 0 && sectors != 0) mask[i >> 6] |= 1L << (i & 63);
+                if (offset != 0 && sectors != 0) {
+                    mask[i >> 6] |= 1L << (i & 63);
+                }
             }
             return mask;
         } catch (IOException e) {
@@ -245,7 +277,10 @@ public final class RegenService {
     public static void cancel() {
         epoch++;
         scanning = false;
-        if (bossBar != null) bossBar.removeAllPlayers();
+        if (bossBar != null) {
+            bossBar.removeAllPlayers();
+        }
+
         queue = null;
         current = null;
         bossBar = null;
@@ -253,7 +288,10 @@ public final class RegenService {
 
     /** Appelé chaque tick serveur (main thread). */
     public static void tick(MinecraftServer server) {
-        if (!isRunning()) return;
+        if (!isRunning()) {
+            return;
+        }
+
         MapManager mgr = MapManager.get();
         if (mgr == null) {
             cancel();
@@ -262,9 +300,14 @@ public final class RegenService {
 
         if (bossBar != null) {
             // Couvre aussi les joueurs connectés en cours de route (idempotent).
-            for (ServerPlayer p : server.getPlayerList().getPlayers()) bossBar.addPlayer(p);
+            for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                bossBar.addPlayer(p);
+            }
         }
-        if (scanning) return; // le scan async n'a pas encore livré la file
+        // Le scan async n'a pas encore livré la file.
+        if (scanning) {
+            return;
+        }
 
         if (mgr.queueSize() < MAX_PENDING_RENDERS) {
             for (int i = 0; i < CHUNKS_PER_TICK && advance(); i++) {
@@ -273,8 +316,15 @@ public final class RegenService {
                 int cz = current.rz() * RegionKey.REGION_CHUNKS + (bit >> 5);
                 ServerLevel level = server.getLevel(current.dim());
                 done++;
-                if (level == null) continue;
-                if (!isChunkFull(level, cx, cz)) continue; // jamais de génération
+                if (level == null) {
+                    continue;
+                }
+
+                // Jamais de génération de terrain : statut vérifié avant chargement.
+                if (!isChunkFull(level, cx, cz)) {
+                    continue;
+                }
+
                 // Chargement bloquant mais throttlé ; le statut vient d'être
                 // vérifié, le chunk existe complet sur disque.
                 level.getChunk(cx, cz);
@@ -303,7 +353,10 @@ public final class RegenService {
         while (true) {
             if (current == null) {
                 current = queue.poll();
-                if (current == null) return false;
+                if (current == null) {
+                    return false;
+                }
+
                 currentBit = 0;
             }
             long[] mask = current.mask();

@@ -24,5 +24,7 @@ public class LayerRegisterEvent extends Event implements IModBusEvent {
         customLayers.put(layerId, renderer);
     }
 
-    public Map<String, ChunkLayerRenderer> getCustomLayers() { return customLayers; }
+    public Map<String, ChunkLayerRenderer> getCustomLayers() {
+        return customLayers;
+    }
 }

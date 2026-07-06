@@ -1,4 +1,4 @@
-package fr.cheesegrinder.sharedjourney.common;
+package fr.cheesegrinder.sharedjourney.common.region;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -10,7 +10,9 @@ import java.io.Writer;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,25 +28,39 @@ public final class RegionIndex {
 
     private final Map<RegionKey, Long> entries = new ConcurrentHashMap<>();
 
-    public long get(RegionKey key) { return entries.getOrDefault(key, -1L); }
+    public long get(RegionKey key) {
+        return entries.getOrDefault(key, -1L);
+    }
 
-    public void put(RegionKey key, long timestamp) { entries.put(key, timestamp); }
+    public void put(RegionKey key, long timestamp) {
+        entries.put(key, timestamp);
+    }
 
-    public void remove(RegionKey key) { entries.remove(key); }
+    public void remove(RegionKey key) {
+        entries.remove(key);
+    }
 
-    public int size() { return entries.size(); }
+    public int size() {
+        return entries.size();
+    }
 
-    public Map<RegionKey, Long> snapshot() { return new HashMap<>(entries); }
+    public Map<RegionKey, Long> snapshot() {
+        return new HashMap<>(entries);
+    }
 
     /** Retire toutes les entrées d'une couche donnée (purge client). Retourne les clés retirées. */
-    public java.util.List<RegionKey> removeLayer(String layerFolderName) {
-        java.util.List<RegionKey> removed = new java.util.ArrayList<>();
+    public List<RegionKey> removeLayer(String layerFolderName) {
+        List<RegionKey> removed = new ArrayList<>();
         entries.keySet().removeIf(k -> {
             boolean match = k.layer().folderName(k.caveBand()).equals(layerFolderName)
                     || k.layer().name().equalsIgnoreCase(layerFolderName);
-            if (match) removed.add(k);
+            if (match) {
+                removed.add(k);
+            }
+
             return match;
         });
+
         return removed;
     }
 
@@ -52,13 +68,21 @@ public final class RegionIndex {
 
     public synchronized void load(Path file) {
         entries.clear();
-        if (!Files.exists(file)) return;
+        if (!Files.exists(file)) {
+            return;
+        }
+
         try (Reader r = Files.newBufferedReader(file)) {
             Map<String, Long> raw = GSON.fromJson(r, MAP_TYPE);
-            if (raw == null) return;
+            if (raw == null) {
+                return;
+            }
+
             raw.forEach((k, v) -> {
                 RegionKey key = RegionKey.fromIndexKey(k);
-                if (key != null && v != null) entries.put(key, v);
+                if (key != null && v != null) {
+                    entries.put(key, v);
+                }
             });
         } catch (Exception e) {
             // Index corrompu : on repart de zéro, les PNG seront re-versionnés via mtime.
@@ -69,6 +93,7 @@ public final class RegionIndex {
         Files.createDirectories(file.getParent());
         Map<String, Long> raw = new HashMap<>();
         entries.forEach((k, v) -> raw.put(k.indexKey(), v));
+
         try (Writer w = Files.newBufferedWriter(file)) {
             GSON.toJson(raw, MAP_TYPE, w);
         }

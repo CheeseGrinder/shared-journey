@@ -2,7 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.compat;
 
 import com.mojang.logging.LogUtils;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
-import fr.cheesegrinder.sharedjourney.client.WaypointStore;
+import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -67,11 +67,16 @@ public final class JourneyMapBridge {
 
     private JourneyMapBridge() {}
 
-    public static List<String> loadedPlugins() { return List.copyOf(loadedPlugins); }
+    public static List<String> loadedPlugins() {
+        return List.copyOf(loadedPlugins);
+    }
 
     /** À appeler après la construction de tous les mods (FMLLoadCompleteEvent, client). */
     public static void init() {
-        if (initialized) return;
+        if (initialized) {
+            return;
+        }
+
         initialized = true;
 
         if (isRealJourneyMapPresent()) {
@@ -81,7 +86,11 @@ public final class JourneyMapBridge {
 
         for (int i = 0; i < PLUGIN_ANNOTATIONS.length; i++) {
             Class<?> apiInterface = tryLoad(CLIENT_API_INTERFACES[i]);
-            if (apiInterface == null) continue; // cette version de l'API n'est pas sur le classpath
+            // Cette version de l'API n'est pas sur le classpath.
+            if (apiInterface == null) {
+                continue;
+            }
+
             Set<String> pluginClasses = scanPlugins(PLUGIN_ANNOTATIONS[i]);
             for (String cls : pluginClasses) {
                 initializePlugin(cls, apiInterface);
@@ -100,7 +109,10 @@ public final class JourneyMapBridge {
 
     /** Le vrai JourneyMap (pas notre shim lowcode) expose ses classes principales. */
     private static boolean isRealJourneyMapPresent() {
-        if (!ModList.get().isLoaded("journeymap")) return false;
+        if (!ModList.get().isLoaded("journeymap")) {
+            return false;
+        }
+
         return tryLoad("journeymap.common.Journeymap") != null
                 || tryLoad("journeymap.client.JourneymapClient") != null;
     }
@@ -136,7 +148,9 @@ public final class JourneyMapBridge {
             String modId = "journeymap-bridge";
             try {
                 Object id = pluginClass.getMethod("getModId").invoke(plugin);
-                if (id instanceof String s && !s.isBlank()) modId = s;
+                if (id instanceof String s && !s.isBlank()) {
+                    modId = s;
+                }
             } catch (Throwable ignored) {}
 
             Object apiProxy = Proxy.newProxyInstance(
@@ -180,7 +194,9 @@ public final class JourneyMapBridge {
         private final Map<String, UUID> knownWaypoints = new ConcurrentHashMap<>();
         private final Set<String> warnedMethods = ConcurrentHashMap.newKeySet();
 
-        ClientApiHandler(String modId) { this.modId = modId; }
+        ClientApiHandler(String modId) {
+            this.modId = modId;
+        }
 
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) {
@@ -207,13 +223,21 @@ public final class JourneyMapBridge {
                     // ---- Displayable générique (v1 et overlays v2)
                     case "show" -> {
                         Object displayable = args[0];
-                        if (isWaypoint(displayable)) addOrUpdate(displayable);
-                        else warnOnce("show:" + displayable.getClass().getSimpleName());
+                        if (isWaypoint(displayable)) {
+                            addOrUpdate(displayable);
+                        }
+                        else {
+                            warnOnce("show:" + displayable.getClass().getSimpleName());
+                        }
+
                         return null;
                     }
                     case "remove" -> {
                         Object displayable = args[0];
-                        if (isWaypoint(displayable)) removeWaypoint(displayable);
+                        if (isWaypoint(displayable)) {
+                            removeWaypoint(displayable);
+                        }
+
                         return null;
                     }
                     case "removeAll" -> {
@@ -261,7 +285,10 @@ public final class JourneyMapBridge {
             String guid = guidOf(jmWaypoint);
             String name = str(call(jmWaypoint, "getName"), str(call(jmWaypoint, "getTitle"), "Waypoint"));
             BlockPos pos = posOf(jmWaypoint);
-            if (pos == null) return;
+            if (pos == null) {
+                return;
+            }
+
             int color = intOf(call(jmWaypoint, "getColor"), 0x00FFFF & (name.hashCode() | 0x404040));
             ResourceLocation dim = dimOf(jmWaypoint);
 
@@ -270,18 +297,27 @@ public final class JourneyMapBridge {
             Waypoint wp = new Waypoint(id, name, dim, pos.getX(), pos.getY(), pos.getZ(),
                     color & 0xFFFFFF, modId, true);
             // add() poste WaypointEvent.Added (annulable) ; update si déjà présent.
-            if (WaypointStore.get(id) != null) WaypointStore.update(wp);
-            else WaypointStore.add(wp);
+            if (WaypointStore.get(id) != null) {
+                WaypointStore.update(wp);
+            }
+            else {
+                WaypointStore.add(wp);
+            }
         }
 
         private void removeWaypoint(Object jmWaypoint) {
             UUID id = knownWaypoints.remove(guidOf(jmWaypoint));
-            if (id != null) WaypointStore.remove(id);
+            if (id != null) {
+                WaypointStore.remove(id);
+            }
         }
 
         private String guidOf(Object wp) {
             Object guid = call(wp, "getGuid");
-            if (guid == null) guid = call(wp, "getId");
+            if (guid == null) {
+                guid = call(wp, "getId");
+            }
+
             if (guid == null) {
                 BlockPos pos = posOf(wp);
                 guid = pos == null ? String.valueOf(System.identityHashCode(wp))
@@ -292,8 +328,14 @@ public final class JourneyMapBridge {
 
         private BlockPos posOf(Object wp) {
             Object pos = call(wp, "getPos");
-            if (pos == null) pos = call(wp, "getPosition");
-            if (pos instanceof BlockPos bp) return bp;
+            if (pos == null) {
+                pos = call(wp, "getPosition");
+            }
+
+            if (pos instanceof BlockPos bp) {
+                return bp;
+            }
+
             Object x = call(wp, "getX"), y = call(wp, "getY"), z = call(wp, "getZ");
             if (x instanceof Number nx && y instanceof Number ny && z instanceof Number nz) {
                 return new BlockPos(nx.intValue(), ny.intValue(), nz.intValue());
@@ -305,14 +347,23 @@ public final class JourneyMapBridge {
             // v2: getDimensions() -> Collection<String> ou String[] ; v1: getDimension()
             Object dims = call(wp, "getDimensions");
             String first = null;
-            if (dims instanceof Collection<?> c && !c.isEmpty()) first = String.valueOf(c.iterator().next());
-            else if (dims instanceof String[] arr && arr.length > 0) first = arr[0];
+            if (dims instanceof Collection<?> c && !c.isEmpty()) {
+                first = String.valueOf(c.iterator().next());
+            }
+            else if (dims instanceof String[] arr && arr.length > 0) {
+                first = arr[0];
+            }
             else {
                 Object d = call(wp, "getDimension");
-                if (d != null) first = String.valueOf(d);
+                if (d != null) {
+                    first = String.valueOf(d);
+                }
             }
             ResourceLocation rl = first == null ? null : ResourceLocation.tryParse(first);
-            if (rl != null) return rl;
+            if (rl != null) {
+                return rl;
+            }
+
             var mc = Minecraft.getInstance();
             return mc.level != null ? mc.level.dimension().location()
                     : ResourceLocation.withDefaultNamespace("overworld");
@@ -340,15 +391,36 @@ public final class JourneyMapBridge {
 
         private static Object defaultValue(Class<?> type) {
             if (!type.isPrimitive()) {
-                if (List.class.isAssignableFrom(type) || Collection.class.isAssignableFrom(type)) return List.of();
-                if (Optional.class.isAssignableFrom(type)) return Optional.empty();
+                if (List.class.isAssignableFrom(type) || Collection.class.isAssignableFrom(type)) {
+                    return List.of();
+                }
+
+                if (Optional.class.isAssignableFrom(type)) {
+                    return Optional.empty();
+                }
+
                 return null;
             }
-            if (type == boolean.class) return false;
-            if (type == void.class) return null;
-            if (type == float.class) return 0f;
-            if (type == double.class) return 0d;
-            if (type == long.class) return 0L;
+            if (type == boolean.class) {
+                return false;
+            }
+
+            if (type == void.class) {
+                return null;
+            }
+
+            if (type == float.class) {
+                return 0f;
+            }
+
+            if (type == double.class) {
+                return 0d;
+            }
+
+            if (type == long.class) {
+                return 0L;
+            }
+
             return 0;
         }
     }

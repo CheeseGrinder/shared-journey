@@ -1,10 +1,10 @@
-package fr.cheesegrinder.sharedjourney.client;
+package fr.cheesegrinder.sharedjourney.client.service;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.logging.LogUtils;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
-import fr.cheesegrinder.sharedjourney.common.RegionKey;
+import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
@@ -46,7 +46,9 @@ public final class ClientMapCache {
         final long version;
         final byte[][] parts;
         int received;
-        Assembly(long version, int total) { this.version = version; this.parts = new byte[total][]; }
+        Assembly(long version, int total) {
+            this.version = version; this.parts = new byte[total][];
+        }
     }
 
     // ------------------------------------------------------------------ accès
@@ -57,8 +59,14 @@ public final class ClientMapCache {
      */
     public static Region getOrLoad(RegionKey key) {
         Region r = REGIONS.get(key);
-        if (r != null) return r;
-        if (DISK_MISSES.contains(key)) return null;
+        if (r != null) {
+            return r;
+        }
+
+        if (DISK_MISSES.contains(key)) {
+            return null;
+        }
+
         long diskVersion = DiskCache.versionOf(key);
         if (diskVersion < 0) {
             DISK_MISSES.add(key);
@@ -75,20 +83,28 @@ public final class ClientMapCache {
 
     public static long versionOf(RegionKey key) {
         Region r = REGIONS.get(key);
-        if (r != null) return r.version;
+        if (r != null) {
+            return r.version;
+        }
+
         return DiskCache.versionOf(key);
     }
 
     public static void evict(RegionKey key) {
         Region r = REGIONS.remove(key);
-        if (r != null) Minecraft.getInstance().getTextureManager().release(r.texture());
+        if (r != null) {
+            Minecraft.getInstance().getTextureManager().release(r.texture());
+        }
+
         DISK_MISSES.remove(key);
     }
 
     public static void clear() {
         REGIONS.keySet().forEach(k -> {
             Region r = REGIONS.get(k);
-            if (r != null) Minecraft.getInstance().getTextureManager().release(r.texture());
+            if (r != null) {
+                Minecraft.getInstance().getTextureManager().release(r.texture());
+            }
         });
         REGIONS.clear();
         PENDING.clear();
@@ -96,18 +112,27 @@ public final class ClientMapCache {
         LAST_REQUESTED.clear();
     }
 
-    public static int loadedCount() { return REGIONS.size(); }
+    public static int loadedCount() {
+        return REGIONS.size();
+    }
 
-    public static int pendingCount() { return PENDING.size(); }
+    public static int pendingCount() {
+        return PENDING.size();
+    }
 
     // ------------------------------------------------------------------ assemblage
 
     public static void acceptFragment(RegionKey key, long version, int part, int totalParts, byte[] data) {
-        if (versionOf(key) >= version && REGIONS.containsKey(key)) return;
+        if (versionOf(key) >= version && REGIONS.containsKey(key)) {
+            return;
+        }
 
         Assembly asm = PENDING.compute(key, (k, existing) ->
                 (existing == null || existing.version < version) ? new Assembly(version, totalParts) : existing);
-        if (asm.version != version || part < 0 || part >= asm.parts.length) return;
+        if (asm.version != version || part < 0 || part >= asm.parts.length) {
+            return;
+        }
+
         if (asm.parts[part] == null) {
             asm.parts[part] = data;
             asm.received++;
@@ -115,10 +140,18 @@ public final class ClientMapCache {
         if (asm.received == asm.parts.length) {
             PENDING.remove(key, asm);
             int size = 0;
-            for (byte[] p : asm.parts) size += p.length;
+            for (byte[] p : asm.parts) {
+                size += p.length;
+            }
+
             byte[] png = new byte[size];
             int off = 0;
-            for (byte[] p : asm.parts) { System.arraycopy(p, 0, png, off, p.length); off += p.length; }
+            for (byte[] p : asm.parts) {
+                System.arraycopy(p, 0, png, off, p.length);
+                off += p.length;
+            }
+
+
             uploadTexture(key, version, png);
             DiskCache.store(key, version, png); // persistance locale (spec §3.2)
         }
@@ -143,14 +176,19 @@ public final class ClientMapCache {
         return ResourceLocation.fromNamespaceAndPath(SharedJourneyConstants.MOD_ID, path);
     }
 
-    private static String coord(int v) { return v < 0 ? "m" + (-v) : String.valueOf(v); }
+    private static String coord(int v) {
+        return v < 0 ? "m" + (-v) : String.valueOf(v);
+    }
 
     // ------------------------------------------------------------------
 
     /** Couches proposées pour la dimension courante (vérité serveur). */
     public static List<MapLayer> layersForCurrentDim() {
         var mc = Minecraft.getInstance();
-        if (mc.level == null) return List.of();
+        if (mc.level == null) {
+            return List.of();
+        }
+
         return layersByDim.getOrDefault(mc.level.dimension().location(), List.of());
     }
 }

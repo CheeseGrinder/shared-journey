@@ -1,10 +1,12 @@
-package fr.cheesegrinder.sharedjourney.server;
+package fr.cheesegrinder.sharedjourney.server.service;
+
+import fr.cheesegrinder.sharedjourney.server.render.ChunkColorizer;
 
 import com.mojang.logging.LogUtils;
 import fr.cheesegrinder.sharedjourney.api.ChunkLayerRenderer;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
-import fr.cheesegrinder.sharedjourney.common.RegionIndex;
-import fr.cheesegrinder.sharedjourney.common.RegionKey;
+import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
+import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
@@ -21,11 +23,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayDeque;
-import java.util.EnumSet;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Set;
+import java.nio.file.attribute.FileTime;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -62,7 +61,9 @@ public final class MapManager {
         }
     }
 
-    public static MapManager get() { return INSTANCE; }
+    public static MapManager get() {
+        return INSTANCE;
+    }
 
     // ------------------------------------------------------------------
 
@@ -104,7 +105,9 @@ public final class MapManager {
     private void close() {
         workers.shutdown();
         try {
-            if (!workers.awaitTermination(10, TimeUnit.SECONDS)) workers.shutdownNow();
+            if (!workers.awaitTermination(10, TimeUnit.SECONDS)) {
+                workers.shutdownNow();
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -115,14 +118,22 @@ public final class MapManager {
 
     public synchronized void enqueueChunk(ServerLevel level, int cx, int cz) {
         QueuedChunk q = new QueuedChunk(level.dimension(), cx, cz);
-        if (queued.add(q)) renderQueue.add(q);
+        if (queued.add(q)) {
+            renderQueue.add(q);
+        }
     }
 
-    public synchronized int queueSize() { return renderQueue.size(); }
+    public synchronized int queueSize() {
+        return renderQueue.size();
+    }
 
-    public int tasksInFlight() { return tasksInFlight.get(); }
+    public int tasksInFlight() {
+        return tasksInFlight.get();
+    }
 
-    public int workerCount() { return workerCount; }
+    public int workerCount() {
+        return workerCount;
+    }
 
     /**
      * Tick serveur : résout les chunks sur le main thread (obligatoire) puis
@@ -136,13 +147,23 @@ public final class MapManager {
             QueuedChunk q;
             synchronized (this) {
                 q = renderQueue.poll();
-                if (q == null) return;
+                if (q == null) {
+                    return;
+                }
+
                 queued.remove(q);
             }
             ServerLevel level = server.getLevel(q.dim());
-            if (level == null) continue;
+            if (level == null) {
+                continue;
+            }
+
             ChunkAccess chunk = level.getChunkSource().getChunkNow(q.cx(), q.cz());
-            if (chunk == null) continue; // déchargé entre-temps
+            // Déchargé entre-temps.
+            if (chunk == null) {
+                continue;
+            }
+
             submitRender(level, chunk);
         }
     }
@@ -186,7 +207,7 @@ public final class MapManager {
     private void renderChunk(ServerLevel level, ChunkAccess chunk) {
         EnumSet<MapLayer> layers = ServerConfig.layersFor(level.dimension());
         ChunkPos cp = chunk.getPos();
-        java.util.List<RegionKey> touched = new java.util.ArrayList<>(layers.size() + 4);
+        List<RegionKey> touched = new ArrayList<>(layers.size() + 4);
         for (MapLayer layer : layers) {
             if (layer == MapLayer.CAVE) {
                 for (int band : ServerConfig.CAVE_BANDS.get()) {
@@ -216,14 +237,24 @@ public final class MapManager {
     /** Un chunk a-t-il déjà été peint (au moins un pixel opaque sur la 1re couche active) ? */
     public boolean isChunkRendered(ServerLevel level, int cx, int cz) {
         EnumSet<MapLayer> layers = ServerConfig.layersFor(level.dimension());
-        if (layers.isEmpty()) return true;
+        if (layers.isEmpty()) {
+            return true;
+        }
+
         MapLayer probe = layers.iterator().next();
         int band = probe == MapLayer.CAVE ? firstCaveBand() : 0;
         RegionKey key = RegionKey.of(level.dimension(), probe, band, cx, cz);
+
         // Astuce rapide : si l'index ne connaît pas la région, rien n'a été peint.
-        if (index.get(key) < 0 && !regions.containsKey(key)) return false;
+        if (index.get(key) < 0 && !regions.containsKey(key)) {
+            return false;
+        }
+
         RegionImage img = getOrLoad(key, false);
-        if (img == null) return false;
+        if (img == null) {
+            return false;
+        }
+
         int px = Math.floorMod(cx, RegionKey.REGION_CHUNKS) * 16;
         int pz = Math.floorMod(cz, RegionKey.REGION_CHUNKS) * 16;
         synchronized (img) {
@@ -233,7 +264,7 @@ public final class MapManager {
 
     private int firstCaveBand() {
         var bands = ServerConfig.CAVE_BANDS.get();
-        return bands.isEmpty() ? 0 : bands.get(0);
+        return bands.isEmpty() ? 0 : bands.getFirst();
     }
 
     // ------------------------------------------------------------------ écriture (workers)
@@ -243,7 +274,8 @@ public final class MapManager {
         int ox = Math.floorMod(cx, RegionKey.REGION_CHUNKS) * 16;
         int oz = Math.floorMod(cz, RegionKey.REGION_CHUNKS) * 16;
         long version;
-        synchronized (img) {
+
+        synchronized (Objects.requireNonNull(img)) {
             for (int z = 0; z < 16; z++) {
                 System.arraycopy(chunkPixels, z * 16, img.pixels,
                         ox + (oz + z) * RegionKey.REGION_BLOCKS, 16);
@@ -261,9 +293,15 @@ public final class MapManager {
     /** Version d'une région : index (vérité) > fichier (mtime) > -1. */
     public long versionOf(RegionKey key) {
         long fromIndex = index.get(key);
-        if (fromIndex >= 0) return fromIndex;
+        if (fromIndex >= 0) {
+            return fromIndex;
+        }
+
         RegionImage img = regions.get(key);
-        if (img != null) return img.version;
+        if (img != null) {
+            return img.version;
+        }
+
         Path file = pathOf(key);
         if (Files.exists(file)) {
             try {
@@ -280,9 +318,15 @@ public final class MapManager {
     /** PNG encodé de la région (mis en cache tant que la région n'est pas réécrite). */
     public byte[] pngOf(RegionKey key) {
         RegionImage img = getOrLoad(key, false);
-        if (img == null) return null;
+        if (img == null) {
+            return null;
+        }
+
         synchronized (img) {
-            if (img.cachedPng != null) return img.cachedPng;
+            if (img.cachedPng != null) {
+                return img.cachedPng;
+            }
+
             byte[] png = encodePng(img.pixels);
             img.cachedPng = png;
             return png;
@@ -306,7 +350,9 @@ public final class MapManager {
 
     private RegionImage getOrLoad(RegionKey key, boolean createIfMissing) {
         RegionImage img = regions.get(key);
-        if (img != null) return img;
+        if (img != null) {
+            return img;
+        }
 
         Path file = pathOf(key);
         if (Files.exists(file)) {
@@ -323,7 +369,10 @@ public final class MapManager {
                 LOGGER.error("Echec de lecture de {}", file, e);
             }
         }
-        if (!createIfMissing) return null;
+        if (!createIfMissing) {
+            return null;
+        }
+
         RegionImage fresh = new RegionImage();
         RegionImage prev = regions.putIfAbsent(key, fresh);
         return prev != null ? prev : fresh;
@@ -351,22 +400,30 @@ public final class MapManager {
             byte[] png;
             long version;
             synchronized (img) {
-                if (!img.dirty) continue;
+                if (!img.dirty) {
+                    continue;
+                }
+
                 png = img.cachedPng != null ? img.cachedPng : encodePng(img.pixels);
                 img.cachedPng = png;
                 version = img.version;
                 img.dirty = false;
             }
-            if (png == null) continue;
+            if (png == null) {
+                continue;
+            }
+
             Path file = pathOf(e.getKey());
             try {
                 Files.createDirectories(file.getParent());
                 Files.write(file, png);
-                Files.setLastModifiedTime(file, java.nio.file.attribute.FileTime.fromMillis(version));
+                Files.setLastModifiedTime(file, FileTime.fromMillis(version));
                 saved++;
             } catch (IOException ex) {
                 LOGGER.error("Echec de sauvegarde de {}", file, ex);
-                synchronized (img) { img.dirty = true; }
+                synchronized (img) {
+                    img.dirty = true;
+                }
             }
         }
         try {
@@ -374,7 +431,9 @@ public final class MapManager {
         } catch (IOException ex) {
             LOGGER.error("Echec de sauvegarde de l'index", ex);
         }
-        if (saved > 0) LOGGER.info("SharedJourney : {} région(s) sauvegardée(s)", saved);
+        if (saved > 0) {
+            LOGGER.info("SharedJourney : {} région(s) sauvegardée(s)", saved);
+        }
     }
 
     // ------------------------------------------------------------------ stats (spec §7)

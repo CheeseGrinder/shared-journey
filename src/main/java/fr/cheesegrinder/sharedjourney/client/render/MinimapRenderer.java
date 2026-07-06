@@ -1,4 +1,9 @@
-package fr.cheesegrinder.sharedjourney.client;
+package fr.cheesegrinder.sharedjourney.client.render;
+
+import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
+import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
+import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -9,7 +14,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.math.Axis;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
-import fr.cheesegrinder.sharedjourney.common.RegionKey;
+import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
@@ -59,27 +64,41 @@ public final class MinimapRenderer {
     /** Passe à la couche suivante parmi celles autorisées par le serveur pour la dimension. */
     public static void cycleLayer() {
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
-        if (allowed.isEmpty()) return;
+        if (allowed.isEmpty()) {
+            return;
+        }
+
         MapLayer cur = currentLayer();
         int idx = allowed.indexOf(cur);
         currentLayer = allowed.get((idx + 1) % allowed.size());
     }
 
-    public static void setLayer(MapLayer layer) { currentLayer = layer; }
+    public static void setLayer(MapLayer layer) {
+        currentLayer = layer;
+    }
 
-    public static void zoomIn() { zoom = Math.min(ZOOM_MAX, zoom * 1.25f); }
+    public static void zoomIn() {
+        zoom = Math.min(ZOOM_MAX, zoom * 1.25f);
+    }
 
-    public static void zoomOut() { zoom = Math.max(ZOOM_MIN, zoom / 1.25f); }
+    public static void zoomOut() {
+        zoom = Math.max(ZOOM_MIN, zoom / 1.25f);
+    }
 
     public static int currentCaveBand() {
         List<Integer> bands = ClientMapCache.caveBands;
-        if (bands.isEmpty()) return 0;
+        if (bands.isEmpty()) {
+            return 0;
+        }
+
         // Suit automatiquement la bande où se trouve le joueur si elle est disponible.
         Player p = Minecraft.getInstance().player;
         if (p != null) {
             int band = Math.floorDiv(p.blockPosition().getY(), 16);
             int i = bands.indexOf(band);
-            if (i >= 0) caveBandIndex = i;
+            if (i >= 0) {
+                caveBandIndex = i;
+            }
         }
         caveBandIndex = Math.min(caveBandIndex, bands.size() - 1);
         return bands.get(Math.max(0, caveBandIndex));
@@ -90,13 +109,23 @@ public final class MinimapRenderer {
     public static void render(GuiGraphics gg) {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
-        if (player == null || mc.options.hideGui || !ClientEvents.minimapVisible) return;
-        if (mc.getDebugOverlay().showDebugScreen()) return;
-        if (!ClientConfig.MINIMAP_ENABLED.get()) return;
+        if (player == null || mc.options.hideGui || !ClientInputEvents.minimapVisible) {
+            return;
+        }
+
+        if (mc.getDebugOverlay().showDebugScreen()) {
+            return;
+        }
+
+        if (!ClientConfig.MINIMAP_ENABLED.get()) {
+            return;
+        }
 
         MapLayer layer = currentLayer();
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
-        if (!allowed.isEmpty() && !allowed.contains(layer)) layer = allowed.get(0);
+        if (!allowed.isEmpty() && !allowed.contains(layer)) {
+            layer = allowed.get(0);
+        }
 
         int size = ClientConfig.MINIMAP_SIZE.get();
         int margin = 6;
@@ -166,7 +195,10 @@ public final class MinimapRenderer {
             for (int rz = minRz; rz <= maxRz; rz++) {
                 RegionKey key = new RegionKey(dim, layer, layer == MapLayer.CAVE ? band : 0, rx, rz);
                 ClientMapCache.Region region = ClientMapCache.getOrLoad(key);
-                if (region == null) continue;
+                if (region == null) {
+                    continue;
+                }
+
                 int drawX = cx + (int) Math.floor(rx * (double) RegionKey.REGION_BLOCKS - px);
                 int drawY = cy + (int) Math.floor(rz * (double) RegionKey.REGION_BLOCKS - pz);
                 gg.blit(region.texture(), drawX, drawY, 0f, 0f,
@@ -177,7 +209,10 @@ public final class MinimapRenderer {
 
         // ---- Waypoints de la dimension (points colorés, sous le radar)
         for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
-            if (!wp.visible()) continue;
+            if (!wp.visible()) {
+                continue;
+            }
+
             int dx = cx + (int) Math.floor(wp.x() - px);
             int dy = cy + (int) Math.floor(wp.z() - pz);
             gg.fill(dx - 2, dy - 2, dx + 3, dy + 3, 0xFF000000);
@@ -190,12 +225,24 @@ public final class MinimapRenderer {
             AABB box = player.getBoundingBox().inflate(radius, 32, radius);
             for (Entity e : player.level().getEntities(player, box)) {
                 int color;
-                if (e instanceof Player && ClientConfig.RADAR_PLAYERS.get()) color = 0xFFFFFFFF;
-                else if (e instanceof Enemy && ClientConfig.RADAR_HOSTILE.get()) color = 0xFFFF4040;
-                else if (e instanceof Animal && ClientConfig.RADAR_PASSIVE.get()) color = 0xFF40FF40;
-                else continue;
+                if (e instanceof Player && ClientConfig.RADAR_PLAYERS.get()) {
+                    color = 0xFFFFFFFF;
+                }
+                else if (e instanceof Enemy && ClientConfig.RADAR_HOSTILE.get()) {
+                    color = 0xFFFF4040;
+                }
+                else if (e instanceof Animal && ClientConfig.RADAR_PASSIVE.get()) {
+                    color = 0xFF40FF40;
+                }
+                else {
+                    continue;
+                }
+
                 double ex = e.getX() - px, ez = e.getZ() - pz;
-                if (ex * ex + ez * ez > (double) radius * radius) continue;
+                if (ex * ex + ez * ez > (double) radius * radius) {
+                    continue;
+                }
+
                 int dx = cx + (int) Math.floor(ex);
                 int dy = cy + (int) Math.floor(ez);
                 gg.fill(dx - 1, dy - 1, dx + 2, dy + 2, 0xFF000000);
@@ -218,7 +265,10 @@ public final class MinimapRenderer {
         // triangle fixe ; sinon flèche orientée selon le yaw.
         gg.pose().pushPose();
         gg.pose().translate(cx, cy, 0);
-        if (!rotate) gg.pose().mulPose(Axis.ZP.rotationDegrees(yaw + 180f));
+        if (!rotate) {
+            gg.pose().mulPose(Axis.ZP.rotationDegrees(yaw + 180f));
+        }
+
         gg.fill(-1, -4, 1, 1, 0xFF000000);
         gg.fill(-3, 0, 3, 2, 0xFF000000);
         gg.fill(0, -3, 1, 0, 0xFFFFFFFF);

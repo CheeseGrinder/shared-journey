@@ -1,4 +1,8 @@
-package fr.cheesegrinder.sharedjourney.server;
+package fr.cheesegrinder.sharedjourney.server.command;
+
+import fr.cheesegrinder.sharedjourney.server.service.MapManager;
+import fr.cheesegrinder.sharedjourney.server.service.RegenService;
+import fr.cheesegrinder.sharedjourney.server.service.SyncService;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -97,16 +101,20 @@ public final class MapCommands {
                             var src = ctx.getSource();
                             ServerPlayer player = src.getPlayerOrException();
                             MapManager mgr = MapManager.get();
-                            if (mgr == null) return 0;
+                            if (mgr == null) {
+                                return 0;
+                            }
+
                             ServerLevel level = player.serverLevel();
                             int r = IntegerArgumentType.getInteger(ctx, "rayonChunks");
                             ChunkPos c = player.chunkPosition();
                             int count = 0;
-                            for (int cx = c.x - r; cx <= c.x + r; cx++)
+                            for (int cx = c.x - r; cx <= c.x + r; cx++) {
                                 for (int cz = c.z - r; cz <= c.z + r; cz++) {
                                     mgr.enqueueChunk(level, cx, cz);
                                     count++;
                                 }
+                            }
                             final int total = count;
                             src.sendSuccess(() -> Component.literal(
                                     total + " chunk(s) mis en file de re-rendu"), true);
@@ -177,7 +185,10 @@ public final class MapCommands {
         // save
         admin.then(Commands.literal("save").executes(ctx -> {
             MapManager mgr = MapManager.get();
-            if (mgr != null) mgr.saveAllAsync();
+            if (mgr != null) {
+                mgr.saveAllAsync();
+            }
+
             ctx.getSource().sendSuccess(() -> Component.literal("Sauvegarde des régions lancée"), true);
             return 1;
         }));
