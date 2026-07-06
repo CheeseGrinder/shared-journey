@@ -1,32 +1,49 @@
 package fr.cheesegrinder.sharedjourney.client;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.math.Axis;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.common.RegionKey;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
+import org.joml.Matrix4f;
+import org.lwjgl.opengl.GL11;
 
 import java.util.List;
 import java.util.Locale;
 
 /**
  * Minimap HUD (spec §6.1) : tuiles serveur, rotation dynamique optionnelle
- * (rendu via matrices de pose), radar d'entités filtrable dont le rayon est
- * plafonné par le serveur (anti-triche), et waypoints.
+ * (rendu via matrices de pose), zoom clavier, forme ronde ou carrée, radar
+ * d'entités filtrable dont le rayon est plafonné par le serveur (anti-triche),
+ * et waypoints.
  */
 public final class MinimapRenderer {
 
     private MinimapRenderer() {}
 
+    private static final float ZOOM_MIN = 0.25f;
+    private static final float ZOOM_MAX = 4.0f;
+    private static final int CIRCLE_SEGMENTS = 64;
+    /** Gris sombre (style Discord) visible sous les chunks pas encore reçus. */
+    public static final int BACKGROUND = 0xFF36393F;
+
     private static MapLayer currentLayer = null; // null = pas encore initialisée depuis la config
     private static int caveBandIndex = 0;
+    private static float zoom = 1.0f; // pixels écran par bloc
 
     public static MapLayer currentLayer() {
         if (currentLayer == null) {
@@ -49,6 +66,10 @@ public final class MinimapRenderer {
     }
 
     public static void setLayer(MapLayer layer) { currentLayer = layer; }
+
+    public static void zoomIn() { zoom = Math.min(ZOOM_MAX, zoom * 1.25f); }
+
+    public static void zoomOut() { zoom = Math.max(ZOOM_MIN, zoom / 1.25f); }
 
     public static int currentCaveBand() {
         List<Integer> bands = ClientMapCache.caveBands;
@@ -91,19 +112,30 @@ public final class MinimapRenderer {
         };
 
         boolean rotate = ClientConfig.MINIMAP_ROTATE.get();
+        boolean circle = ClientConfig.MINIMAP_SHAPE.get() == ClientConfig.Shape.CIRCLE;
         // En mode rotation, la carte tourne autour du joueur pour que "devant" soit en haut.
         float yaw = player.getYRot();
 
-        // Fond + bordure
-        gg.fill(x - 1, y - 1, x + size + 1, y + size + 1, 0xFF202020);
-        gg.fill(x, y, x + size, y + size, 0xFF000000);
+        int half = size / 2;
+        int cx = x + half, cy = y + half;
+
+        // Fond gris (zones pas encore reçues) ; la bordure ronde est dessinée
+        // en dernier, par-dessus le contenu.
+        if (circle) {
+            gg.flush();
+            fillCircle(gg, cx, cy, half + 1, BACKGROUND);
+            // Masque de profondeur : les coins du carré (hors cercle) deviennent
+            // "devant" le contenu, qui y échoue donc au test de profondeur.
+            maskCorners(gg, cx, cy, half, half + 2);
+        } else {
+            gg.fill(x - 1, y - 1, x + size + 1, y + size + 1, 0xFF202020);
+            gg.fill(x, y, x + size, y + size, BACKGROUND);
+        }
 
         double px = player.getX();
         double pz = player.getZ();
         int band = layer == MapLayer.CAVE ? currentCaveBand() : 0;
         var dim = player.level().dimension();
-        int half = size / 2;
-        int cx = x + half, cy = y + half;
 
         gg.enableScissor(x, y, x + size, y + size);
 
@@ -114,10 +146,17 @@ public final class MinimapRenderer {
             gg.pose().mulPose(Axis.ZP.rotationDegrees(-yaw - 180f));
             gg.pose().translate(-cx, -cy, 0);
         }
+        if (zoom != 1.0f) {
+            // Zoom clavier : échelle autour du centre (1 px écran = zoom blocs).
+            gg.pose().translate(cx, cy, 0);
+            gg.pose().scale(zoom, zoom, 1f);
+            gg.pose().translate(-cx, -cy, 0);
+        }
 
-        // 1 pixel écran = 1 bloc. En rotation, la diagonale dépasse : on élargit
-        // la fenêtre de régions à couvrir (half * sqrt(2)).
-        int reach = rotate ? (int) Math.ceil(half * 1.4143) : half;
+        // Fenêtre de blocs à couvrir. Un cercle est invariant par rotation ;
+        // pour un carré en rotation, la diagonale dépasse (half * sqrt(2)).
+        double factor = (rotate && !circle) ? 1.4143 : 1.0;
+        int reach = (int) Math.ceil(half * factor / zoom) + 1;
         int minRx = Math.floorDiv((int) px - reach, RegionKey.REGION_BLOCKS);
         int maxRx = Math.floorDiv((int) px + reach, RegionKey.REGION_BLOCKS);
         int minRz = Math.floorDiv((int) pz - reach, RegionKey.REGION_BLOCKS);
@@ -167,6 +206,14 @@ public final class MinimapRenderer {
         gg.pose().popPose();
         gg.disableScissor();
 
+        if (circle) {
+            // Vide le contenu batché (clippé par le masque) puis restaure la
+            // profondeur des coins pour ne pas gêner les couches suivantes.
+            gg.flush();
+            resetDepth(gg, x - 2, y - 2, x + size + 2, y + size + 2);
+            drawRing(gg, cx, cy, half, half + 1.5f, 0xFF202020);
+        }
+
         // Marqueur joueur au centre. En rotation, le joueur "regarde vers le haut" :
         // triangle fixe ; sinon flèche orientée selon le yaw.
         gg.pose().pushPose();
@@ -190,5 +237,85 @@ public final class MinimapRenderer {
                     + player.blockPosition().getY() + ", " + player.blockPosition().getZ();
             gg.drawCenteredString(mc.font, coords, x + half, textY + 11, 0xAAAAAA);
         }
+    }
+
+    // ------------------------------------------------------------------ formes (mode rond)
+
+    /** Disque plein (triangle fan), dessiné immédiatement. */
+    private static void fillCircle(GuiGraphics gg, float cx, float cy, float radius, int argb) {
+        Matrix4f mat = gg.pose().last().pose();
+        RenderSystem.enableBlend();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        BufferBuilder buf = Tesselator.getInstance().begin(
+                VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
+        buf.addVertex(mat, cx, cy, 0).setColor(argb);
+        for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
+            double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
+            buf.addVertex(mat, cx + (float) (Math.cos(a) * radius),
+                    cy + (float) (Math.sin(a) * radius), 0).setColor(argb);
+        }
+        BufferUploader.drawWithShader(buf.buildOrThrow());
+    }
+
+    /** Anneau (bordure du cercle), dessiné immédiatement. */
+    private static void drawRing(GuiGraphics gg, float cx, float cy, float rIn, float rOut, int argb) {
+        Matrix4f mat = gg.pose().last().pose();
+        RenderSystem.enableBlend();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        BufferBuilder buf = Tesselator.getInstance().begin(
+                VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
+            double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
+            float c = (float) Math.cos(a), s = (float) Math.sin(a);
+            buf.addVertex(mat, cx + c * rOut, cy + s * rOut, 0).setColor(argb);
+            buf.addVertex(mat, cx + c * rIn, cy + s * rIn, 0).setColor(argb);
+        }
+        BufferUploader.drawWithShader(buf.buildOrThrow());
+    }
+
+    /**
+     * Écrit dans le tampon de profondeur l'anneau "carré moins cercle" à une
+     * profondeur PLUS PROCHE que le contenu : les pixels des coins échouent
+     * ensuite au test LEQUAL, ce qui découpe la carte en disque sans stencil.
+     * Couleur non écrite (colorMask off).
+     */
+    private static void maskCorners(GuiGraphics gg, float cx, float cy, float radius, float halfExt) {
+        Matrix4f mat = gg.pose().last().pose();
+        RenderSystem.colorMask(false, false, false, false);
+        RenderSystem.enableDepthTest();
+        RenderSystem.depthMask(true);
+        RenderSystem.setShader(GameRenderer::getPositionShader);
+        BufferBuilder buf = Tesselator.getInstance().begin(
+                VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION);
+        float z = 100f; // devant le contenu (z = 0)
+        for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
+            double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
+            float c = (float) Math.cos(a), s = (float) Math.sin(a);
+            // Point sur le bord du carré englobant, dans la même direction.
+            float scale = halfExt / Math.max(Math.abs(c), Math.abs(s));
+            buf.addVertex(mat, cx + c * scale, cy + s * scale, z);
+            buf.addVertex(mat, cx + c * radius, cy + s * radius, z);
+        }
+        BufferUploader.drawWithShader(buf.buildOrThrow());
+        RenderSystem.colorMask(true, true, true, true);
+    }
+
+    /** Restaure une profondeur "lointaine" sur toute la zone (annule le masque). */
+    private static void resetDepth(GuiGraphics gg, float x0, float y0, float x1, float y1) {
+        Matrix4f mat = gg.pose().last().pose();
+        RenderSystem.colorMask(false, false, false, false);
+        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+        RenderSystem.depthMask(true);
+        RenderSystem.setShader(GameRenderer::getPositionShader);
+        BufferBuilder buf = Tesselator.getInstance().begin(
+                VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
+        float z = -9000f; // très loin derrière tout le rendu GUI
+        buf.addVertex(mat, x0, y0, z);
+        buf.addVertex(mat, x0, y1, z);
+        buf.addVertex(mat, x1, y1, z);
+        buf.addVertex(mat, x1, y0, z);
+        BufferUploader.drawWithShader(buf.buildOrThrow());
+        RenderSystem.depthFunc(GL11.GL_LEQUAL);
+        RenderSystem.colorMask(true, true, true, true);
     }
 }

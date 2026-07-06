@@ -23,6 +23,17 @@ public final class ClientEvents {
 
     public static boolean minimapVisible = true;
 
+    /**
+     * Cible d'ouverture différée de la carte (/sj goto, clic sur un message
+     * de position) : appliquée au tick suivant pour que la fermeture du chat
+     * n'écrase pas l'écran qu'on vient d'ouvrir.
+     */
+    private static volatile double[] pendingMapOpen = null;
+
+    public static void openMapAt(double x, double z) {
+        pendingMapOpen = new double[]{x, z};
+    }
+
     public static final KeyMapping OPEN_FULL_MAP = new KeyMapping(
             "key.sharedjourney.fullmap", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_M,
             "key.categories.sharedjourney");
@@ -31,6 +42,12 @@ public final class ClientEvents {
             "key.categories.sharedjourney");
     public static final KeyMapping CYCLE_LAYER = new KeyMapping(
             "key.sharedjourney.cycle_layer", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_COMMA,
+            "key.categories.sharedjourney");
+    public static final KeyMapping ZOOM_IN = new KeyMapping(
+            "key.sharedjourney.zoom_in", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_EQUAL,
+            "key.categories.sharedjourney");
+    public static final KeyMapping ZOOM_OUT = new KeyMapping(
+            "key.sharedjourney.zoom_out", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_MINUS,
             "key.categories.sharedjourney");
 
     private ClientEvents() {}
@@ -46,6 +63,8 @@ public final class ClientEvents {
             event.register(OPEN_FULL_MAP);
             event.register(TOGGLE_MINIMAP);
             event.register(CYCLE_LAYER);
+            event.register(ZOOM_IN);
+            event.register(ZOOM_OUT);
         }
 
         @SubscribeEvent
@@ -64,6 +83,11 @@ public final class ClientEvents {
         @SubscribeEvent
         public static void onClientTick(ClientTickEvent.Post event) {
             Minecraft mc = Minecraft.getInstance();
+            double[] target = pendingMapOpen;
+            if (target != null && mc.player != null) {
+                pendingMapOpen = null;
+                mc.setScreen(new FullMapScreen(target[0], target[1]));
+            }
             while (OPEN_FULL_MAP.consumeClick()) {
                 if (mc.screen == null) mc.setScreen(new FullMapScreen());
             }
@@ -72,6 +96,12 @@ public final class ClientEvents {
             }
             while (CYCLE_LAYER.consumeClick()) {
                 MinimapRenderer.cycleLayer();
+            }
+            while (ZOOM_IN.consumeClick()) {
+                MinimapRenderer.zoomIn();
+            }
+            while (ZOOM_OUT.consumeClick()) {
+                MinimapRenderer.zoomOut();
             }
         }
 

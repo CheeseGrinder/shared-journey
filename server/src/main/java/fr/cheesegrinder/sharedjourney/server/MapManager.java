@@ -159,19 +159,31 @@ public final class MapManager {
     private void renderChunk(ServerLevel level, ChunkAccess chunk) {
         EnumSet<MapLayer> layers = ServerConfig.layersFor(level.dimension());
         ChunkPos cp = chunk.getPos();
+        java.util.List<RegionKey> touched = new java.util.ArrayList<>(layers.size() + 4);
         for (MapLayer layer : layers) {
             if (layer == MapLayer.CAVE) {
                 for (int band : ServerConfig.CAVE_BANDS.get()) {
                     int[] pixels = ChunkColorizer.render(level, chunk, layer, band);
-                    writeChunk(RegionKey.of(level.dimension(), layer, band, cp.x, cp.z), cp.x, cp.z, pixels);
+                    RegionKey key = RegionKey.of(level.dimension(), layer, band, cp.x, cp.z);
+                    writeChunk(key, cp.x, cp.z, pixels);
+                    touched.add(key);
                 }
             } else {
                 int[] pixels = ChunkColorizer.render(level, chunk, layer, 0);
-                writeChunk(RegionKey.of(level.dimension(), layer, 0, cp.x, cp.z), cp.x, cp.z, pixels);
+                RegionKey key = RegionKey.of(level.dimension(), layer, 0, cp.x, cp.z);
+                writeChunk(key, cp.x, cp.z, pixels);
+                touched.add(key);
             }
         }
+        // Push immédiat aux joueurs concernés (sans attendre le delta périodique).
+        SyncService.pushRegionUpdates(server, touched);
         // NB: les couches custom (LayerRegisterEvent) sont collectées mais leur
         // pipeline de stockage/sync n'est pas encore branché — voir README §Limites.
+    }
+
+    /** Clés de régions connues de l'index (copie, pour la régénération complète). */
+    public Set<RegionKey> indexedRegions() {
+        return index.snapshot().keySet();
     }
 
     /** Un chunk a-t-il déjà été peint (au moins un pixel opaque sur la 1re couche active) ? */

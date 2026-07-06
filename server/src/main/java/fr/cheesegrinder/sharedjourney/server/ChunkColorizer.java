@@ -5,9 +5,12 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.FoliageColor;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -55,8 +58,16 @@ public final class ChunkColorizer {
 
         pos.set(wx, y, wz);
         BlockState state = chunk.getBlockState(pos);
+        // La végétation décorative (fleurs, herbes, pousses...) ne doit pas
+        // apparaître sur la carte : on peint le bloc situé dessous.
+        while (y > chunk.getMinBuildHeight() && isMapHidden(state) && state.getFluidState().isEmpty()) {
+            y--;
+            pos.set(wx, y, wz);
+            state = chunk.getBlockState(pos);
+        }
+        Biome biome = chunk.getNoiseBiome(wx >> 2, y >> 2, wz >> 2).value();
 
-        // Eau : couleur d'eau assombrie selon la profondeur.
+        // Eau : couleur du biome assombrie selon la profondeur.
         if (!state.getFluidState().isEmpty()) {
             int depth = 0;
             while (y - depth > chunk.getMinBuildHeight()
@@ -65,13 +76,12 @@ public final class ChunkColorizer {
                 depth++;
             }
             float dark = Math.max(0.35f, 1.0f - depth * 0.035f);
-            int base = MapColor.WATER.col;
+            int base = biome.getWaterColor() & 0xFFFFFF;
             int rgb = scaleRgb(base, dark);
             return night ? applyNight(level, pos.set(wx, y + 1, wz), rgb) : (0xFF000000 | rgb);
         }
 
-        MapColor mc = state.getMapColor(level, pos);
-        int base = (mc == MapColor.NONE ? MapColor.STONE : mc).col;
+        int base = tintedBaseColor(level, state, biome, pos, wx, wz);
 
         // Ombrage de pente : compare la hauteur avec le voisin nord (comme un relief).
         int yNorth = surfaceY(level, chunk, wx, wz - 1);
@@ -82,6 +92,85 @@ public final class ChunkColorizer {
             return applyNight(level, pos.set(wx, y + 1, wz), rgb);
         }
         return 0xFF000000 | rgb;
+    }
+
+    /**
+     * Couleur de base d'un bloc de surface, teintée par le biome quand le bloc
+     * l'est en jeu (herbe, feuillage). Les colormaps texture de vanilla ne sont
+     * pas chargées sur un serveur dédié : on approxime le triangle
+     * température/précipitations des colormaps (vérifié proche des valeurs
+     * réelles : plaines ≈ 0x8CBD57 pour 0x91BD59).
+     */
+    private static int tintedBaseColor(ServerLevel level, BlockState state, Biome biome,
+                                       BlockPos pos, int wx, int wz) {
+        if (isGrassTinted(state)) {
+            return grassColor(biome, wx, wz);
+        }
+        if (state.is(BlockTags.LEAVES) || state.is(Blocks.VINE)) {
+            // Essences à teinte fixe (comme vanilla), sinon feuillage du biome.
+            int tint;
+            if (state.is(Blocks.BIRCH_LEAVES)) tint = FoliageColor.getBirchColor();
+            else if (state.is(Blocks.SPRUCE_LEAVES)) tint = FoliageColor.getEvergreenColor();
+            else if (state.is(Blocks.MANGROVE_LEAVES)) tint = FoliageColor.getMangroveColor();
+            else if (state.is(Blocks.CHERRY_LEAVES) || state.is(Blocks.AZALEA_LEAVES)
+                    || state.is(Blocks.FLOWERING_AZALEA_LEAVES)) tint = -1; // texture non teintée
+            else tint = foliageColor(biome);
+            if (tint >= 0) return scaleRgb(tint & 0xFFFFFF, 0.85f); // textures de feuilles sombres
+        }
+        MapColor mc = state.getMapColor(level, pos);
+        return (mc == MapColor.NONE ? MapColor.STONE : mc).col;
+    }
+
+    /** Blocs décoratifs invisibles sur la carte (on peint le bloc dessous). */
+    private static boolean isMapHidden(BlockState state) {
+        return state.is(BlockTags.FLOWERS) || state.is(BlockTags.SAPLINGS)
+                || state.is(Blocks.SHORT_GRASS) || state.is(Blocks.TALL_GRASS)
+                || state.is(Blocks.FERN) || state.is(Blocks.LARGE_FERN)
+                || state.is(Blocks.DEAD_BUSH) || state.is(Blocks.BROWN_MUSHROOM)
+                || state.is(Blocks.RED_MUSHROOM) || state.is(Blocks.TORCH)
+                || state.is(Blocks.WALL_TORCH) || state.is(Blocks.SOUL_TORCH)
+                || state.is(Blocks.COBWEB);
+    }
+
+    private static boolean isGrassTinted(BlockState state) {
+        // Les herbes/fougères sont filtrées par isMapHidden : seuls restent
+        // les blocs teintés susceptibles d'être la surface peinte.
+        return state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.SUGAR_CANE);
+    }
+
+    private static int grassColor(Biome biome, int wx, int wz) {
+        var fx = biome.getSpecialEffects();
+        int base = fx.getGrassColorOverride()
+                .orElseGet(() -> climateBlend(biome, 0xBFB755, 0x80B497, 0x47CD33));
+        // Modificateur vanilla (marais, forêt sombre) — fonctionne côté serveur.
+        return fx.getGrassColorModifier().modifyColor(wx, wz, base) & 0xFFFFFF;
+    }
+
+    private static int foliageColor(Biome biome) {
+        return biome.getSpecialEffects().getFoliageColorOverride()
+                .orElseGet(() -> climateBlend(biome, 0xAEA42A, 0x60A17B, 0x1ABF00));
+    }
+
+    /** Interpolation triangulaire chaud-sec / froid / chaud-humide des colormaps. */
+    private static int climateBlend(Biome biome, int hotDry, int cold, int hotWet) {
+        float t = Math.max(0f, Math.min(1f, biome.getBaseTemperature()));
+        float d = Math.max(0f, Math.min(1f, biome.getModifiedClimateSettings().downfall()));
+        float r = d * t;
+        float cw = 1f - t;
+        int rr = clamp255(((hotDry >> 16) & 0xFF)
+                + cw * (((cold >> 16) & 0xFF) - ((hotDry >> 16) & 0xFF))
+                + r * (((hotWet >> 16) & 0xFF) - ((hotDry >> 16) & 0xFF)));
+        int gg = clamp255(((hotDry >> 8) & 0xFF)
+                + cw * (((cold >> 8) & 0xFF) - ((hotDry >> 8) & 0xFF))
+                + r * (((hotWet >> 8) & 0xFF) - ((hotDry >> 8) & 0xFF)));
+        int bb = clamp255((hotDry & 0xFF)
+                + cw * ((cold & 0xFF) - (hotDry & 0xFF))
+                + r * ((hotWet & 0xFF) - (hotDry & 0xFF)));
+        return (rr << 16) | (gg << 8) | bb;
+    }
+
+    private static int clamp255(float v) {
+        return Math.max(0, Math.min(255, (int) v));
     }
 
     /** Assombrit selon la lumière de bloc (torches, lave...) au-dessus de la surface. */
@@ -128,7 +217,8 @@ public final class ChunkColorizer {
     // ------------------------------------------------------------------ BIOME
 
     private static int renderBiome(ServerLevel level, ChunkAccess chunk, int wx, int wz) {
-        Holder<Biome> biome = level.getBiome(new BlockPos(wx, level.getSeaLevel(), wz));
+        // getNoiseBiome (et pas level.getBiome) : sûr depuis un thread de rendu.
+        Holder<Biome> biome = chunk.getNoiseBiome(wx >> 2, level.getSeaLevel() >> 2, wz >> 2);
         // Couleur d'herbe si le biome en définit une, sinon couleur déterministe
         // dérivée de l'identifiant du biome (stable entre serveur et clients).
         var effects = biome.value().getSpecialEffects();

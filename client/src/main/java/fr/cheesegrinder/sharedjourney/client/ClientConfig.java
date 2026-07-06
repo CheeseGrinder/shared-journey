@@ -10,6 +10,7 @@ public final class ClientConfig {
     public static ModConfigSpec.BooleanValue MINIMAP_ENABLED;
     public static ModConfigSpec.IntValue MINIMAP_SIZE;
     public static ModConfigSpec.EnumValue<Corner> MINIMAP_CORNER;
+    public static ModConfigSpec.EnumValue<Shape> MINIMAP_SHAPE;
     /** Rotation dynamique de la minimap avec le regard du joueur (spec §6.1). */
     public static ModConfigSpec.BooleanValue MINIMAP_ROTATE;
     public static ModConfigSpec.BooleanValue SHOW_COORDS;
@@ -26,6 +27,8 @@ public final class ClientConfig {
 
     public enum Corner { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
 
+    public enum Shape { CIRCLE, SQUARE }
+
     static {
         ModConfigSpec.Builder b = new ModConfigSpec.Builder();
 
@@ -33,6 +36,7 @@ public final class ClientConfig {
         MINIMAP_ENABLED = b.define("enabled", true);
         MINIMAP_SIZE = b.comment("Taille de la minimap en pixels écran.").defineInRange("size", 128, 64, 320);
         MINIMAP_CORNER = b.defineEnum("corner", Corner.TOP_RIGHT);
+        MINIMAP_SHAPE = b.comment("Forme de la minimap : ronde ou carrée.").defineEnum("shape", Shape.CIRCLE);
         MINIMAP_ROTATE = b.comment("La carte tourne avec le joueur (sinon nord fixe).").define("rotateWithPlayer", false);
         SHOW_COORDS = b.define("showCoordinates", true);
         b.pop();

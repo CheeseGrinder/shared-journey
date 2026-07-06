@@ -3,6 +3,8 @@
   "key.sharedjourney.fullmap": "Ouvrir la carte",
   "key.sharedjourney.toggle_minimap": "Afficher/masquer la minimap",
   "key.sharedjourney.cycle_layer": "Changer de couche",
+  "key.sharedjourney.zoom_in": "Zoom avant (minimap)",
+  "key.sharedjourney.zoom_out": "Zoom arrière (minimap)",
 
   "sharedjourney.layer.day": "Jour",
   "sharedjourney.layer.night": "Nuit",
@@ -11,12 +13,20 @@
   "sharedjourney.layer.cave": "Grottes",
 
   "sharedjourney.fullmap.hint": "Glisser : déplacer | Molette : zoom | Clic droit : waypoint | Clic sur marqueur : éditer",
+  "sharedjourney.fullmap.center": "Centrer",
   "sharedjourney.waypoint.create": "Nouveau waypoint",
   "sharedjourney.waypoint.edit": "Modifier le waypoint",
   "sharedjourney.waypoint.delete": "Supprimer",
   "sharedjourney.waypoint.visible": "Visible : oui",
   "sharedjourney.waypoint.hidden": "Visible : non",
   "sharedjourney.command.purged": "%s fichier(s) de région supprimé(s) du cache pour le calque '%s'",
+
+  "sharedjourney.context.teleport": "Se téléporter ici",
+  "sharedjourney.context.waypoint": "Créer un waypoint",
+  "sharedjourney.context.chat": "Noter la position dans le chat",
+  "sharedjourney.coords.chat": "Position : %s, %s",
+  "sharedjourney.coords.open": "Cliquer pour ouvrir la carte ici",
+  "sharedjourney.regen.bossbar": "Régénération de la carte : %s/%s chunks",
 
   "sharedjourney.configuration.title": "Configuration Shared Journey",
   "sharedjourney.configuration.section.sharedjourney.client.toml": "Client (minimap, radar, cache)",
@@ -62,6 +72,9 @@
 
   "sharedjourney.configuration.corner": "Coin",
   "sharedjourney.configuration.corner.tooltip": "Coin de l'écran où la minimap est affichée.",
+
+  "sharedjourney.configuration.shape": "Forme",
+  "sharedjourney.configuration.shape.tooltip": "Forme de la minimap : ronde ou carrée.",
 
   "sharedjourney.configuration.rotateWithPlayer": "Tourner avec le joueur",
   "sharedjourney.configuration.rotateWithPlayer.tooltip": "Fait tourner la minimap dans le sens du regard (désactivé = nord toujours en haut).",

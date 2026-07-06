@@ -2,16 +2,29 @@ package fr.cheesegrinder.sharedjourney.client.gui;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
+import fr.cheesegrinder.sharedjourney.client.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.MinimapRenderer;
 import fr.cheesegrinder.sharedjourney.client.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.Payloads;
 import fr.cheesegrinder.sharedjourney.common.RegionKey;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.ArrayList;
@@ -40,6 +53,8 @@ public class FullMapScreen extends Screen {
     private Button layerButton;
     private Button bandMinus;
     private Button bandPlus;
+    /** Boutons du menu contextuel (clic droit), retirés au prochain clic. */
+    private final List<Button> contextButtons = new ArrayList<>();
 
     public FullMapScreen() {
         super(Component.literal("SharedJourney"));
@@ -54,6 +69,13 @@ public class FullMapScreen extends Screen {
         bandIndex = Math.max(0, ClientMapCache.caveBands.indexOf(MinimapRenderer.currentCaveBand()));
     }
 
+    /** Ouvre la carte centrée sur une position donnée (/sj goto, clic chat). */
+    public FullMapScreen(double centerX, double centerZ) {
+        this();
+        this.centerX = centerX;
+        this.centerZ = centerZ;
+    }
+
     @Override
     protected void init() {
         layerButton = addRenderableWidget(Button.builder(layerLabel(), b -> cycleLayer())
@@ -62,7 +84,19 @@ public class FullMapScreen extends Screen {
                 .bounds(width / 2 - 90, height - 26, 20, 20).build());
         bandPlus = addRenderableWidget(Button.builder(Component.literal("+"), b -> changeBand(+1))
                 .bounds(width / 2 + 70, height - 26, 20, 20).build());
+        addRenderableWidget(Button.builder(
+                        Component.translatable("sharedjourney.fullmap.center"), b -> centerOnPlayer())
+                .bounds(width - 86, height - 26, 80, 20).build());
+        contextButtons.clear(); // init() recrée tous les widgets (resize)
         updateBandButtons();
+    }
+
+    private void centerOnPlayer() {
+        var player = net.minecraft.client.Minecraft.getInstance().player;
+        if (player != null) {
+            centerX = player.getX();
+            centerZ = player.getZ();
+        }
     }
 
     private Component layerLabel() {
@@ -119,7 +153,9 @@ public class FullMapScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         dragged = false;
-        return super.mouseClicked(mouseX, mouseY, button);
+        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+        closeContextMenu(); // clic hors du menu : on le referme
+        return false;
     }
 
     @Override
@@ -146,18 +182,93 @@ public class FullMapScreen extends Screen {
                 mc.setScreen(new WaypointEditScreen(this, nearest));
                 return true;
             }
-        } else if (button == 1) {
-            // Clic droit : création d'un waypoint à la position cliquée (spec §6.2)
-            int wx = (int) Math.floor(worldX(mouseX));
-            int wz = (int) Math.floor(worldZ(mouseY));
-            int wy = mc.player.blockPosition().getY();
-            Waypoint wp = Waypoint.create("X:" + wx + " Z:" + wz,
-                    mc.level.dimension().location(), new BlockPos(wx, wy, wz),
-                    0xFFFFFF & java.util.concurrent.ThreadLocalRandom.current().nextInt(), "user");
-            mc.setScreen(new WaypointEditScreen(this, wp, true));
+        } else if (button == 1 && !dragged) {
+            // Clic droit : menu contextuel (TP, waypoint, position dans le chat)
+            openContextMenu(mouseX, mouseY);
             return true;
         }
         return false;
+    }
+
+    // ------------------------------------------------------------------ menu contextuel
+
+    private void openContextMenu(double mouseX, double mouseY) {
+        closeContextMenu();
+        var mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
+        int wx = (int) Math.floor(worldX(mouseX));
+        int wz = (int) Math.floor(worldZ(mouseY));
+        // Le TP passe par /tp : réservé aux joueurs op (niveau 2, connu du client).
+        boolean canTeleport = mc.player.hasPermissions(2);
+        int rows = canTeleport ? 3 : 2;
+        int w = 140, h = 20;
+        int bx = (int) Math.min(mouseX, width - w - 4);
+        int by = (int) Math.min(mouseY, height - rows * (h + 1) - 4);
+        if (canTeleport) {
+            addContextButton(bx, by, w, h, "sharedjourney.context.teleport", () -> teleportTo(wx, wz));
+            by += h + 1;
+        }
+        addContextButton(bx, by, w, h, "sharedjourney.context.waypoint", () -> createWaypointAt(wx, wz));
+        addContextButton(bx, by + h + 1, w, h, "sharedjourney.context.chat", () -> logCoords(wx, wz));
+    }
+
+    private void addContextButton(int x, int y, int w, int h, String key, Runnable action) {
+        Button b = Button.builder(Component.translatable(key), btn -> {
+            closeContextMenu();
+            action.run();
+        }).bounds(x, y, w, h).build();
+        contextButtons.add(b);
+        addRenderableWidget(b);
+    }
+
+    private void closeContextMenu() {
+        contextButtons.forEach(this::removeWidget);
+        contextButtons.clear();
+    }
+
+    /** Y de surface si le chunk est chargé côté client, sinon -1. */
+    private int surfaceYAt(int wx, int wz) {
+        var mc = Minecraft.getInstance();
+        LevelChunk chunk = mc.level == null ? null
+                : mc.level.getChunkSource().getChunkNow(wx >> 4, wz >> 4);
+        if (chunk == null) return -1;
+        return chunk.getHeight(Heightmap.Types.WORLD_SURFACE, wx & 15, wz & 15) + 1;
+    }
+
+    private void teleportTo(int wx, int wz) {
+        var mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        int y = surfaceYAt(wx, wz);
+        String yArg = y >= 0 ? String.valueOf(y) : "~";
+        mc.player.connection.sendUnsignedCommand(
+                "tp @s " + (wx + 0.5) + " " + yArg + " " + (wz + 0.5));
+        onClose();
+    }
+
+    private void createWaypointAt(int wx, int wz) {
+        var mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null) return;
+        int y = surfaceYAt(wx, wz);
+        int wy = y >= 0 ? y : mc.player.blockPosition().getY();
+        Waypoint wp = Waypoint.create("X:" + wx + " Z:" + wz,
+                mc.level.dimension().location(), new BlockPos(wx, wy, wz),
+                0xFFFFFF & java.util.concurrent.ThreadLocalRandom.current().nextInt(), "user");
+        mc.setScreen(new WaypointEditScreen(this, wp, true));
+    }
+
+    /** Écrit la position dans le chat (local) ; cliquer dessus rouvre la carte ici. */
+    private void logCoords(int wx, int wz) {
+        var mc = Minecraft.getInstance();
+        Component msg = Component.translatable("sharedjourney.coords.chat", wx, wz)
+                .withStyle(style -> style
+                        .withColor(ChatFormatting.AQUA)
+                        .withUnderlined(true)
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,
+                                "/sj goto " + wx + " " + wz))
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                                Component.translatable("sharedjourney.coords.open"))));
+        mc.gui.getChat().addMessage(msg);
+        onClose(); // referme la carte pour laisser voir le chat
     }
 
     private Waypoint nearestWaypoint(double mouseX, double mouseY) {
@@ -196,11 +307,36 @@ public class FullMapScreen extends Screen {
         renderBackgroundLayers(gg);
         super.render(gg, mouseX, mouseY, partialTick);
 
-        // Coordonnées sous le curseur
+        // Infos sous le curseur : coordonnées, et si le chunk est chargé côté
+        // client, biome + bloc de surface (comme JourneyMap).
         int wx = (int) Math.floor(worldX(mouseX));
         int wz = (int) Math.floor(worldZ(mouseY));
-        gg.drawString(font, wx + ", " + wz, 6, 6, 0xFFFFFF);
-        gg.drawString(font, "zoom x" + String.format("%.2f", zoom), 6, 18, 0xAAAAAA);
+        var mc = net.minecraft.client.Minecraft.getInstance();
+        int infoY = 6;
+        LevelChunk hoverChunk = mc.level == null ? null
+                : mc.level.getChunkSource().getChunkNow(wx >> 4, wz >> 4);
+        if (hoverChunk != null) {
+            int top = hoverChunk.getHeight(Heightmap.Types.WORLD_SURFACE, wx & 15, wz & 15);
+            BlockPos hoverPos = new BlockPos(wx, top, wz);
+            gg.drawString(font, wx + ", " + top + ", " + wz, 6, infoY, 0xFFFFFF);
+            infoY += 12;
+            var biomeKey = mc.level.getBiome(hoverPos).unwrapKey();
+            if (biomeKey.isPresent()) {
+                var loc = biomeKey.get().location();
+                gg.drawString(font, Component.translatable(
+                        "biome." + loc.getNamespace() + "." + loc.getPath()), 6, infoY, 0xC0C0FF);
+                infoY += 12;
+            }
+            BlockState topState = hoverChunk.getBlockState(hoverPos);
+            if (!topState.isAir()) {
+                gg.drawString(font, topState.getBlock().getName(), 6, infoY, 0xA0E0A0);
+                infoY += 12;
+            }
+        } else {
+            gg.drawString(font, wx + ", " + wz, 6, infoY, 0xFFFFFF);
+            infoY += 12;
+        }
+        gg.drawString(font, "zoom x" + String.format("%.2f", zoom), 6, infoY, 0xAAAAAA);
         gg.drawString(font, Component.translatable("sharedjourney.fullmap.hint"), 6, height - 14, 0x808080);
 
         // Nom du waypoint survolé
@@ -212,7 +348,7 @@ public class FullMapScreen extends Screen {
     }
 
     private void renderBackgroundLayers(GuiGraphics gg) {
-        gg.fill(0, 0, width, height, 0xFF101014);
+        gg.fill(0, 0, width, height, MinimapRenderer.BACKGROUND);
         var mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.level == null || mc.player == null) return;
 
@@ -274,6 +410,26 @@ public class FullMapScreen extends Screen {
             gg.fill(sx - 2, sy - 2, sx + 3, sy + 3, 0xFF000000 | wp.colorRgb());
             if (zoom >= 0.5f) {
                 gg.drawCenteredString(font, wp.name(), sx, sy - 13, 0xFFFFFF);
+            }
+        }
+
+        // Radar d'entités : mêmes filtres et plafond serveur que la minimap.
+        if (ClientConfig.RADAR_ENABLED.get() && ClientMapCache.radarMaxRadius > 0) {
+            int radius = Math.min(ClientConfig.RADAR_RADIUS.get(), ClientMapCache.radarMaxRadius);
+            AABB box = mc.player.getBoundingBox().inflate(radius, 32, radius);
+            for (Entity e : mc.level.getEntities(mc.player, box)) {
+                int color;
+                if (e instanceof Player && ClientConfig.RADAR_PLAYERS.get()) color = 0xFFFFFFFF;
+                else if (e instanceof Enemy && ClientConfig.RADAR_HOSTILE.get()) color = 0xFFFF4040;
+                else if (e instanceof Animal && ClientConfig.RADAR_PASSIVE.get()) color = 0xFF40FF40;
+                else continue;
+                double ex = e.getX() - mc.player.getX(), ez = e.getZ() - mc.player.getZ();
+                if (ex * ex + ez * ez > (double) radius * radius) continue;
+                int sx = (int) Math.round(screenX(e.getX()));
+                int sy = (int) Math.round(screenY(e.getZ()));
+                if (sx < -4 || sx > width + 4 || sy < -4 || sy > height + 4) continue;
+                gg.fill(sx - 2, sy - 2, sx + 2, sy + 2, 0xFF000000);
+                gg.fill(sx - 1, sy - 1, sx + 1, sy + 1, color);
             }
         }
 

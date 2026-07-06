@@ -22,7 +22,7 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
  * le scan d'annotations voie les plugins des mods tiers).
  */
 @Mod(value = SharedJourney.MODID, dist = Dist.CLIENT)
-@EventBusSubscriber(modid = SharedJourney.MODID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
+@EventBusSubscriber(modid = SharedJourney.MODID, value = Dist.CLIENT)
 public class SharedJourneyClient {
 
     public SharedJourneyClient(IEventBus modEventBus, ModContainer container) {

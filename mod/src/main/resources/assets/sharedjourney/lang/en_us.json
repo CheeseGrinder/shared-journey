@@ -3,6 +3,8 @@
   "key.sharedjourney.fullmap": "Open full map",
   "key.sharedjourney.toggle_minimap": "Toggle minimap",
   "key.sharedjourney.cycle_layer": "Cycle map layer",
+  "key.sharedjourney.zoom_in": "Minimap zoom in",
+  "key.sharedjourney.zoom_out": "Minimap zoom out",
 
   "sharedjourney.layer.day": "Day",
   "sharedjourney.layer.night": "Night",
@@ -11,12 +13,20 @@
   "sharedjourney.layer.cave": "Caves",
 
   "sharedjourney.fullmap.hint": "Drag: pan | Wheel: zoom | Right-click: new waypoint | Click marker: edit",
+  "sharedjourney.fullmap.center": "Center",
   "sharedjourney.waypoint.create": "New waypoint",
   "sharedjourney.waypoint.edit": "Edit waypoint",
   "sharedjourney.waypoint.delete": "Delete",
   "sharedjourney.waypoint.visible": "Visible: yes",
   "sharedjourney.waypoint.hidden": "Visible: no",
   "sharedjourney.command.purged": "%s cached region file(s) deleted for layer '%s'",
+
+  "sharedjourney.context.teleport": "Teleport here",
+  "sharedjourney.context.waypoint": "Create waypoint",
+  "sharedjourney.context.chat": "Log position in chat",
+  "sharedjourney.coords.chat": "Position: %s, %s",
+  "sharedjourney.coords.open": "Click to open the map here",
+  "sharedjourney.regen.bossbar": "Map regeneration: %s/%s chunks",
 
   "sharedjourney.configuration.title": "Shared Journey Configs",
   "sharedjourney.configuration.section.sharedjourney.client.toml": "Client (minimap, radar, cache)",
@@ -62,6 +72,9 @@
 
   "sharedjourney.configuration.corner": "Corner",
   "sharedjourney.configuration.corner.tooltip": "Screen corner where the minimap is displayed.",
+
+  "sharedjourney.configuration.shape": "Shape",
+  "sharedjourney.configuration.shape.tooltip": "Minimap shape: round or square.",
 
   "sharedjourney.configuration.rotateWithPlayer": "Rotate with Player",
   "sharedjourney.configuration.rotateWithPlayer.tooltip": "Rotate the minimap to match the player's look direction (false = north always up).",

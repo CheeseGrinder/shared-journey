@@ -19,21 +19,26 @@ import java.util.Collection;
 import java.util.Locale;
 
 /**
- * Racine unique /map (spec §7).
- *   /map stats                                   -> niveau 0 : ses propres stats de sync
- *                                                   niveau 2 : + état moteur et stats de tous
- *   /map admin sync force <joueurs|all> [rx rz]  -> renvoi forcé (ignore l'index)
- *   /map admin rerender <rayonChunks>            -> re-rend autour de soi
- *   /map admin layer <dim> <couche> <true|false> -> couches par dimension à chaud
- *   /map admin save                              -> flush disque
- * (/map purge <layer> est enregistré CÔTÉ CLIENT — voir ClientCommands.)
+ * Racines /sharedjourney et /sj (alias) — spec §7.
+ *   /sj stats                                   -> niveau 0 : ses propres stats de sync
+ *                                                  niveau 2 : + état moteur et stats de tous
+ *   /sj admin sync force <joueurs|all> [rx rz]  -> renvoi forcé (ignore l'index)
+ *   /sj admin rerender <rayonChunks>            -> re-rend autour de soi
+ *   /sj admin layer <dim> <couche> <true|false> -> couches par dimension à chaud
+ *   /sj admin save                              -> flush disque
+ * (/sj purge <layer> est enregistré CÔTÉ CLIENT — voir ClientCommands.)
  */
 public final class MapCommands {
 
     private MapCommands() {}
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("map");
+        dispatcher.register(buildRoot("sharedjourney"));
+        dispatcher.register(buildRoot("sj"));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> buildRoot(String name) {
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal(name);
 
         // ---- /map stats (tous joueurs : soi ; OP : tout)
         root.then(Commands.literal("stats")
@@ -127,6 +132,33 @@ public final class MapCommands {
         }
         admin.then(layerCmd);
 
+        // regen : re-rend toute la carte connue (progression en boss bar)
+        admin.then(Commands.literal("regen")
+                .executes(ctx -> {
+                    if (RegenService.isRunning()) {
+                        ctx.getSource().sendFailure(Component.literal(
+                                "Une régénération est déjà en cours (/sj admin regen cancel pour l'annuler)"));
+                        return 0;
+                    }
+                    int total = RegenService.start(ctx.getSource().getServer());
+                    if (total < 0) {
+                        ctx.getSource().sendFailure(Component.literal("Moteur de carte indisponible"));
+                        return 0;
+                    }
+                    ctx.getSource().sendSuccess(() -> Component.literal(
+                            "Régénération lancée : " + total + " chunk(s) à re-rendre"), true);
+                    return total;
+                })
+                .then(Commands.literal("cancel").executes(ctx -> {
+                    if (!RegenService.isRunning()) {
+                        ctx.getSource().sendFailure(Component.literal("Aucune régénération en cours"));
+                        return 0;
+                    }
+                    RegenService.cancel();
+                    ctx.getSource().sendSuccess(() -> Component.literal("Régénération annulée"), true);
+                    return 1;
+                })));
+
         // save
         admin.then(Commands.literal("save").executes(ctx -> {
             MapManager mgr = MapManager.get();
@@ -136,7 +168,7 @@ public final class MapCommands {
         }));
 
         root.then(admin);
-        dispatcher.register(root);
+        return root;
     }
 
     private static int forceAll(CommandSourceStack src, int[] region) {

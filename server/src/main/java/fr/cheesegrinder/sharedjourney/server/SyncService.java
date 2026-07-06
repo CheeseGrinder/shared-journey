@@ -128,6 +128,28 @@ public final class SyncService {
         }
     }
 
+    /**
+     * Notifie qu'une ou plusieurs régions viennent d'être re-rendues : mise en
+     * file immédiate pour les joueurs de la dimension, sans attendre le delta
+     * périodique (réactivité des modifications de terrain). Appelable depuis
+     * un thread de rendu : bascule sur le main thread.
+     */
+    public static void pushRegionUpdates(MinecraftServer server, List<RegionKey> keys) {
+        if (keys.isEmpty()) return;
+        server.execute(() -> {
+            MapManager mgr = MapManager.get();
+            if (mgr == null) return;
+            for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                PlayerState st = STATES.get(p.getUUID());
+                if (st == null) continue;
+                var dim = p.level().dimension();
+                for (RegionKey key : keys) {
+                    if (key.dimension().equals(dim)) maybeQueue(st, mgr, key, false);
+                }
+            }
+        });
+    }
+
     private static void maybeQueue(PlayerState st, MapManager mgr, RegionKey key, boolean force) {
         long serverVersion = mgr.versionOf(key);
         if (serverVersion < 0) return;
