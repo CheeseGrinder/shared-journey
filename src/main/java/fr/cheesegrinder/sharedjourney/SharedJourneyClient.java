@@ -32,6 +32,7 @@ public class SharedJourneyClient {
         // Câblage des handlers côté client.
         Payloads.Hooks.clientLayerSettings = ClientNetHandler::handleLayerSettings;
         Payloads.Hooks.clientRegionData = ClientNetHandler::handleRegionData;
+        Payloads.Hooks.clientMapInfoReply = ClientNetHandler::handleMapInfoReply;
     }
 
     @SubscribeEvent

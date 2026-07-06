@@ -21,4 +21,9 @@ public final class ClientNetHandler {
         ClientMapCache.acceptFragment(payload.key(), payload.version(),
                 payload.part(), payload.totalParts(), payload.data());
     }
+
+    public static void handleMapInfoReply(Payloads.MapInfoReplyPayload payload) {
+        ClientMapCache.putHoverInfo(payload.x(), payload.z(),
+                new ClientMapCache.HoverInfo(payload.y(), payload.biomeId(), payload.blockId()));
+    }
 }

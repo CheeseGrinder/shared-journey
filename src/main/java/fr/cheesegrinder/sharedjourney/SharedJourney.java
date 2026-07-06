@@ -36,6 +36,7 @@ public class SharedJourney {
         // Câblage des handlers côté serveur (classes présentes des deux côtés).
         Payloads.Hooks.serverRegionRequest = SyncService::handleRegionRequest;
         Payloads.Hooks.serverClientIndex = SyncService::handleClientIndex;
+        Payloads.Hooks.serverMapInfoRequest = SyncService::handleMapInfoRequest;
 
         LOGGER.info("SharedJourney initialisé");
     }

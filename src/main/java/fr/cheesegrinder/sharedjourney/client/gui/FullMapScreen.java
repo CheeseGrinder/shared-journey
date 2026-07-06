@@ -14,6 +14,8 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
@@ -56,6 +58,10 @@ public class FullMapScreen extends Screen {
     private Button bandPlus;
     /** Boutons du menu contextuel (clic droit), retirés au prochain clic. */
     private final List<Button> contextButtons = new ArrayList<>();
+
+    // Throttle des requêtes d'infos de survol (colonne + horodatage).
+    private long lastInfoRequestKey = Long.MIN_VALUE;
+    private long lastInfoRequestAt;
 
     public FullMapScreen() {
         super(Component.literal("SharedJourney"));
@@ -312,6 +318,46 @@ public class FullMapScreen extends Screen {
         onClose(); // referme la carte pour laisser voir le chat
     }
 
+    /**
+     * Infos de la colonne survolée : lues du chunk local s'il est chargé,
+     * sinon du cache des réponses serveur (avec requête throttlée si absent).
+     */
+    private ClientMapCache.HoverInfo hoverInfoAt(Minecraft mc, int wx, int wz) {
+        if (mc.level == null) {
+            return null;
+        }
+
+        LevelChunk chunk = mc.level.getChunkSource().getChunkNow(wx >> 4, wz >> 4);
+        if (chunk != null) {
+            int top = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, wx & 15, wz & 15);
+            BlockPos pos = new BlockPos(wx, top, wz);
+            String biomeId = mc.level.getBiome(pos).unwrapKey()
+                    .map(k -> k.location().toString())
+                    .orElse("");
+            BlockState state = chunk.getBlockState(pos);
+            String blockId = state.isAir() ? ""
+                    : BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+            return new ClientMapCache.HoverInfo(top, biomeId, blockId);
+        }
+
+        ClientMapCache.HoverInfo cached = ClientMapCache.hoverInfo(wx, wz);
+        if (cached != null) {
+            return cached;
+        }
+
+        // Requête au serveur, throttlée : une par colonne survolée, re-tentée
+        // au plus toutes les 500 ms si la réponse n'est pas encore arrivée.
+        long key = ClientMapCache.columnKey(wx, wz);
+        long now = System.currentTimeMillis();
+        if (key != lastInfoRequestKey || now - lastInfoRequestAt > 500) {
+            lastInfoRequestKey = key;
+            lastInfoRequestAt = now;
+            PacketDistributor.sendToServer(new Payloads.MapInfoRequestPayload(wx, wz));
+        }
+
+        return null;
+    }
+
     private Waypoint nearestWaypoint(double mouseX, double mouseY) {
         var mc = Minecraft.getInstance();
         if (mc.level == null) {
@@ -351,29 +397,26 @@ public class FullMapScreen extends Screen {
         renderBackgroundLayers(gg);
         super.render(gg, mouseX, mouseY, partialTick);
 
-        // Infos sous le curseur : coordonnées, et si le chunk est chargé côté
-        // client, biome + bloc de surface (comme JourneyMap).
+        // Infos sous le curseur : coordonnées, biome + bloc de surface (comme
+        // JourneyMap). Chunk chargé localement si possible, sinon infos
+        // demandées au serveur (cache + requête throttlée).
         int wx = (int) Math.floor(worldX(mouseX));
         int wz = (int) Math.floor(worldZ(mouseY));
         var mc = Minecraft.getInstance();
         int infoY = 6;
-        LevelChunk hoverChunk = mc.level == null ? null
-                : mc.level.getChunkSource().getChunkNow(wx >> 4, wz >> 4);
-        if (hoverChunk != null) {
-            int top = hoverChunk.getHeight(Heightmap.Types.WORLD_SURFACE, wx & 15, wz & 15);
-            BlockPos hoverPos = new BlockPos(wx, top, wz);
-            gg.drawString(font, wx + ", " + top + ", " + wz, 6, infoY, 0xFFFFFF);
+        ClientMapCache.HoverInfo info = hoverInfoAt(mc, wx, wz);
+        if (info != null) {
+            gg.drawString(font, wx + ", " + info.y() + ", " + wz, 6, infoY, 0xFFFFFF);
             infoY += 12;
-            var biomeKey = mc.level.getBiome(hoverPos).unwrapKey();
-            if (biomeKey.isPresent()) {
-                var loc = biomeKey.get().location();
+            if (!info.biomeId().isEmpty()) {
+                var loc = ResourceLocation.parse(info.biomeId());
                 gg.drawString(font, Component.translatable(
                         "biome." + loc.getNamespace() + "." + loc.getPath()), 6, infoY, 0xC0C0FF);
                 infoY += 12;
             }
-            BlockState topState = hoverChunk.getBlockState(hoverPos);
-            if (!topState.isAir()) {
-                gg.drawString(font, topState.getBlock().getName(), 6, infoY, 0xA0E0A0);
+            if (!info.blockId().isEmpty()) {
+                var block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(info.blockId()));
+                gg.drawString(font, block.getName(), 6, infoY, 0xA0E0A0);
                 infoY += 12;
             }
         } else {

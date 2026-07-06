@@ -5,11 +5,17 @@ import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.config.CommonConfig;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.ArrayList;
@@ -33,6 +39,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  *    max_kb_per_second_per_player (converti en octets/tick), en fragments.
  */
 public final class SyncService {
+
+    /** Intervalle minimal entre deux requêtes d'infos de survol par joueur (anti-spam IO). */
+    private static final long INFO_REQUEST_MIN_INTERVAL_MS = 100;
 
     private static final Map<UUID, PlayerState> STATES = new ConcurrentHashMap<>();
 
@@ -281,6 +290,70 @@ public final class SyncService {
         st.requestsReceived += max;
     }
 
+    /**
+     * Requête d'infos au survol de la carte plein écran : renvoie biome, bloc
+     * de surface et Y de la colonne. Si le chunk n'est pas chargé, il est lu
+     * depuis le disque (statut NBT vérifié : jamais de génération de terrain).
+     * Throttlée par joueur pour borner l'IO.
+     */
+    public static void handleMapInfoRequest(Player playerRaw, Payloads.MapInfoRequestPayload payload) {
+        if (!(playerRaw instanceof ServerPlayer player)) {
+            return;
+        }
+
+        if (!ServerConfig.ALLOW_ON_DEMAND_REQUESTS.get()) {
+            return;
+        }
+
+        PlayerState st = STATES.get(player.getUUID());
+        if (st == null) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - st.lastInfoRequestMillis < INFO_REQUEST_MIN_INTERVAL_MS) {
+            return;
+        }
+
+        st.lastInfoRequestMillis = now;
+        ServerLevel level = player.serverLevel();
+        int cx = payload.x() >> 4;
+        int cz = payload.z() >> 4;
+        ChunkAccess chunk = level.getChunkSource().getChunkNow(cx, cz);
+        if (chunk != null) {
+            sendMapInfo(player, chunk, payload.x(), payload.z());
+            return;
+        }
+
+        // Chunk pas chargé : statut vérifié sur disque avant chargement (aucune
+        // génération de terrain), puis chargement et réponse sur le main thread.
+        level.getChunkSource().chunkMap.read(new ChunkPos(cx, cz)).thenAccept(tag -> {
+            if (tag.isEmpty() || !tag.get().getString("Status").endsWith("full")) {
+                return;
+            }
+
+            level.getServer().execute(() -> {
+                if (player.hasDisconnected()) {
+                    return;
+                }
+
+                sendMapInfo(player, level.getChunk(cx, cz), payload.x(), payload.z());
+            });
+        });
+    }
+
+    private static void sendMapInfo(ServerPlayer player, ChunkAccess chunk, int x, int z) {
+        int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x & 15, z & 15);
+        BlockState state = chunk.getBlockState(new BlockPos(x, y, z));
+        String biomeId = chunk.getNoiseBiome(x >> 2, y >> 2, z >> 2).unwrapKey()
+                .map(k -> k.location().toString())
+                .orElse("");
+        String blockId = state.isAir() ? ""
+                : BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+        PacketDistributor.sendToPlayer(player,
+                new Payloads.MapInfoReplyPayload(x, z, y, biomeId, blockId));
+    }
+
     // ------------------------------------------------------------------ administration / stats
 
     /**
@@ -355,6 +428,7 @@ public final class SyncService {
         int forcedCount;
         int handshakeEntries;
         long lastSyncMillis;
+        long lastInfoRequestMillis;
 
         void enqueue(RegionKey key) {
             if (queuedSet.add(key)) {

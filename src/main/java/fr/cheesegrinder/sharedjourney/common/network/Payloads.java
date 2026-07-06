@@ -39,8 +39,10 @@ public final class Payloads {
     public static final class Hooks {
         public static Consumer<LayerSettingsPayload> clientLayerSettings = p -> {};
         public static Consumer<RegionDataPayload> clientRegionData = p -> {};
+        public static Consumer<MapInfoReplyPayload> clientMapInfoReply = p -> {};
         public static BiConsumer<Player, RegionRequestPayload> serverRegionRequest = (pl, p) -> {};
         public static BiConsumer<Player, ClientIndexPayload> serverClientIndex = (pl, p) -> {};
+        public static BiConsumer<Player, MapInfoRequestPayload> serverMapInfoRequest = (pl, p) -> {};
     }
 
     private static ResourceLocation id(String path) {
@@ -212,6 +214,45 @@ public final class Payloads {
         }
     }
 
+    // ---------------------------------------------------------------- C2S/S2C : infos au survol
+
+    /** Le client demande les infos (biome, bloc, Y) d'une colonne survolée sur la carte. */
+    public record MapInfoRequestPayload(int x, int z) implements CustomPacketPayload {
+        public static final Type<MapInfoRequestPayload> TYPE = new Type<>(id("map_info_request"));
+
+        public static final StreamCodec<FriendlyByteBuf, MapInfoRequestPayload> CODEC = StreamCodec.of(
+                (buf, p) -> {
+                    buf.writeInt(p.x);
+                    buf.writeInt(p.z);
+                },
+                buf -> new MapInfoRequestPayload(buf.readInt(), buf.readInt()));
+
+        @Override public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** Infos d'une colonne pour l'affichage au survol (identifiants vides si inconnus). */
+    public record MapInfoReplyPayload(int x, int z, int y, String biomeId, String blockId)
+            implements CustomPacketPayload {
+        public static final Type<MapInfoReplyPayload> TYPE = new Type<>(id("map_info_reply"));
+
+        public static final StreamCodec<FriendlyByteBuf, MapInfoReplyPayload> CODEC = StreamCodec.of(
+                (buf, p) -> {
+                    buf.writeInt(p.x);
+                    buf.writeInt(p.z);
+                    buf.writeInt(p.y);
+                    buf.writeUtf(p.biomeId);
+                    buf.writeUtf(p.blockId);
+                },
+                buf -> new MapInfoReplyPayload(buf.readInt(), buf.readInt(), buf.readInt(),
+                        buf.readUtf(), buf.readUtf()));
+
+        @Override public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     // ---------------------------------------------------------------- enregistrement
 
     public static void register(final RegisterPayloadHandlersEvent event) {
@@ -228,5 +269,11 @@ public final class Payloads {
 
         registrar.playToServer(ClientIndexPayload.TYPE, ClientIndexPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.serverClientIndex.accept(ctx.player(), payload)));
+
+        registrar.playToClient(MapInfoReplyPayload.TYPE, MapInfoReplyPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientMapInfoReply.accept(payload)));
+
+        registrar.playToServer(MapInfoRequestPayload.TYPE, MapInfoRequestPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.serverMapInfoRequest.accept(ctx.player(), payload)));
     }
 }

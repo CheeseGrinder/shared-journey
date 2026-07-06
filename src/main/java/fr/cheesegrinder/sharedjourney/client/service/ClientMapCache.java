@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,6 +40,36 @@ public final class ClientMapCache {
     private static final Set<RegionKey> DISK_MISSES = ConcurrentHashMap.newKeySet();
     /** Anti-spam de requêtes à la demande. */
     public static final Map<RegionKey, Long> LAST_REQUESTED = new ConcurrentHashMap<>();
+
+    /** Cap du cache d'infos de survol (colonnes) reçues du serveur. */
+    private static final int HOVER_INFO_CAP = 4096;
+
+    /**
+     * Infos de survol (biome/bloc/Y) reçues du serveur pour les colonnes hors
+     * des chunks chargés localement. LRU borné ; clé = colonne (x, z) packée.
+     * Accédé uniquement depuis le thread client (réception via enqueueWork).
+     */
+    private static final Map<Long, HoverInfo> HOVER_INFO = new LinkedHashMap<>(256, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<Long, HoverInfo> eldest) {
+            return size() > HOVER_INFO_CAP;
+        }
+    };
+
+    public record HoverInfo(int y, String biomeId, String blockId) {}
+
+    /** Clé de colonne pour le cache d'infos de survol. */
+    public static long columnKey(int x, int z) {
+        return ((long) x << 32) | (z & 0xFFFFFFFFL);
+    }
+
+    public static HoverInfo hoverInfo(int x, int z) {
+        return HOVER_INFO.get(columnKey(x, z));
+    }
+
+    public static void putHoverInfo(int x, int z, HoverInfo info) {
+        HOVER_INFO.put(columnKey(x, z), info);
+    }
 
     public record Region(long version, ResourceLocation texture) {}
 
