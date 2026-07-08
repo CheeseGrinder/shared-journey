@@ -53,7 +53,7 @@ import java.util.function.Supplier;
  * - glisser pour se déplacer (pan), molette pour zoomer
  * - clic droit : créer un waypoint à l'endroit cliqué
  * - clic gauche sur un waypoint : l'éditer (nom, couleur, suppression)
- * - bouton (ou touche virgule) pour changer de couche ; +/- pour la bande CAVE
+ * - barre d'icônes en haut pour changer de couche ; +/- en bas pour la bande CAVE
  * Les régions manquantes/périmées visibles sont demandées au serveur (throttle).
  */
 public class FullMapScreen extends Screen {
@@ -80,7 +80,6 @@ public class FullMapScreen extends Screen {
     private int bandIndex;
     private boolean dragged;
 
-    private Button layerButton;
     private Button bandMinus;
     private Button bandPlus;
     /** Boutons du menu contextuel (clic droit), retirés au prochain clic. */
@@ -125,19 +124,12 @@ public class FullMapScreen extends Screen {
 
     @Override
     protected void init() {
-        layerButton = addRenderableWidget(Button.builder(layerLabel(), b -> cycleLayer())
-                .bounds(width / 2 - 60, height - 26, 120, 20)
-                .build());
         bandMinus = addRenderableWidget(Button.builder(Component.literal("-"), b -> changeBand(-1))
-                .bounds(width / 2 - 90, height - 26, 20, 20)
+                .bounds(width / 2 - 46, height - 26, 20, 20)
                 .build());
         bandPlus = addRenderableWidget(Button.builder(Component.literal("+"), b -> changeBand(+1))
-                .bounds(width / 2 + 70, height - 26, 20, 20)
+                .bounds(width / 2 + 26, height - 26, 20, 20)
                 .build());
-        addRenderableWidget(
-                Button.builder(Component.translatable("sharedjourney.fullmap.center"), b -> centerOnPlayer())
-                        .bounds(width - 86, height - 26, 80, 20)
-                        .build());
         contextButtons.clear(); // init() recrée tous les widgets (resize)
         buildTopToolbar();
         buildLeftToolbar();
@@ -231,6 +223,9 @@ public class FullMapScreen extends Screen {
     private int addToggleIcon(int x, int step, Item icon, String tooltipKey, ModConfigSpec.BooleanValue value) {
         IconButton b = addIcon(x, 6, icon, tooltipKey, btn -> {
             value.set(!value.get());
+            // set() ne modifie que la valeur en mémoire : on force l'écriture
+            // du fichier pour que le réglage survive à la session.
+            ClientConfig.SPEC.save();
             refreshToolbar();
         });
         toggleIcons.put(b, value);
@@ -240,7 +235,6 @@ public class FullMapScreen extends Screen {
     private void selectLayer(MapLayer target) {
         layer = target;
         MinimapRenderer.setLayer(target);
-        layerButton.setMessage(layerLabel());
         updateBandButtons();
         refreshToolbar();
     }
@@ -284,26 +278,10 @@ public class FullMapScreen extends Screen {
         }
     }
 
-    private Component layerLabel() {
-        String s = Component.translatable(layer.translationKey()).getString();
-        if (layer == MapLayer.CAVE && !ClientMapCache.caveBands.isEmpty()) {
-            int band = currentBand();
-            s += " y" + (band * 16) + ".." + (band * 16 + 15);
-        }
-        return Component.literal(s);
-    }
-
-    private void cycleLayer() {
-        List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
-        if (allowed.isEmpty()) {
-            return;
-        }
-
-        int idx = allowed.indexOf(layer);
-        layer = allowed.get((idx + 1) % allowed.size());
-        MinimapRenderer.setLayer(layer);
-        layerButton.setMessage(layerLabel());
-        updateBandButtons();
+    /** Plage de y de la bande CAVE courante, affichée entre les boutons - et +. */
+    private String bandLabel() {
+        int band = currentBand();
+        return "y" + (band * 16) + ".." + (band * 16 + 15);
     }
 
     private void changeBand(int delta) {
@@ -313,7 +291,6 @@ public class FullMapScreen extends Screen {
         }
 
         bandIndex = Math.floorMod(bandIndex + delta, bands.size());
-        layerButton.setMessage(layerLabel());
     }
 
     private int currentBand() {
@@ -584,6 +561,9 @@ public class FullMapScreen extends Screen {
         var mc = Minecraft.getInstance();
         renderTopInfoBar(gg, mc);
         renderHoverBar(gg, mc, mouseX, mouseY);
+        if (layer == MapLayer.CAVE && !ClientMapCache.caveBands.isEmpty()) {
+            drawInfoBar(gg, bandLabel(), height - 20);
+        }
         if (showKeys) {
             renderLegend(gg);
         }
@@ -742,8 +722,8 @@ public class FullMapScreen extends Screen {
         pose.popPose();
 
         // Grille de chunks en coordonnées écran (lignes fines de 1 px),
-        // seulement quand un chunk fait au moins quelques pixels.
-        if (ClientConfig.SHOW_GRID.get() && 16 * zoom >= 4f) {
+        // seulement à partir du zoom 1024 (libellé = zoom * 2048).
+        if (ClientConfig.SHOW_GRID.get() && zoom >= 1024f / 2048f) {
             int gridColor = 0x38000000;
             int firstCx = Math.floorDiv((int) Math.floor(worldX(0)), 16);
             int lastCx = Math.floorDiv((int) Math.ceil(worldX(width)), 16) + 1;

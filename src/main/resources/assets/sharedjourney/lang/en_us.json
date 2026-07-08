@@ -14,7 +14,6 @@
   "sharedjourney.layer.auto": "Auto: %s",
 
   "sharedjourney.fullmap.hint": "Drag: pan | Wheel: zoom | Right-click: new waypoint | Click marker: edit",
-  "sharedjourney.fullmap.center": "Center",
   "sharedjourney.waypoint.create": "New waypoint",
   "sharedjourney.waypoint.edit": "Edit waypoint",
   "sharedjourney.waypoint.delete": "Delete",

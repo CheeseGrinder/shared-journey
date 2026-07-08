@@ -287,8 +287,9 @@ public final class MinimapRenderer {
         }
 
         // ---- Grille de chunks (frontières tous les 16 blocs), dans la pose
-        // du contenu : suit rotation et zoom.
-        if (ClientConfig.SHOW_GRID.get()) {
+        // du contenu : suit rotation et zoom. Affichée seulement à partir du
+        // zoom 1.0 (équivalent du libellé 2048 de la carte plein écran).
+        if (ClientConfig.SHOW_GRID.get() && zoom >= 1.0f) {
             int gridColor = 0x38000000;
             int gxStart = Math.floorDiv((int) px - reach, 16) * 16;
             int gzStart = Math.floorDiv((int) pz - reach, 16) * 16;
@@ -348,8 +349,9 @@ public final class MinimapRenderer {
         // haut" (flèche fixe) ; sinon flèche orientée selon le yaw.
         EntityDots.drawPlayerArrow(gg, cx, cy, rotate ? 0f : yaw + 180f, 0.85f);
 
-        // Points cardinaux sur le pourtour, suivant la rotation de la carte.
-        drawCardinals(gg, mc, cx, cy, half - 1, rotate ? -yaw - 180f : 0f);
+        // Points cardinaux en retrait du bord (à l'intérieur de la carte,
+        // pas sur la bordure), suivant la rotation de la carte.
+        drawCardinals(gg, mc, cx, cy, half - 8, rotate ? -yaw - 180f : 0f);
 
         // Libellés (échelle réduite) : heure + période au-dessus de la carte,
         // biome et coordonnées en dessous (ou empilés au-dessus si la carte
@@ -381,7 +383,10 @@ public final class MinimapRenderer {
         }
     }
 
-    /** Texte centré à échelle réduite (les libellés pleine taille mangent l'écran). */
+    /**
+     * Texte centré à échelle réduite (les libellés pleine taille mangent
+     * l'écran), sur fond translucide pour rester lisible quel que soit le décor.
+     */
     private static void drawSmallCentered(GuiGraphics gg, Minecraft mc, String text, int cx, int y, int color) {
         if (text.isEmpty()) {
             return;
@@ -390,11 +395,13 @@ public final class MinimapRenderer {
         gg.pose().pushPose();
         gg.pose().translate(cx, y, 0);
         gg.pose().scale(0.75f, 0.75f, 1f);
+        int w = mc.font.width(text);
+        gg.fill(-w / 2 - 2, -2, w / 2 + 2, 9, 0xA0101010);
         gg.drawCenteredString(mc.font, text, 0, 0, color);
         gg.pose().popPose();
     }
 
-    /** Heure du monde formatée + période (journée, coucher, nuit, lever). */
+    /** Heure du monde formatée (sans secondes) + période (journée, coucher, nuit, lever). */
     private static String timeText(Level level) {
         if (level == null) {
             return "";
@@ -403,8 +410,7 @@ public final class MinimapRenderer {
         long t = Math.floorMod(level.getDayTime(), 24000L);
         int hours = (int) ((t / 1000 + 6) % 24);
         int minutes = (int) (t % 1000 * 60 / 1000);
-        int seconds = (int) (t % 1000 * 3600 / 1000 % 60);
-        return String.format("%02d:%02d:%02d ", hours, minutes, seconds)
+        return String.format("%02d:%02d ", hours, minutes)
                 + Component.translatable(periodKey(t)).getString();
     }
 
@@ -443,10 +449,14 @@ public final class MinimapRenderer {
     }
 
     /**
-     * Lettres N/E/S/W sur le pourtour de la minimap. thetaDeg = rotation du
-     * contenu de la carte (0 = nord en haut) ; les lettres suivent.
+     * Lettres N/E/S/W à l'intérieur de la minimap, sur pastille ronde.
+     * thetaDeg = rotation du contenu de la carte (0 = nord en haut) ;
+     * les lettres suivent.
      */
     private static void drawCardinals(GuiGraphics gg, Minecraft mc, int cx, int cy, float radius, float thetaDeg) {
+        // Les pastilles sont dessinées en mode immédiat : on vide d'abord le
+        // batch GUI en attente pour préserver l'ordre de superposition.
+        gg.flush();
         double theta = Math.toRadians(thetaDeg);
         float cos = (float) Math.cos(theta);
         float sin = (float) Math.sin(theta);
@@ -460,7 +470,7 @@ public final class MinimapRenderer {
     private static void drawCardinal(GuiGraphics gg, Minecraft mc, String letter, float x, float y) {
         int ix = Math.round(x);
         int iy = Math.round(y);
-        gg.fill(ix - 4, iy - 5, ix + 4, iy + 5, 0xA0202020);
+        fillCircle(gg, ix, iy, 6f, 0xA0202020);
         gg.drawCenteredString(mc.font, letter, ix, iy - 4, 0xFFFFFF);
     }
 

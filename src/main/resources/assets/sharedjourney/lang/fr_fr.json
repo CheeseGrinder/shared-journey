@@ -14,7 +14,6 @@
   "sharedjourney.layer.auto": "Auto : %s",
 
   "sharedjourney.fullmap.hint": "Glisser : déplacer | Molette : zoom | Clic droit : waypoint | Clic sur marqueur : éditer",
-  "sharedjourney.fullmap.center": "Centrer",
   "sharedjourney.waypoint.create": "Nouveau waypoint",
   "sharedjourney.waypoint.edit": "Modifier le waypoint",
   "sharedjourney.waypoint.delete": "Supprimer",
