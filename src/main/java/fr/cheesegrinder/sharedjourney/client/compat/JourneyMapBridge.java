@@ -71,6 +71,8 @@ public final class JourneyMapBridge {
 
     private static boolean initialized;
     private static final List<String> loadedPlugins = new ArrayList<>();
+    /** Handlers IClientAPI par modId : sert à resynchroniser les waypoints mutés. */
+    private static final Map<String, ClientApiHandler> HANDLERS = new ConcurrentHashMap<>();
 
     private JourneyMapBridge() {}
 
@@ -221,6 +223,21 @@ public final class JourneyMapBridge {
     }
 
     private static Object waypointCall(Object proxy, BridgeWaypointState st, Method method, Object[] args) {
+        Object result = waypointCallInner(proxy, st, method, args);
+        // Dans le vrai JourneyMap les objets waypoint sont "vivants" : les
+        // mods les mutent (setName après renommage d'une waystone...) SANS
+        // rappeler addWaypoint. On répercute donc chaque mutation vers le
+        // store si ce waypoint a déjà été ajouté.
+        if (method.getName().startsWith("set")) {
+            ClientApiHandler handler = HANDLERS.get(st.modId);
+            if (handler != null) {
+                handler.resyncIfKnown(st.guid, proxy);
+            }
+        }
+        return result;
+    }
+
+    private static Object waypointCallInner(Object proxy, BridgeWaypointState st, Method method, Object[] args) {
         switch (method.getName()) {
             case "getId", "getGuid":
                 return st.guid;
@@ -420,8 +437,10 @@ public final class JourneyMapBridge {
             } catch (Throwable ignored) {
             }
 
-            Object apiProxy = Proxy.newProxyInstance(
-                    apiInterface.getClassLoader(), new Class<?>[] {apiInterface}, new ClientApiHandler(modId));
+            ClientApiHandler handler = new ClientApiHandler(modId);
+            HANDLERS.put(modId, handler);
+            Object apiProxy =
+                    Proxy.newProxyInstance(apiInterface.getClassLoader(), new Class<?>[] {apiInterface}, handler);
 
             // IClientPlugin.initialize(IClientAPI) — on cherche la méthode par nom
             // et compatibilité de paramètre pour tolérer les variations d'API.
@@ -570,6 +589,13 @@ public final class JourneyMapBridge {
         private void warnOnce(String what) {
             if (warnedMethods.add(what)) {
                 LOGGER.info("[Bridge JM] {} a appelé '{}' — non supporté par le bridge, ignoré.", modId, what);
+            }
+        }
+
+        /** Répercute la mutation d'un waypoint déjà ajouté vers le store. */
+        void resyncIfKnown(String guid, Object jmWaypoint) {
+            if (apiWaypoints.containsKey(guid)) {
+                addOrUpdate(jmWaypoint);
             }
         }
 

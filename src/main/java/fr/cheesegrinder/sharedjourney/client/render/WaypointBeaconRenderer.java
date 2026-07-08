@@ -22,6 +22,7 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -60,6 +61,10 @@ public final class WaypointBeaconRenderer {
         PoseStack pose = event.getPoseStack();
         MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
         float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(true);
+        // Deux passes : tous les faisceaux, flush, puis toutes les étiquettes.
+        // Dans un même batch le faisceau (translucide) serait dessiné après le
+        // texte et le masquerait.
+        List<Waypoint> shown = new ArrayList<>();
         for (Waypoint wp : waypoints) {
             if (!wp.visible()) {
                 continue;
@@ -72,8 +77,15 @@ public final class WaypointBeaconRenderer {
                 continue;
             }
 
+            shown.add(wp);
             drawBeam(pose, buffers, cam, mc.level, wp, partialTick);
-            drawLabel(pose, event.getCamera(), buffers, mc.font, cam, wp, dist);
+        }
+        buffers.endBatch();
+
+        for (Waypoint wp : shown) {
+            double dx = wp.x() + 0.5 - cam.x;
+            double dz = wp.z() + 0.5 - cam.z;
+            drawLabel(pose, event.getCamera(), buffers, mc.font, cam, wp, Math.sqrt(dx * dx + dz * dz));
         }
         buffers.endBatch();
     }

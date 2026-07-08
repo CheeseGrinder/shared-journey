@@ -180,7 +180,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
     /** Barre de gauche : recherche de position, suivi du joueur, zoom. */
     private void buildLeftToolbar() {
-        int y = 40;
+        // Sous les contrôles d'overlay des plugins bridgés (train map Create
+        // dessine son toggle en haut à gauche) pour ne pas se chevaucher.
+        int y = 70;
         addIcon(6, y, Items.COMPASS, "sharedjourney.action.locate", b -> {
             locateOpen = !locateOpen;
             updateLocateWidgets();
@@ -239,9 +241,12 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         return x + step;
     }
 
+    /**
+     * Change la couche de la carte plein écran UNIQUEMENT : la minimap garde
+     * sa propre sélection (mode auto jour/nuit/grottes inclus).
+     */
     private void selectLayer(MapLayer target) {
         layer = target;
-        MinimapRenderer.setLayer(target);
         updateBandButtons();
         refreshToolbar();
     }
@@ -426,9 +431,10 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         }
 
         if ((button == 0 || button == 1) && !dragged) {
+            boolean overlays = pluginOverlaysActive();
             // Clic JourneyMap PRE (annulable) : un plugin bridgé (gisements
             // RNS...) peut consommer le clic avant notre traitement.
-            if (JourneyMapFullscreenBridge.fireClick(this, true, mouseX, mouseY, button)) {
+            if (overlays && JourneyMapFullscreenBridge.fireClick(this, true, mouseX, mouseY, button)) {
                 return true;
             }
 
@@ -441,7 +447,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 handled = true;
             }
 
-            JourneyMapFullscreenBridge.fireClick(this, false, mouseX, mouseY, button);
+            if (overlays) {
+                JourneyMapFullscreenBridge.fireClick(this, false, mouseX, mouseY, button);
+            }
             return handled;
         }
         return false;
@@ -589,7 +597,16 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             return;
         }
 
+        // Y de surface : chunk local, sinon cache d'infos de survol reçu du
+        // serveur — jamais un TP à l'aveugle dans le sol.
         int y = surfaceYAt(wx, wz);
+        if (y < 0) {
+            ClientMapCache.HoverInfo info = ClientMapCache.hoverInfo(wx, wz);
+            if (info != null) {
+                y = info.y();
+            }
+        }
+
         String yArg = y >= 0 ? String.valueOf(y) : "~";
         mc.player.connection.sendUnsignedCommand("tp @s " + (wx + 0.5) + " " + yArg + " " + (wz + 0.5));
         onClose();
@@ -788,9 +805,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 return true;
             }
             case GLFW.GLFW_KEY_T -> {
-                // Chat par-dessus la carte : celle-ci reste visible et rouvre
-                // à la fermeture du chat.
-                mc.setScreen(new MapChatScreen(this));
+                // Chat par-dessus la carte, ouvert au PROCHAIN tick : le
+                // caractère 't' de la même frame arrive sinon dans le chat.
+                mc.tell(() -> mc.setScreen(new MapChatScreen(this)));
                 return true;
             }
             case GLFW.GLFW_KEY_EQUAL, GLFW.GLFW_KEY_KP_ADD -> {
@@ -848,12 +865,22 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
     // ------------------------------------------------------------------ rendu
 
+    /**
+     * Overlays des plugins bridgés (trains Create, gisements RNS) actifs :
+     * seulement à partir du zoom 1024 et jamais sur la couche CAVE.
+     */
+    private boolean pluginOverlaysActive() {
+        return zoom >= 1024f / 2048f && layer != MapLayer.CAVE;
+    }
+
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         renderBackgroundLayers(gg);
         // Overlays des plugins JourneyMap bridgés (trains Create, gisements
         // RNS...) : au-dessus de la carte, sous les widgets.
-        JourneyMapFullscreenBridge.fireRender(this, gg, mouseX, mouseY, partialTick);
+        if (pluginOverlaysActive()) {
+            JourneyMapFullscreenBridge.fireRender(this, gg, mouseX, mouseY, partialTick);
+        }
         super.render(gg, mouseX, mouseY, partialTick);
 
         var mc = Minecraft.getInstance();
@@ -900,7 +927,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         int wz = (int) Math.floor(worldZ(mouseY));
         ClientMapCache.HoverInfo info = hoverInfoAt(mc, wx, wz);
         if (info == null) {
-            drawInfoBar(gg, "x: " + wx + ", z: " + wz, height - 14);
+            drawInfoBar(gg, "x: " + wx + ", z: " + wz, height - 24);
             return;
         }
 
@@ -913,7 +940,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         if (!info.biomeId().isEmpty()) {
             sb.append(" ■ ").append(biomeName(info.biomeId()));
         }
-        drawInfoBar(gg, sb.toString(), height - 14);
+        drawInfoBar(gg, sb.toString(), height - 24);
     }
 
     /** Nom localisé d'un biome depuis son identifiant "namespace:path". */
@@ -965,7 +992,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         int boxW = (int) (maxW * scale) + 8;
         int boxH = (int) (lines.size() * lineH * scale) + 6;
         int x0 = width - boxW - 6;
-        int y0 = height - boxH - 6;
+        // Marge basse plus grande : ne pas passer sous la zone du chat.
+        int y0 = height - boxH - 16;
         gg.fill(x0, y0, width - 6, y0 + boxH, 0xA0101010);
         gg.pose().pushPose();
         gg.pose().translate(x0 + 4, y0 + 3, 0);
@@ -1080,8 +1108,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 continue;
             }
 
-            gg.fill(sx - 3, sy - 3, sx + 4, sy + 4, 0xFF000000);
-            gg.fill(sx - 2, sy - 2, sx + 3, sy + 3, 0xFF000000 | wp.colorRgb());
+            EntityDots.drawWaypointDiamond(gg, sx, sy, wp.colorRgb(), 1.2f);
             if (zoom >= 0.5f) {
                 gg.drawCenteredString(font, wp.name(), sx, sy - 13, 0xFFFFFF);
             }

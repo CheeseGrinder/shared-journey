@@ -312,8 +312,7 @@ public final class MinimapRenderer {
                 continue;
             }
 
-            gg.fill(wp.x() - 2, wp.z() - 2, wp.x() + 3, wp.z() + 3, 0xFF000000);
-            gg.fill(wp.x() - 1, wp.z() - 1, wp.x() + 2, wp.z() + 2, 0xFF000000 | wp.colorRgb());
+            EntityDots.drawWaypointDiamond(gg, wp.x(), wp.z(), wp.colorRgb(), 0.9f);
         }
 
         // ---- Radar d'entités (spec §6.1) : rayon plafonné par le serveur
@@ -340,8 +339,10 @@ public final class MinimapRenderer {
         // Overlays des plugins JourneyMap bridgés (rails/trains Create,
         // gisements RNS...) : dessinés dans le scissor de la minimap, via un
         // pose qui ramène le "centre écran" attendu par les plugins sur le
-        // centre de la minimap.
-        JourneyMapFullscreenBridge.fireMinimapRender(gg, cx, cy, px, pz, zoom, layer, rotate ? -yaw - 180f : 0f);
+        // centre de la minimap. Pas d'overlays sur la couche CAVE.
+        if (layer != MapLayer.CAVE) {
+            JourneyMapFullscreenBridge.fireMinimapRender(gg, cx, cy, px, pz, zoom, layer, rotate ? -yaw - 180f : 0f);
+        }
 
         gg.disableScissor();
 

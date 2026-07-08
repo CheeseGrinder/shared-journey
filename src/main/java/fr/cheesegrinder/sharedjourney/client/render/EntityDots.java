@@ -64,6 +64,17 @@ public final class EntityDots {
         gg.fill(x - 1, y - 1, x + 2, y + 2, argb);
     }
 
+    /** Losange de waypoint (style JourneyMap) : carré tourné à 45°, contour sombre. */
+    public static void drawWaypointDiamond(GuiGraphics gg, float x, float y, int rgb, float scale) {
+        gg.pose().pushPose();
+        gg.pose().translate(x, y, 0);
+        gg.pose().mulPose(Axis.ZP.rotationDegrees(45f));
+        gg.pose().scale(scale, scale, 1f);
+        gg.fill(-3, -3, 3, 3, 0xFF000000);
+        gg.fill(-2, -2, 2, 2, 0xFF000000 | rgb);
+        gg.pose().popPose();
+    }
+
     /**
      * Flèche du joueur : triangle blanc bordé de bleu pointant dans la
      * direction donnée (0 = vers le haut de l'écran). Dessin immédiat : le
