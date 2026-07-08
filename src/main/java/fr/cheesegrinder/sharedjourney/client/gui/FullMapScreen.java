@@ -2,6 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.gui;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
+import fr.cheesegrinder.sharedjourney.client.compat.CreateTrainMapBridge;
 import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapFullscreenBridge;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientSetupEvents;
@@ -394,6 +395,14 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         dragged = false;
+        // Widget toggle de la train map Create (dessiné en haut à gauche par
+        // son overlay) : son handler natif ne connaît que l'écran de JM.
+        if (button == 0
+                && pluginOverlaysActive()
+                && CreateTrainMapBridge.handleToggleClick((int) mouseX, (int) mouseY)) {
+            return true;
+        }
+
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true;
         }
@@ -1109,7 +1118,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             }
 
             EntityDots.drawWaypointDiamond(gg, sx, sy, wp.colorRgb(), 1.2f);
-            if (zoom >= 0.5f) {
+            if (zoom >= 0.5f && ClientConfig.SHOW_WAYPOINT_NAMES.get()) {
                 gg.drawCenteredString(font, wp.name(), sx, sy - 13, 0xFFFFFF);
             }
         }

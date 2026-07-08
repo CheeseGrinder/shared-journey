@@ -36,6 +36,13 @@ public final class ClientConfig {
     /** Distance maximale d'affichage d'un beacon. */
     public static ModConfigSpec.IntValue BEACON_MAX_DISTANCE;
 
+    /** Nom des waypoints (carte plein écran + étiquettes des beacons). */
+    public static ModConfigSpec.BooleanValue SHOW_WAYPOINT_NAMES;
+    /** Overlay des trains/rails Create (via le bridge JourneyMap). */
+    public static ModConfigSpec.BooleanValue SHOW_TRAIN_OVERLAY;
+    /** Overlay des gisements Create: Rock & Stone (via le bridge JourneyMap). */
+    public static ModConfigSpec.BooleanValue SHOW_DEPOSIT_OVERLAY;
+
     /** Grille de chunks superposée à la minimap et à la carte plein écran. */
     public static ModConfigSpec.BooleanValue SHOW_GRID;
     /** Autorise la bascule auto vers les couches CAVE quand le joueur est sous terre. */
@@ -92,6 +99,12 @@ public final class ClientConfig {
                 .defineInRange("beaconMinDistance", 4, 0, 512);
         BEACON_MAX_DISTANCE = b.comment("Distance maximale (blocs) d'affichage des beacons.")
                 .defineInRange("beaconMaxDistance", 512, 16, 4096);
+        SHOW_WAYPOINT_NAMES = b.comment("Nom des waypoints (carte plein écran + étiquettes des beacons).")
+                .define("showWaypointNames", true);
+        SHOW_TRAIN_OVERLAY = b.comment("Overlay des trains/rails Create sur les cartes (bridge JourneyMap).")
+                .define("showTrainOverlay", true);
+        SHOW_DEPOSIT_OVERLAY = b.comment("Overlay des gisements Create: Rock & Stone (bridge JourneyMap).")
+                .define("showDepositOverlay", true);
         SHOW_GRID = b.comment("Grille de chunks superposée à la minimap et à la carte plein écran.")
                 .define("showGrid", false);
         SHOW_CAVE = b.comment("Bascule auto vers les couches CAVE quand le joueur est sous terre.")

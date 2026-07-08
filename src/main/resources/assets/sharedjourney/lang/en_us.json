@@ -166,6 +166,13 @@
   "sharedjourney.configuration.beaconMaxDistance": "Beacon Max Distance",
   "sharedjourney.configuration.beaconMaxDistance.tooltip": "Beyond this distance (blocks) the beacon is hidden.",
 
+  "sharedjourney.configuration.showWaypointNames": "Waypoint Names",
+  "sharedjourney.configuration.showWaypointNames.tooltip": "Show waypoint names on the fullscreen map and on beacons (waystones included).",
+  "sharedjourney.configuration.showTrainOverlay": "Create Train Overlay",
+  "sharedjourney.configuration.showTrainOverlay.tooltip": "Show Create tracks, stations and trains on the maps (via the JourneyMap bridge).",
+  "sharedjourney.configuration.showDepositOverlay": "RNS Deposit Overlay",
+  "sharedjourney.configuration.showDepositOverlay.tooltip": "Show discovered Create: Rock & Stone deposits on the maps (via the JourneyMap bridge).",
+
   "sharedjourney.configuration.showGrid": "Show Chunk Grid",
   "sharedjourney.configuration.showGrid.tooltip": "Overlay the chunk grid on the minimap and the fullscreen map.",
 

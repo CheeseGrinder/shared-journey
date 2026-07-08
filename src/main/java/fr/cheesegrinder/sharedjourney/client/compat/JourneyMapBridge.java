@@ -31,6 +31,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Bridge de compatibilité JourneyMap (spec §9).
@@ -365,6 +366,12 @@ public final class JourneyMapBridge {
      * JourneyMap (EventImpl.getListeners), en réflexion pure.
      */
     static void dispatchToRegistry(String registryClassName, String fieldName, Object event) {
+        dispatchToRegistry(registryClassName, fieldName, event, modId -> true);
+    }
+
+    /** Variante filtrée par modId d'abonné (toggles d'overlays de la config). */
+    static void dispatchToRegistry(
+            String registryClassName, String fieldName, Object event, Predicate<String> modIdFilter) {
         try {
             Class<?> registryClass = tryLoad(registryClassName);
             if (registryClass == null) {
@@ -378,6 +385,11 @@ public final class JourneyMapBridge {
             }
 
             for (Object entry : list) {
+                Object listenerModId = entry.getClass().getMethod("modId").invoke(entry);
+                if (!modIdFilter.test(String.valueOf(listenerModId))) {
+                    continue;
+                }
+
                 Object consumer = entry.getClass().getMethod("listener").invoke(entry);
                 if (consumer instanceof Consumer<?> c) {
                     @SuppressWarnings("unchecked")

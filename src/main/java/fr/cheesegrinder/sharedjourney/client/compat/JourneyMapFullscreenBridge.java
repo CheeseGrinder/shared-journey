@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.client.compat;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
+import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -22,6 +23,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * Volet "fullscreen" du bridge JourneyMap : publie, depuis NOTRE carte plein
@@ -95,10 +97,22 @@ public final class JourneyMapFullscreenBridge {
             Object fullscreen = proxyFor(map);
             Object event = renderEventCtor.newInstance(fullscreen, gg, mouseX, mouseY, partialTick);
             JourneyMapBridge.dispatchToRegistry(
-                    "journeymap.api.v2.common.event.FullscreenEventRegistry", "FULLSCREEN_RENDER_EVENT", event);
+                    "journeymap.api.v2.common.event.FullscreenEventRegistry",
+                    "FULLSCREEN_RENDER_EVENT",
+                    event,
+                    overlayFilter());
         } catch (Throwable t) {
             LOGGER.warn("[Bridge JM] Échec du FullscreenRenderEvent : {}", t.toString());
         }
+    }
+
+    /** Toggles d'overlays de la config client, par modId de plugin. */
+    private static Predicate<String> overlayFilter() {
+        return modId -> switch (modId) {
+            case "create" -> ClientConfig.SHOW_TRAIN_OVERLAY.get();
+            case "create_rns" -> ClientConfig.SHOW_DEPOSIT_OVERLAY.get();
+            default -> true;
+        };
     }
 
     /**
@@ -124,7 +138,10 @@ public final class JourneyMapFullscreenBridge {
                     new Point2D.Double(mouseX, mouseY),
                     button);
             JourneyMapBridge.dispatchToRegistry(
-                    "journeymap.api.v2.common.event.FullscreenEventRegistry", "FULLSCREEN_MAP_CLICK_EVENT", event);
+                    "journeymap.api.v2.common.event.FullscreenEventRegistry",
+                    "FULLSCREEN_MAP_CLICK_EVENT",
+                    event,
+                    overlayFilter());
             return Boolean.TRUE.equals(isCancelledMethod.invoke(event));
         } catch (Throwable t) {
             LOGGER.warn("[Bridge JM] Échec du FullscreenMapEvent.ClickEvent : {}", t.toString());

@@ -25,14 +25,14 @@ Tous les joueurs partagent donc exactement la même carte, y compris ce qui a é
 
 ## Architecture (spec §2) — 4 modules Gradle + assemblage
 
-| Module   | Contenu |
-|----------|---------|
-| `api`    | Interfaces publiques : `Waypoint`, `MapLayer`, `ChunkLayerRenderer`, événements `WaypointEvent` (annulable) et `LayerRegisterEvent`. Aucune logique métier. |
+| Module   | Contenu                                                                                                                                                                                                 |
+|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `api`    | Interfaces publiques : `Waypoint`, `MapLayer`, `ChunkLayerRenderer`, événements `WaypointEvent` (annulable) et `LayerRegisterEvent`. Aucune logique métier.                                             |
 | `common` | `RegionKey`, `RegionIndex` (index.json), `Payloads` (paquets réseau + handshake), configs SERVER/COMMON. Ne dépend ni du client ni du serveur : les handlers réseau sont injectés via `Payloads.Hooks`. |
-| `server` | `ChunkColorizer` (rendu des 5 couches), `MapManager` (moteur asynchrone + disque + index), `SyncService` (files d'envoi par joueur), `ServerEvents`, `MapCommands`. |
-| `client` | `DiskCache` (cache local par serveur), `ClientMapCache` (textures), minimap (rotation + radar), carte plein écran (waypoints), `WaypointStore`, commandes client, **bridge JourneyMap**. |
-| `mod`    | Assemblage : classes `@Mod`, métadonnées, runs de dev ; le jar final fusionne les sorties des 4 modules. |
-| `jmshim` | (Optionnel) mod `lowcodefml` déclarant le modId `journeymap` — voir §Bridge. |
+| `server` | `ChunkColorizer` (rendu des 5 couches), `MapManager` (moteur asynchrone + disque + index), `SyncService` (files d'envoi par joueur), `ServerEvents`, `MapCommands`.                                     |
+| `client` | `DiskCache` (cache local par serveur), `ClientMapCache` (textures), minimap (rotation + radar), carte plein écran (waypoints), `WaypointStore`, commandes client, **bridge JourneyMap**.                |
+| `mod`    | Assemblage : classes `@Mod`, métadonnées, runs de dev ; le jar final fusionne les sorties des 4 modules.                                                                                                |
+| `jmshim` | (Optionnel) mod `lowcodefml` déclarant le modId `journeymap` — voir §Bridge.                                                                                                                            |
 
 ## Stockage (spec §3)
 
@@ -93,16 +93,16 @@ world/data/sharedjourney/
 
 ## Commandes (spec §7) — racine unique `/map`
 
-| Commande | Côté | Permission |
-|---|---|---|
-| `/map stats` | serveur | niveau 0 : ses stats ; niveau 2 : moteur + tous les joueurs |
-| `/map stats <joueur>` | serveur | OP |
-| `/map purge <layer\|all>` | **client** | — (supprime le cache local du calque) |
-| `/map cache` | **client** | — (état du cache local) |
-| `/map admin sync force <joueurs\|all> [rx rz]` | serveur | OP — renvoi forcé, ignore l'index ; filtre optionnel sur une région |
-| `/map admin rerender <rayonChunks>` | serveur | OP |
-| `/map admin layer <dim> <couche> <bool>` | serveur | OP |
-| `/map admin save` | serveur | OP |
+| Commande                                       | Côté       | Permission                                                          |
+|------------------------------------------------|------------|---------------------------------------------------------------------|
+| `/map stats`                                   | serveur    | niveau 0 : ses stats ; niveau 2 : moteur + tous les joueurs         |
+| `/map stats <joueur>`                          | serveur    | OP                                                                  |
+| `/map purge <layer\|all>`                      | **client** | — (supprime le cache local du calque)                               |
+| `/map cache`                                   | **client** | — (état du cache local)                                             |
+| `/map admin sync force <joueurs\|all> [rx rz]` | serveur    | OP — renvoi forcé, ignore l'index ; filtre optionnel sur une région |
+| `/map admin rerender <rayonChunks>`            | serveur    | OP                                                                  |
+| `/map admin layer <dim> <couche> <bool>`       | serveur    | OP                                                                  |
+| `/map admin save`                              | serveur    | OP                                                                  |
 
 Le dispatcher client intercepte `purge`/`cache` ; tout autre `/map …` part au serveur.
 

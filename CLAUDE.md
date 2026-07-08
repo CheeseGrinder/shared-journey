@@ -28,27 +28,27 @@ Single Gradle module at the root (`src/main/java`, `src/main/resources`, `src/ma
 
 Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
 
-| Package          | Contents                                                                                  |
-|------------------|-------------------------------------------------------------------------------------------|
-| *(root)*         | `@Mod` entry points: `SharedJourney`, `SharedJourneyClient`                               |
-| `api`            | Public interfaces: `Waypoint`, `MapLayer`, `ChunkLayerRenderer`, `SharedJourneyConstants` |
-| `api.event`      | Custom NeoForge events: `LayerRegisterEvent`, `WaypointEvent`                             |
-| `common.config`  | `CommonConfig`, `ServerConfig` (facade) + per-section `LayersServerConfig`, `EngineServerConfig`, `SyncServerConfig` |
-| `common.network` | `Payloads` (network packets + `Hooks` indirection)                                        |
-| `common.region`  | `RegionKey`, `RegionIndex`, `RegionStorage` (disk layout + legacy migration)              |
-| `common.util`    | `UndergroundCheck` (shared client/server "is underground" rule)                           |
-| `server.command` | `MapCommands` (`/sj`, `/sharedjourney`)                                                   |
-| `server.event`   | `ServerLifecycleEvents`, `PlayerEvents`, `ChunkEvents`, `ConfigEvents`                    |
+| Package          | Contents                                                                                                                                                         |
+|------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| *(root)*         | `@Mod` entry points: `SharedJourney`, `SharedJourneyClient`                                                                                                      |
+| `api`            | Public interfaces: `Waypoint`, `MapLayer`, `ChunkLayerRenderer`, `SharedJourneyConstants`                                                                        |
+| `api.event`      | Custom NeoForge events: `LayerRegisterEvent`, `WaypointEvent`                                                                                                    |
+| `common.config`  | `CommonConfig`, `ServerConfig` (facade) + per-section `LayersServerConfig`, `EngineServerConfig`, `SyncServerConfig`                                             |
+| `common.network` | `Payloads` (network packets + `Hooks` indirection)                                                                                                               |
+| `common.region`  | `RegionKey`, `RegionIndex`, `RegionStorage` (disk layout + legacy migration)                                                                                     |
+| `common.util`    | `UndergroundCheck` (shared client/server "is underground" rule)                                                                                                  |
+| `server.command` | `MapCommands` (`/sj`, `/sharedjourney`)                                                                                                                          |
+| `server.event`   | `ServerLifecycleEvents`, `PlayerEvents`, `ChunkEvents`, `ConfigEvents`                                                                                           |
 | `server.render`  | `ChunkColorizer` (facade) + per-layer renderers (`SurfaceRenderer`, `TopoRenderer`, `BiomeRenderer`, `CaveRenderer`), `BiomeTints`, `RenderContext`, `ColorUtil` |
-| `server.service` | `MapManager` (async engine), `SyncService` (delta sync), `RegenService` (full regen), `CaveTracker` (cave anti-exploit) |
-| `client.command` | `ClientCommands` (`/sj purge`, `/sj cache`, `/sj goto`)                                   |
-| `client.config`  | `ClientConfig`                                                                            |
-| `client.event`   | `ClientSetupEvents` (keys, HUD layer), `ClientInputEvents`, `ClientSessionEvents`         |
-| `client.gui`     | `FullMapScreen`, `WaypointEditScreen`                                                     |
-| `client.net`     | `ClientNetHandler` (payload handlers)                                                     |
-| `client.render`  | `MinimapRenderer` (HUD minimap)                                                           |
-| `client.service` | `ClientMapCache`, `DiskCache`, `WaypointStore`                                            |
-| `client.compat`  | `JourneyMapBridge` (reflection proxy)                                                     |
+| `server.service` | `MapManager` (async engine), `SyncService` (delta sync), `RegenService` (full regen), `CaveTracker` (cave anti-exploit)                                          |
+| `client.command` | `ClientCommands` (`/sj purge`, `/sj cache`, `/sj goto`)                                                                                                          |
+| `client.config`  | `ClientConfig`                                                                                                                                                   |
+| `client.event`   | `ClientSetupEvents` (keys, HUD layer), `ClientInputEvents`, `ClientSessionEvents`                                                                                |
+| `client.gui`     | `FullMapScreen`, `WaypointEditScreen`                                                                                                                            |
+| `client.net`     | `ClientNetHandler` (payload handlers)                                                                                                                            |
+| `client.render`  | `MinimapRenderer` (HUD minimap)                                                                                                                                  |
+| `client.service` | `ClientMapCache`, `DiskCache`, `WaypointStore`                                                                                                                   |
+| `client.compat`  | `JourneyMapBridge` (reflection proxy)                                                                                                                            |
 
 The packages keep the layering discipline of the former multi-module split: `api` has no dependencies, `common` depends only on `api`, `server` and `client` depend on `common` and never on each other.
 

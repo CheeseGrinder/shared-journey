@@ -166,6 +166,13 @@
   "sharedjourney.configuration.beaconMaxDistance": "Distance max des beacons",
   "sharedjourney.configuration.beaconMaxDistance.tooltip": "Au-delà de cette distance (blocs), le beacon est masqué.",
 
+  "sharedjourney.configuration.showWaypointNames": "Nom des waypoints",
+  "sharedjourney.configuration.showWaypointNames.tooltip": "Affiche le nom des waypoints sur la carte plein écran et sur les beacons (waystones incluses).",
+  "sharedjourney.configuration.showTrainOverlay": "Overlay des trains Create",
+  "sharedjourney.configuration.showTrainOverlay.tooltip": "Affiche les rails, gares et trains de Create sur les cartes (via le bridge JourneyMap).",
+  "sharedjourney.configuration.showDepositOverlay": "Overlay des gisements RNS",
+  "sharedjourney.configuration.showDepositOverlay.tooltip": "Affiche les gisements découverts de Create: Rock & Stone sur les cartes (via le bridge JourneyMap).",
+
   "sharedjourney.configuration.showGrid": "Afficher la grille de chunks",
   "sharedjourney.configuration.showGrid.tooltip": "Superpose la grille de chunks à la minimap et à la carte plein écran.",
 

@@ -31,11 +31,17 @@ public final class CreateTrainMapBridge {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
+    /** Position du widget toggle dessiné par la train map (constantes Create). */
+    private static final int TOGGLE_WIDGET_X = 3;
+
+    private static final int TOGGLE_WIDGET_Y = 30;
+
     private static boolean resolved;
     private static boolean available;
     private static Method managerTick;
     private static Method requestData;
     private static Method stopRequesting;
+    private static Method handleToggleWidgetClick;
     private static boolean requesting;
 
     private CreateTrainMapBridge() {}
@@ -49,7 +55,7 @@ public final class CreateTrainMapBridge {
                 && !mc.options.hideGui
                 && ClientInputEvents.minimapVisible
                 && ClientConfig.MINIMAP_ENABLED.get();
-        boolean mapOpen = mc.level != null && (fullMapOpen || minimapShown);
+        boolean mapOpen = mc.level != null && (fullMapOpen || minimapShown) && ClientConfig.SHOW_TRAIN_OVERLAY.get();
         if (mapOpen && JourneyMapBridge.bridgeActive() && resolve()) {
             try {
                 managerTick.invoke(null);
@@ -71,6 +77,26 @@ public final class CreateTrainMapBridge {
         }
     }
 
+    /**
+     * Clic sur le widget toggle que la train map dessine en haut à gauche de
+     * la carte : le handler de Create est gaté sur l'écran interne de
+     * JourneyMap, on rappelle donc sa logique nous-mêmes. Retourne true si le
+     * clic a été consommé.
+     */
+    public static boolean handleToggleClick(int mouseX, int mouseY) {
+        if (!JourneyMapBridge.bridgeActive() || !resolve() || !ClientConfig.SHOW_TRAIN_OVERLAY.get()) {
+            return false;
+        }
+
+        try {
+            return Boolean.TRUE.equals(
+                    handleToggleWidgetClick.invoke(null, mouseX, mouseY, TOGGLE_WIDGET_X, TOGGLE_WIDGET_Y));
+        } catch (Throwable t) {
+            warnAndDisable(t);
+            return false;
+        }
+    }
+
     private static void warnAndDisable(Throwable t) {
         LOGGER.warn("[Bridge JM] Sync de la carte des trains Create en échec, désactivée : {}", t.toString());
         available = false;
@@ -88,6 +114,8 @@ public final class CreateTrainMapBridge {
             managerTick = manager.getMethod("tick");
             requestData = sync.getMethod("requestData");
             stopRequesting = sync.getMethod("stopRequesting");
+            handleToggleWidgetClick =
+                    manager.getMethod("handleToggleWidgetClick", int.class, int.class, int.class, int.class);
             available = true;
             LOGGER.info("[Bridge JM] Carte des trains Create détectée : sync branchée sur la carte SharedJourney.");
         } catch (ClassNotFoundException e) {

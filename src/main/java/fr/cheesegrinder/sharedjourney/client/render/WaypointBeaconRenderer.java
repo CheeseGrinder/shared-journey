@@ -34,8 +34,8 @@ import java.util.List;
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID, value = Dist.CLIENT)
 public final class WaypointBeaconRenderer {
 
-    /** Décalage horizontal de l'étiquette vers la caméra (sort du faisceau). */
-    private static final double LABEL_CAMERA_OFFSET = 0.75;
+    /** Décalage latéral de l'étiquette (blocs) : hors du faisceau (rayon 0.25). */
+    private static final float LABEL_SIDE_OFFSET_BLOCKS = 0.45f;
 
     private WaypointBeaconRenderer() {}
 
@@ -82,10 +82,12 @@ public final class WaypointBeaconRenderer {
         }
         buffers.endBatch();
 
-        for (Waypoint wp : shown) {
-            double dx = wp.x() + 0.5 - cam.x;
-            double dz = wp.z() + 0.5 - cam.z;
-            drawLabel(pose, event.getCamera(), buffers, mc.font, cam, wp, Math.sqrt(dx * dx + dz * dz));
+        if (ClientConfig.SHOW_WAYPOINT_NAMES.get()) {
+            for (Waypoint wp : shown) {
+                double dx = wp.x() + 0.5 - cam.x;
+                double dz = wp.z() + 0.5 - cam.z;
+                drawLabel(pose, event.getCamera(), buffers, mc.font, cam, wp, Math.sqrt(dx * dx + dz * dz));
+            }
         }
         buffers.endBatch();
     }
@@ -121,31 +123,36 @@ public final class WaypointBeaconRenderer {
     }
 
     /**
-     * Étiquette flottante (nom + distance) : 1 bloc au-dessus du sommet du
-     * point (waystone = 2 blocs de haut), légèrement décalée vers la caméra
-     * pour sortir du faisceau et rester lisible. Orientée face caméra et
-     * grossie avec la distance.
+     * Étiquette flottante (nom + distance) : 1 bloc au-dessus du point,
+     * décalée SUR LE CÔTÉ du faisceau (en unités billboard, donc toujours
+     * visuellement hors du faisceau) pour rester lisible. Deux passes comme
+     * les nameplates vanilla : version assombrie visible à travers les blocs,
+     * puis version pleine testée en profondeur.
      */
     private static void drawLabel(
             PoseStack pose, Camera camera, MultiBufferSource buffers, Font font, Vec3 cam, Waypoint wp, double dist) {
         String text = wp.name() + " (" + (int) dist + "m)";
-        double bx = wp.x() + 0.5;
-        double bz = wp.z() + 0.5;
-        double dx = cam.x - bx;
-        double dz = cam.z - bz;
-        double len = Math.sqrt(dx * dx + dz * dz);
-        double offX = len < 0.01 ? 0 : dx / len * LABEL_CAMERA_OFFSET;
-        double offZ = len < 0.01 ? 0 : dz / len * LABEL_CAMERA_OFFSET;
         pose.pushPose();
-        pose.translate(bx - cam.x + offX, wp.y() + 3.0 - cam.y, bz - cam.z + offZ);
+        pose.translate(wp.x() + 0.5 - cam.x, wp.y() + 1.0 - cam.y, wp.z() + 0.5 - cam.z);
         pose.mulPose(camera.rotation());
         float scale = 0.025f * (float) Math.max(1.0, dist / 12.0);
         pose.scale(scale, -scale, scale);
         Matrix4f mat = pose.last().pose();
-        float xOff = -font.width(text) / 2f;
-        int bg = 0x66000000;
+        // Bord gauche du texte à ~0.45 bloc du centre : hors du faisceau (rayon 0.25).
+        float xStart = LABEL_SIDE_OFFSET_BLOCKS / scale;
         font.drawInBatch(
-                text, xOff, 0, 0xFFFFFFFF, false, mat, buffers, Font.DisplayMode.SEE_THROUGH, bg, LightTexture.FULL_BRIGHT);
+                text,
+                xStart,
+                -4,
+                0x20FFFFFF,
+                false,
+                mat,
+                buffers,
+                Font.DisplayMode.SEE_THROUGH,
+                0x80000000,
+                LightTexture.FULL_BRIGHT);
+        font.drawInBatch(
+                text, xStart, -4, 0xFFFFFFFF, false, mat, buffers, Font.DisplayMode.NORMAL, 0, LightTexture.FULL_BRIGHT);
         pose.popPose();
     }
 }
