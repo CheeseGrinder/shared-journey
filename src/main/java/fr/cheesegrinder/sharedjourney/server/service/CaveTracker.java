@@ -55,8 +55,9 @@ public final class CaveTracker {
         // Sous terre uniquement (bloc solide au-dessus des yeux — fluides et
         // feuilles exclus) : marcher en surface, nager ou plonger en mer
         // ouverte ne doit pas révéler la bande traversée. Même règle que la
-        // bascule auto de la minimap côté client.
-        if (!UndergroundCheck.isUnderground(level, player)) {
+        // bascule auto de la minimap côté client. Exception : les spectateurs
+        // (admins en cartographie) déverrouillent sans cette règle.
+        if (!player.isSpectator() && !UndergroundCheck.isUnderground(level, player)) {
             return;
         }
 

@@ -87,6 +87,7 @@ public final class EntityDots {
     private static void triangle(GuiGraphics gg, int argb, float x1, float y1, float x2, float y2, float x3, float y3) {
         Matrix4f mat = gg.pose().last().pose();
         RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferBuilder buf =
                 Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);

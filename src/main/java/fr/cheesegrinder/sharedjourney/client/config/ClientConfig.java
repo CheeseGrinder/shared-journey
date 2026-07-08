@@ -29,6 +29,13 @@ public final class ClientConfig {
     /** Rayon (blocs) auquel un waypoint temporaire est considéré atteint et supprimé. */
     public static ModConfigSpec.IntValue TEMP_WAYPOINT_RADIUS;
 
+    /** Beacons de waypoints dans le monde : faisceau vertical + nom/distance. */
+    public static ModConfigSpec.BooleanValue WAYPOINT_BEACONS;
+    /** Distance minimale d'affichage d'un beacon (évite d'aveugler de près). */
+    public static ModConfigSpec.IntValue BEACON_MIN_DISTANCE;
+    /** Distance maximale d'affichage d'un beacon. */
+    public static ModConfigSpec.IntValue BEACON_MAX_DISTANCE;
+
     /** Grille de chunks superposée à la minimap et à la carte plein écran. */
     public static ModConfigSpec.BooleanValue SHOW_GRID;
     /** Autorise la bascule auto vers les couches CAVE quand le joueur est sous terre. */
@@ -79,6 +86,12 @@ public final class ClientConfig {
         TEMP_WAYPOINT_RADIUS = b.comment(
                         "Rayon (blocs) auquel un waypoint temporaire est considéré atteint et supprimé.")
                 .defineInRange("tempWaypointRadius", 8, 1, 128);
+        WAYPOINT_BEACONS = b.comment("Beacons de waypoints dans le monde (faisceau vertical + nom et distance).")
+                .define("waypointBeacons", true);
+        BEACON_MIN_DISTANCE = b.comment("Distance minimale (blocs) d'affichage des beacons.")
+                .defineInRange("beaconMinDistance", 4, 0, 512);
+        BEACON_MAX_DISTANCE = b.comment("Distance maximale (blocs) d'affichage des beacons.")
+                .defineInRange("beaconMaxDistance", 512, 16, 4096);
         SHOW_GRID = b.comment("Grille de chunks superposée à la minimap et à la carte plein écran.")
                 .define("showGrid", false);
         SHOW_CAVE = b.comment("Bascule auto vers les couches CAVE quand le joueur est sous terre.")

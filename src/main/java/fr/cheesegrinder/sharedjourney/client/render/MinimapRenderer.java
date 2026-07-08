@@ -263,6 +263,12 @@ public final class MinimapRenderer {
         int minRz = Math.floorDiv((int) pz - reach, RegionKey.REGION_BLOCKS);
         int maxRz = Math.floorDiv((int) pz + reach, RegionKey.REGION_BLOCKS);
 
+        // Ancre le contenu sur la position exacte (double) du joueur : tout
+        // est ensuite dessiné en coordonnées monde. L'ancien arrondi entier
+        // par tuile/ligne faisait scintiller des traits aux jointures de
+        // régions quand le joueur bougeait.
+        gg.pose().translate((float) (cx - px), (float) (cy - pz), 0f);
+
         for (int rx = minRx; rx <= maxRx; rx++) {
             for (int rz = minRz; rz <= maxRz; rz++) {
                 RegionKey key = new RegionKey(dim, layer, layer == MapLayer.CAVE ? band : 0, rx, rz);
@@ -271,12 +277,10 @@ public final class MinimapRenderer {
                     continue;
                 }
 
-                int drawX = cx + (int) Math.floor(rx * (double) RegionKey.REGION_BLOCKS - px);
-                int drawY = cy + (int) Math.floor(rz * (double) RegionKey.REGION_BLOCKS - pz);
                 gg.blit(
                         region.texture(),
-                        drawX,
-                        drawY,
+                        rx * RegionKey.REGION_BLOCKS,
+                        rz * RegionKey.REGION_BLOCKS,
                         0f,
                         0f,
                         RegionKey.REGION_BLOCKS,
@@ -294,12 +298,10 @@ public final class MinimapRenderer {
             int gxStart = Math.floorDiv((int) px - reach, 16) * 16;
             int gzStart = Math.floorDiv((int) pz - reach, 16) * 16;
             for (int gx = gxStart; gx <= (int) px + reach; gx += 16) {
-                int sx = cx + (int) Math.floor(gx - px);
-                gg.fill(sx, cy - reach, sx + 1, cy + reach, gridColor);
+                gg.fill(gx, (int) pz - reach, gx + 1, (int) pz + reach, gridColor);
             }
             for (int gz = gzStart; gz <= (int) pz + reach; gz += 16) {
-                int sy = cy + (int) Math.floor(gz - pz);
-                gg.fill(cx - reach, sy, cx + reach, sy + 1, gridColor);
+                gg.fill((int) px - reach, gz, (int) px + reach, gz + 1, gridColor);
             }
         }
 
@@ -309,10 +311,8 @@ public final class MinimapRenderer {
                 continue;
             }
 
-            int dx = cx + (int) Math.floor(wp.x() - px);
-            int dy = cy + (int) Math.floor(wp.z() - pz);
-            gg.fill(dx - 2, dy - 2, dx + 3, dy + 3, 0xFF000000);
-            gg.fill(dx - 1, dy - 1, dx + 2, dy + 2, 0xFF000000 | wp.colorRgb());
+            gg.fill(wp.x() - 2, wp.z() - 2, wp.x() + 3, wp.z() + 3, 0xFF000000);
+            gg.fill(wp.x() - 1, wp.z() - 1, wp.x() + 2, wp.z() + 2, 0xFF000000 | wp.colorRgb());
         }
 
         // ---- Radar d'entités (spec §6.1) : rayon plafonné par le serveur
@@ -330,7 +330,7 @@ public final class MinimapRenderer {
                     continue;
                 }
 
-                EntityDots.draw(gg, cx + (int) Math.floor(ex), cy + (int) Math.floor(ez), color);
+                EntityDots.draw(gg, (int) Math.floor(e.getX()), (int) Math.floor(e.getZ()), color);
             }
         }
 
@@ -470,7 +470,7 @@ public final class MinimapRenderer {
     private static void drawCardinal(GuiGraphics gg, Minecraft mc, String letter, float x, float y) {
         int ix = Math.round(x);
         int iy = Math.round(y);
-        fillCircle(gg, ix, iy, 5f, 0xA0202020);
+        fillCircle(gg, ix, iy, 5f, 0xB0101010);
         // Lettre à échelle réduite pour tenir dans la pastille.
         gg.pose().pushPose();
         gg.pose().translate(ix, iy, 0);
@@ -485,6 +485,9 @@ public final class MinimapRenderer {
     private static void fillCircle(GuiGraphics gg, float cx, float cy, float radius, int argb) {
         Matrix4f mat = gg.pose().last().pose();
         RenderSystem.enableBlend();
+        // Le blend func global peut avoir été altéré par un rendu précédent
+        // (l'alpha des pastilles disparaissait) : on le restaure.
+        RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferBuilder buf =
                 Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
@@ -501,6 +504,7 @@ public final class MinimapRenderer {
     private static void drawRing(GuiGraphics gg, float cx, float cy, float rIn, float rOut, int argb) {
         Matrix4f mat = gg.pose().last().pose();
         RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferBuilder buf =
                 Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);

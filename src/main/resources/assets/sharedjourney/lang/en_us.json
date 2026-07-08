@@ -159,6 +159,13 @@
   "sharedjourney.configuration.tempWaypointRadius": "Temp Waypoint Radius",
   "sharedjourney.configuration.tempWaypointRadius.tooltip": "Distance (blocks) at which a temporary waypoint is considered reached and deleted.",
 
+  "sharedjourney.configuration.waypointBeacons": "Waypoint Beacons",
+  "sharedjourney.configuration.waypointBeacons.tooltip": "Show a vertical beam and the waypoint name in the world.",
+  "sharedjourney.configuration.beaconMinDistance": "Beacon Min Distance",
+  "sharedjourney.configuration.beaconMinDistance.tooltip": "Below this distance (blocks) the beacon is hidden.",
+  "sharedjourney.configuration.beaconMaxDistance": "Beacon Max Distance",
+  "sharedjourney.configuration.beaconMaxDistance.tooltip": "Beyond this distance (blocks) the beacon is hidden.",
+
   "sharedjourney.configuration.showGrid": "Show Chunk Grid",
   "sharedjourney.configuration.showGrid.tooltip": "Overlay the chunk grid on the minimap and the fullscreen map.",
 

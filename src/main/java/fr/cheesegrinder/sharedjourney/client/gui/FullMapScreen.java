@@ -15,6 +15,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
@@ -87,8 +88,7 @@ public class FullMapScreen extends Screen {
     private int bandIndex;
     private boolean dragged;
 
-    private Button bandMinus;
-    private Button bandPlus;
+    private BandSlider bandSlider;
     /** Boutons du menu contextuel (clic droit), retirés au prochain clic. */
     private final List<Button> contextButtons = new ArrayList<>();
 
@@ -138,12 +138,7 @@ public class FullMapScreen extends Screen {
 
     @Override
     protected void init() {
-        bandMinus = addRenderableWidget(Button.builder(Component.literal("-"), b -> changeBand(-1))
-                .bounds(width / 2 - 46, height - 26, 20, 20)
-                .build());
-        bandPlus = addRenderableWidget(Button.builder(Component.literal("+"), b -> changeBand(+1))
-                .bounds(width / 2 + 26, height - 26, 20, 20)
-                .build());
+        bandSlider = addRenderableWidget(new BandSlider(width / 2 - 75, height - 40, 150, 20));
         contextButtons.clear(); // init() recrée tous les widgets (resize)
         buildTopToolbar();
         buildLeftToolbar();
@@ -292,19 +287,10 @@ public class FullMapScreen extends Screen {
         }
     }
 
-    /** Plage de y de la bande CAVE courante, affichée entre les boutons - et +. */
+    /** Plage de y de la bande CAVE courante, affichée sur le slider. */
     private String bandLabel() {
         int band = currentBand();
         return "y" + (band * 16) + ".." + (band * 16 + 15);
-    }
-
-    private void changeBand(int delta) {
-        List<Integer> bands = ClientMapCache.caveBands;
-        if (bands.isEmpty()) {
-            return;
-        }
-
-        bandIndex = Math.floorMod(bandIndex + delta, bands.size());
     }
 
     private int currentBand() {
@@ -318,9 +304,7 @@ public class FullMapScreen extends Screen {
     }
 
     private void updateBandButtons() {
-        boolean cave = layer == MapLayer.CAVE;
-        bandMinus.visible = cave;
-        bandPlus.visible = cave;
+        bandSlider.visible = layer == MapLayer.CAVE && !ClientMapCache.caveBands.isEmpty();
     }
 
     // ------------------------------------------------------------------ conversions écran <-> monde
@@ -794,9 +778,6 @@ public class FullMapScreen extends Screen {
         var mc = Minecraft.getInstance();
         renderTopInfoBar(gg, mc);
         renderHoverBar(gg, mc, mouseX, mouseY);
-        if (layer == MapLayer.CAVE && !ClientMapCache.caveBands.isEmpty()) {
-            drawInfoBar(gg, bandLabel(), height - 20);
-        }
         if (showKeys) {
             renderLegend(gg);
         }
@@ -832,13 +813,13 @@ public class FullMapScreen extends Screen {
         drawInfoBar(gg, text, 30);
     }
 
-    /** Barre au-dessus des actions du bas : bloc survolé ■ position ■ biome. */
+    /** Barre en bas de l'écran : bloc survolé ■ position ■ biome. */
     private void renderHoverBar(GuiGraphics gg, Minecraft mc, int mouseX, int mouseY) {
         int wx = (int) Math.floor(worldX(mouseX));
         int wz = (int) Math.floor(worldZ(mouseY));
         ClientMapCache.HoverInfo info = hoverInfoAt(mc, wx, wz);
         if (info == null) {
-            drawInfoBar(gg, "x: " + wx + ", z: " + wz, height - 40);
+            drawInfoBar(gg, "x: " + wx + ", z: " + wz, height - 14);
             return;
         }
 
@@ -851,7 +832,7 @@ public class FullMapScreen extends Screen {
         if (!info.biomeId().isEmpty()) {
             sb.append(" ■ ").append(biomeName(info.biomeId()));
         }
-        drawInfoBar(gg, sb.toString(), height - 40);
+        drawInfoBar(gg, sb.toString(), height - 14);
     }
 
     /** Nom localisé d'un biome depuis son identifiant "namespace:path". */
@@ -896,13 +877,24 @@ public class FullMapScreen extends Screen {
         for (String line : lines) {
             maxW = Math.max(maxW, font.width(line));
         }
-        int x = width - maxW - 10;
-        int y = height - 44 - lines.size() * 10;
-        gg.fill(x - 4, y - 4, width - 6, y + lines.size() * 10 + 2, 0xA0101010);
+
+        // Échelle réduite, calée en bas à droite de l'écran.
+        float scale = 0.75f;
+        int lineH = 10;
+        int boxW = (int) (maxW * scale) + 8;
+        int boxH = (int) (lines.size() * lineH * scale) + 6;
+        int x0 = width - boxW - 6;
+        int y0 = height - boxH - 6;
+        gg.fill(x0, y0, width - 6, y0 + boxH, 0xA0101010);
+        gg.pose().pushPose();
+        gg.pose().translate(x0 + 4, y0 + 3, 0);
+        gg.pose().scale(scale, scale, 1f);
+        int y = 0;
         for (String line : lines) {
-            gg.drawString(font, line, x, y, 0xE0E0E0);
-            y += 10;
+            gg.drawString(font, line, 0, y, 0xE0E0E0);
+            y += lineH;
         }
+        gg.pose().popPose();
     }
 
     private void renderBackgroundLayers(GuiGraphics gg) {
@@ -1052,5 +1044,39 @@ public class FullMapScreen extends Screen {
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    /** Slider de sélection de la bande CAVE, visible seulement en couche CAVE. */
+    private class BandSlider extends AbstractSliderButton {
+
+        BandSlider(int x, int y, int w, int h) {
+            super(x, y, w, h, Component.empty(), 0);
+            syncFromIndex();
+        }
+
+        /** Aligne le curseur sur la bande courante (ouverture, resize). */
+        private void syncFromIndex() {
+            int count = ClientMapCache.caveBands.size();
+            if (count > 1) {
+                value = bandIndex / (double) (count - 1);
+            } else {
+                value = 0;
+            }
+
+            updateMessage();
+        }
+
+        @Override
+        protected void updateMessage() {
+            setMessage(Component.literal(bandLabel()));
+        }
+
+        @Override
+        protected void applyValue() {
+            int count = ClientMapCache.caveBands.size();
+            if (count > 0) {
+                bandIndex = (int) Math.round(value * (count - 1));
+            }
+        }
     }
 }
