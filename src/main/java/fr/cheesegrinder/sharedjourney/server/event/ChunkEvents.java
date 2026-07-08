@@ -102,6 +102,17 @@ public final class ChunkEvents {
         markDirty(event);
     }
 
+    /**
+     * Modifications programmatiques (sans entité) : rails de Create posés par
+     * snap/extension, machines, mods... Break/EntityPlace ne les voient pas ;
+     * la notification de voisinage accompagne tout setBlock avec UPDATE. Le
+     * coût est absorbé par la déduplication de la file de chunks sales.
+     */
+    @SubscribeEvent
+    public static void onNeighborNotify(BlockEvent.NeighborNotifyEvent event) {
+        markDirty(event);
+    }
+
     /** Pistons : le train de blocs déplacés peut traverser une frontière de chunk. */
     @SubscribeEvent
     public static void onPistonMove(PistonEvent.Post event) {

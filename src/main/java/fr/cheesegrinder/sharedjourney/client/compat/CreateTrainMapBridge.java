@@ -1,6 +1,8 @@
 package fr.cheesegrinder.sharedjourney.client.compat;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
+import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
 import fr.cheesegrinder.sharedjourney.client.gui.FullMapScreen;
 
 import net.minecraft.client.Minecraft;
@@ -41,7 +43,13 @@ public final class CreateTrainMapBridge {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
-        boolean mapOpen = mc.level != null && mc.screen instanceof FullMapScreen;
+        boolean fullMapOpen = mc.screen instanceof FullMapScreen;
+        // La minimap affiche aussi les overlays trains : il lui faut les données.
+        boolean minimapShown = mc.screen == null
+                && !mc.options.hideGui
+                && ClientInputEvents.minimapVisible
+                && ClientConfig.MINIMAP_ENABLED.get();
+        boolean mapOpen = mc.level != null && (fullMapOpen || minimapShown);
         if (mapOpen && JourneyMapBridge.bridgeActive() && resolve()) {
             try {
                 managerTick.invoke(null);

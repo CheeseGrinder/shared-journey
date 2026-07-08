@@ -458,6 +458,13 @@ public final class JourneyMapBridge {
         private final String modId;
         /** JM guid/objet -> notre UUID, pour retrouver les waypoints à supprimer. */
         private final Map<String, UUID> knownWaypoints = new ConcurrentHashMap<>();
+        /**
+         * Objets Waypoint (API) ajoutés, par guid : sert getWaypoint et
+         * getAllWaypoints. Indispensable pour que les mods (Waystones)
+         * retrouvent et METTENT À JOUR leurs waypoints au lieu d'en recréer
+         * un à chaque changement (doublons superposés sinon).
+         */
+        private final Map<String, Object> apiWaypoints = new ConcurrentHashMap<>();
 
         private final Set<String> warnedMethods = ConcurrentHashMap.newKeySet();
 
@@ -489,10 +496,15 @@ public final class JourneyMapBridge {
                         return null;
                     }
                     case "getAllWaypoints", "getWaypoints" -> {
-                        return List.of();
+                        return List.copyOf(apiWaypoints.values());
                     }
                     case "getWaypoint" -> {
-                        return null;
+                        // (modId, guid/id) : retrouve l'objet ajouté précédemment.
+                        if (args == null || args.length == 0) {
+                            return null;
+                        }
+
+                        return apiWaypoints.get(String.valueOf(args[args.length - 1]));
                     }
 
                     // ---- Displayable générique (v1 et overlays v2)
@@ -515,6 +527,7 @@ public final class JourneyMapBridge {
                         return null;
                     }
                     case "removeAll" -> {
+                        apiWaypoints.clear();
                         WaypointStore.removeBySource(modId);
                         return null;
                     }
@@ -592,6 +605,7 @@ public final class JourneyMapBridge {
             int color = intOf(call(jmWaypoint, "getColor"), 0x00FFFF & (name.hashCode() | 0x404040));
             ResourceLocation dim = dimOf(jmWaypoint);
 
+            apiWaypoints.put(guid, jmWaypoint);
             UUID id = knownWaypoints.computeIfAbsent(guid, g -> UUID.nameUUIDFromBytes((modId + "|" + g).getBytes()));
             Waypoint wp = new Waypoint(
                     id,
@@ -613,7 +627,9 @@ public final class JourneyMapBridge {
         }
 
         private void removeWaypoint(Object jmWaypoint) {
-            UUID id = knownWaypoints.remove(guidOf(jmWaypoint));
+            String guid = guidOf(jmWaypoint);
+            apiWaypoints.remove(guid);
+            UUID id = knownWaypoints.remove(guid);
             if (id != null) {
                 WaypointStore.remove(id);
             }

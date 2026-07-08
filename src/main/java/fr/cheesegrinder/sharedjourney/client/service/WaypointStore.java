@@ -175,6 +175,13 @@ public final class WaypointStore {
 
             for (JsonElement el : arr) {
                 JsonObject o = el.getAsJsonObject();
+                // Seuls les waypoints "user" sont persistés : ceux des mods
+                // bridgés (Waystones...) sont resynchronisés à chaque session
+                // par leur mod. Purge aussi les doublons d'anciennes versions.
+                if (o.has("source") && !"user".equals(o.get("source").getAsString())) {
+                    continue;
+                }
+
                 ResourceLocation dim =
                         ResourceLocation.tryParse(o.get("dimension").getAsString());
                 if (dim == null) {
@@ -219,6 +226,11 @@ public final class WaypointStore {
 
         JsonArray arr = new JsonArray();
         for (Waypoint wp : WAYPOINTS.values()) {
+            // Les waypoints des mods bridgés sont volatils (voir load()).
+            if (!"user".equals(wp.source())) {
+                continue;
+            }
+
             JsonObject o = new JsonObject();
             o.addProperty("id", wp.id().toString());
             o.addProperty("name", wp.name());

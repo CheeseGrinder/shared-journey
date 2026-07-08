@@ -62,7 +62,7 @@ import java.util.function.Supplier;
  * - barre d'icônes en haut pour changer de couche ; +/- en bas pour la bande CAVE
  * Les régions manquantes/périmées visibles sont demandées au serveur (throttle).
  */
-public class FullMapScreen extends Screen {
+public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.BridgedMapView {
 
     private static final long REQUEST_COOLDOWN_MS = 5_000;
     private static final int WAYPOINT_CLICK_PX = 6;
@@ -325,36 +325,63 @@ public class FullMapScreen extends Screen {
         return height / 2.0 + (wz - centerZ) * zoom;
     }
 
-    // ------------------------------------------------------------------ accès pour le bridge JourneyMap (IFullscreen)
+    // ------------------------------------------------------------------ vue pour le bridge JourneyMap (IFullscreen)
 
+    @Override
+    public Screen screen() {
+        return this;
+    }
+
+    @Override
+    public int viewWidth() {
+        return width;
+    }
+
+    @Override
+    public int viewHeight() {
+        return height;
+    }
+
+    @Override
     public double centerX() {
         return centerX;
     }
 
+    @Override
     public double centerZ() {
         return centerZ;
     }
 
     /** Zoom courant en pixels écran par bloc. */
+    @Override
     public float zoomScale() {
         return zoom;
     }
 
+    @Override
     public MapLayer currentLayer() {
         return layer;
     }
 
+    @Override
     public void centerOn(double x, double z) {
         centerX = x;
         centerZ = z;
     }
 
-    public void zoomInStep() {
+    @Override
+    public void zoomIn() {
         zoomStep(1, width / 2.0, height / 2.0);
     }
 
-    public void zoomOutStep() {
+    @Override
+    public void zoomOut() {
         zoomStep(-1, width / 2.0, height / 2.0);
+    }
+
+    @Override
+    public void close() {
+        onClose();
     }
 
     // ------------------------------------------------------------------ interactions
@@ -372,13 +399,19 @@ public class FullMapScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        // Les widgets d'abord (slider de bande CAVE...) : sinon glisser leur
+        // curseur déplace la carte derrière.
+        if (super.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
+            return true;
+        }
+
         if (button == 0) {
             dragged = true;
             centerX -= dragX / zoom;
             centerZ -= dragY / zoom;
             return true;
         }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        return false;
     }
 
     @Override
@@ -755,7 +788,9 @@ public class FullMapScreen extends Screen {
                 return true;
             }
             case GLFW.GLFW_KEY_T -> {
-                mc.setScreen(new ChatScreen(""));
+                // Chat par-dessus la carte : celle-ci reste visible et rouvre
+                // à la fermeture du chat.
+                mc.setScreen(new MapChatScreen(this));
                 return true;
             }
             case GLFW.GLFW_KEY_EQUAL, GLFW.GLFW_KEY_KP_ADD -> {
@@ -1090,6 +1125,38 @@ public class FullMapScreen extends Screen {
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    /**
+     * Chat ouvert PAR-DESSUS la carte : la carte reste rendue en arrière-plan
+     * et se rouvre quand le chat se ferme (Échap ou envoi du message), au
+     * lieu d'être perdue.
+     */
+    private static class MapChatScreen extends ChatScreen {
+
+        private final FullMapScreen parent;
+
+        MapChatScreen(FullMapScreen parent) {
+            super("");
+            this.parent = parent;
+        }
+
+        @Override
+        public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
+            // La carte derrière (sans interaction), puis le chat par-dessus.
+            parent.render(gg, -1, -1, partialTick);
+            super.render(gg, mouseX, mouseY, partialTick);
+        }
+
+        @Override
+        public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+            boolean handled = super.keyPressed(keyCode, scanCode, modifiers);
+            // Le vanilla ferme le chat en posant screen=null : on rouvre la carte.
+            if (minecraft != null && minecraft.screen == null) {
+                minecraft.setScreen(parent);
+            }
+            return handled;
+        }
     }
 
     /** Slider de sélection de la bande CAVE, visible seulement en couche CAVE. */

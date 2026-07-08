@@ -2,6 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.render;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
+import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapFullscreenBridge;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
@@ -335,6 +336,13 @@ public final class MinimapRenderer {
         }
 
         gg.pose().popPose();
+
+        // Overlays des plugins JourneyMap bridgés (rails/trains Create,
+        // gisements RNS...) : dessinés dans le scissor de la minimap, via un
+        // pose qui ramène le "centre écran" attendu par les plugins sur le
+        // centre de la minimap.
+        JourneyMapFullscreenBridge.fireMinimapRender(gg, cx, cy, px, pz, zoom, layer, rotate ? -yaw - 180f : 0f);
+
         gg.disableScissor();
 
         if (circle) {

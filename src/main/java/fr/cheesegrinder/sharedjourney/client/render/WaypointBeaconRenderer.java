@@ -8,9 +8,9 @@ import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.blockentity.BeaconRenderer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
@@ -19,30 +19,22 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.BufferUploader;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.Tesselator;
-import com.mojang.blaze3d.vertex.VertexFormat;
 import org.joml.Matrix4f;
 
 import java.util.List;
 
 /**
- * Beacons de waypoints dans le monde : faisceau vertical translucide de la
- * couleur du waypoint (deux quads croisés, toute la hauteur du monde) et
- * étiquette flottante (nom + distance) visible à travers les blocs.
+ * Beacons de waypoints dans le monde : faisceau de beacon VANILLA (texture
+ * animée, cœur opaque + halo) teinté de la couleur du waypoint, et étiquette
+ * flottante (nom + distance) visible à travers les blocs.
  * Affichés entre les distances min et max de la config client.
  */
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID, value = Dist.CLIENT)
 public final class WaypointBeaconRenderer {
 
-    /** Demi-largeur (blocs) des quads du faisceau. */
-    private static final float BEAM_HALF_WIDTH = 0.3f;
-
-    private static final int BEAM_ALPHA = 0x60;
+    /** Décalage horizontal de l'étiquette vers la caméra (sort du faisceau). */
+    private static final double LABEL_CAMERA_OFFSET = 0.75;
 
     private WaypointBeaconRenderer() {}
 
@@ -67,6 +59,7 @@ public final class WaypointBeaconRenderer {
         Vec3 cam = event.getCamera().getPosition();
         PoseStack pose = event.getPoseStack();
         MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
+        float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(true);
         for (Waypoint wp : waypoints) {
             if (!wp.visible()) {
                 continue;
@@ -79,55 +72,60 @@ public final class WaypointBeaconRenderer {
                 continue;
             }
 
-            drawBeam(pose, cam, mc.level, wp);
+            drawBeam(pose, buffers, cam, mc.level, wp, partialTick);
             drawLabel(pose, event.getCamera(), buffers, mc.font, cam, wp, dist);
         }
         buffers.endBatch();
     }
 
-    /** Faisceau vertical : deux quads croisés sur toute la hauteur du monde. */
-    private static void drawBeam(PoseStack pose, Vec3 cam, Level level, Waypoint wp) {
+    /**
+     * Faisceau de beacon vanilla (même rendu que le bloc beacon : texture
+     * animée, cœur opaque + halo translucide), teinté de la couleur du
+     * waypoint, sur toute la hauteur du monde.
+     */
+    private static void drawBeam(
+            PoseStack pose,
+            MultiBufferSource.BufferSource buffers,
+            Vec3 cam,
+            Level level,
+            Waypoint wp,
+            float partialTick) {
         pose.pushPose();
-        pose.translate(wp.x() + 0.5 - cam.x, 0, wp.z() + 0.5 - cam.z);
-        Matrix4f mat = pose.last().pose();
-        float y0 = (float) (level.getMinBuildHeight() - cam.y);
-        float y1 = (float) (level.getMaxBuildHeight() - cam.y);
-        int argb = (BEAM_ALPHA << 24) | wp.colorRgb();
-
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.enableDepthTest();
-        RenderSystem.depthMask(false);
-        RenderSystem.disableCull();
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        BufferBuilder buf =
-                Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
-        // Plan orienté X puis plan orienté Z.
-        buf.addVertex(mat, -BEAM_HALF_WIDTH, y0, 0).setColor(argb);
-        buf.addVertex(mat, -BEAM_HALF_WIDTH, y1, 0).setColor(argb);
-        buf.addVertex(mat, BEAM_HALF_WIDTH, y1, 0).setColor(argb);
-        buf.addVertex(mat, BEAM_HALF_WIDTH, y0, 0).setColor(argb);
-        buf.addVertex(mat, 0, y0, -BEAM_HALF_WIDTH).setColor(argb);
-        buf.addVertex(mat, 0, y1, -BEAM_HALF_WIDTH).setColor(argb);
-        buf.addVertex(mat, 0, y1, BEAM_HALF_WIDTH).setColor(argb);
-        buf.addVertex(mat, 0, y0, BEAM_HALF_WIDTH).setColor(argb);
-        BufferUploader.drawWithShader(buf.buildOrThrow());
-        RenderSystem.enableCull();
-        RenderSystem.depthMask(true);
+        pose.translate(wp.x() - cam.x, level.getMinBuildHeight() - cam.y, wp.z() - cam.z);
+        int height = level.getMaxBuildHeight() - level.getMinBuildHeight();
+        BeaconRenderer.renderBeaconBeam(
+                pose,
+                buffers,
+                BeaconRenderer.BEAM_LOCATION,
+                partialTick,
+                1.0f,
+                level.getGameTime(),
+                0,
+                height,
+                0xFF000000 | wp.colorRgb(),
+                0.2f,
+                0.25f);
         pose.popPose();
     }
 
     /**
-     * Étiquette flottante (nom + distance) accrochée au faisceau À HAUTEUR
-     * DES YEUX (comme JourneyMap) : sa position ne dépend ni de l'altitude
-     * du waypoint ni de l'angle de vue. Orientée face caméra et grossie avec
-     * la distance pour rester lisible de loin.
+     * Étiquette flottante (nom + distance) : 1 bloc au-dessus du sommet du
+     * point (waystone = 2 blocs de haut), légèrement décalée vers la caméra
+     * pour sortir du faisceau et rester lisible. Orientée face caméra et
+     * grossie avec la distance.
      */
     private static void drawLabel(
             PoseStack pose, Camera camera, MultiBufferSource buffers, Font font, Vec3 cam, Waypoint wp, double dist) {
         String text = wp.name() + " (" + (int) dist + "m)";
+        double bx = wp.x() + 0.5;
+        double bz = wp.z() + 0.5;
+        double dx = cam.x - bx;
+        double dz = cam.z - bz;
+        double len = Math.sqrt(dx * dx + dz * dz);
+        double offX = len < 0.01 ? 0 : dx / len * LABEL_CAMERA_OFFSET;
+        double offZ = len < 0.01 ? 0 : dz / len * LABEL_CAMERA_OFFSET;
         pose.pushPose();
-        pose.translate(wp.x() + 0.5 - cam.x, 0, wp.z() + 0.5 - cam.z);
+        pose.translate(bx - cam.x + offX, wp.y() + 3.0 - cam.y, bz - cam.z + offZ);
         pose.mulPose(camera.rotation());
         float scale = 0.025f * (float) Math.max(1.0, dist / 12.0);
         pose.scale(scale, -scale, scale);
