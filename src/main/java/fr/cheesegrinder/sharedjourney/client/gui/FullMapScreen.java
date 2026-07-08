@@ -566,18 +566,36 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         int rows = 5;
         int sy = Math.min(menuY, height - rows * (h + 1) - 4);
-        addContextButton(sx, sy, w, h, "sharedjourney.context.waypoint", () -> createWaypointAt(
-                wx, wz, Waypoint.Type.DIMENSION));
-        addContextButton(sx, sy + (h + 1), w, h, "sharedjourney.context.waypoint_temp", () -> createTempWaypointAt(
-                wx, wz));
-        addContextButton(sx, sy + 2 * (h + 1), w, h, "sharedjourney.context.waypoint_global", () -> createWaypointAt(
-                wx, wz, Waypoint.Type.GLOBAL));
         addContextButton(
-                sx, sy + 3 * (h + 1), w, h, "sharedjourney.context.show_all", () -> WaypointStore.setAllVisible(
-                        dim, true));
+                sx,
+                sy,
+                w,
+                h,
+                "sharedjourney.context.waypoint",
+                () -> createWaypointAt(wx, wz, Waypoint.Type.DIMENSION));
         addContextButton(
-                sx, sy + 4 * (h + 1), w, h, "sharedjourney.context.hide_all", () -> WaypointStore.setAllVisible(
-                        dim, false));
+                sx, sy + (h + 1), w, h, "sharedjourney.context.waypoint_temp", () -> createTempWaypointAt(wx, wz));
+        addContextButton(
+                sx,
+                sy + 2 * (h + 1),
+                w,
+                h,
+                "sharedjourney.context.waypoint_global",
+                () -> createWaypointAt(wx, wz, Waypoint.Type.GLOBAL));
+        addContextButton(
+                sx,
+                sy + 3 * (h + 1),
+                w,
+                h,
+                "sharedjourney.context.show_all",
+                () -> WaypointStore.setAllVisible(dim, true));
+        addContextButton(
+                sx,
+                sy + 4 * (h + 1),
+                w,
+                h,
+                "sharedjourney.context.hide_all",
+                () -> WaypointStore.setAllVisible(dim, false));
     }
 
     private void addContextButton(int x, int y, int w, int h, String key, Runnable action) {

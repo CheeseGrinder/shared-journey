@@ -132,11 +132,7 @@ public final class JourneyMapFullscreenBridge {
         try {
             BlockPos pos = new BlockPos((int) Math.floor(map.worldX(mouseX)), 0, (int) Math.floor(map.worldZ(mouseY)));
             Object event = clickEventCtor.newInstance(
-                    pre ? stagePre : stagePost,
-                    pos,
-                    mc.level.dimension(),
-                    new Point2D.Double(mouseX, mouseY),
-                    button);
+                    pre ? stagePre : stagePost, pos, mc.level.dimension(), new Point2D.Double(mouseX, mouseY), button);
             JourneyMapBridge.dispatchToRegistry(
                     "journeymap.api.v2.common.event.FullscreenEventRegistry",
                     "FULLSCREEN_MAP_CLICK_EVENT",
@@ -237,7 +233,12 @@ public final class JourneyMapFullscreenBridge {
 
     /** Vue minimap : centre = joueur, dimensions = écran (pose translatée). */
     private record MinimapView(
-            Screen screen, int viewWidth, int viewHeight, double centerX, double centerZ, float zoomScale,
+            Screen screen,
+            int viewWidth,
+            int viewHeight,
+            double centerX,
+            double centerZ,
+            float zoomScale,
             MapLayer currentLayer)
             implements BridgedMapView {
 
@@ -275,8 +276,8 @@ public final class JourneyMapFullscreenBridge {
         int zoom512 = (int) Math.round(map.zoomScale() * guiScale * 512.0);
         Object mapType = MAP_TYPES.get(map.currentLayer());
         BlockPos center = new BlockPos((int) Math.floor(map.centerX()), 0, (int) Math.floor(map.centerZ()));
-        AABB blockBounds = new AABB(
-                map.worldX(0), 0, map.worldZ(0), map.worldX(map.viewWidth()), 0, map.worldZ(map.viewHeight()));
+        AABB blockBounds =
+                new AABB(map.worldX(0), 0, map.worldZ(0), map.worldX(map.viewWidth()), 0, map.worldZ(map.viewHeight()));
         Rectangle2D.Double displayBounds =
                 new Rectangle2D.Double(0, 0, map.viewWidth() * guiScale, map.viewHeight() * guiScale);
         return uiStateCtor.newInstance(

@@ -50,7 +50,8 @@ public final class WaypointBeaconRenderer {
             return;
         }
 
-        List<Waypoint> waypoints = WaypointStore.forDimension(mc.level.dimension().location());
+        List<Waypoint> waypoints =
+                WaypointStore.forDimension(mc.level.dimension().location());
         if (waypoints.isEmpty()) {
             return;
         }

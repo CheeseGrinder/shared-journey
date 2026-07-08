@@ -23,6 +23,7 @@ public final class ClientConfig {
     public static ModConfigSpec.BooleanValue RADAR_PLAYERS;
     /** Demande au serveur d'être caché de la carte des AUTRES joueurs. */
     public static ModConfigSpec.BooleanValue HIDE_FROM_MAP;
+
     public static ModConfigSpec.BooleanValue RADAR_HOSTILE;
     public static ModConfigSpec.BooleanValue RADAR_PASSIVE;
     public static ModConfigSpec.BooleanValue RADAR_PETS;
