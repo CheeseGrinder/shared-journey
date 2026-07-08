@@ -110,7 +110,7 @@ public class FullMapScreen extends Screen {
         layer = MinimapRenderer.displayedLayer();
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
         if (!allowed.isEmpty() && !allowed.contains(layer)) {
-            layer = allowed.get(0);
+            layer = allowed.getFirst();
         }
 
         bandIndex = Math.max(0, ClientMapCache.caveBands.indexOf(MinimapRenderer.currentCaveBand()));
@@ -233,7 +233,7 @@ public class FullMapScreen extends Screen {
             value.set(!value.get());
             refreshToolbar();
         });
-        toggleIcons.put(b, value::get);
+        toggleIcons.put(b, value);
         return x + step;
     }
 
@@ -269,7 +269,7 @@ public class FullMapScreen extends Screen {
     private void zoomStep(int direction, double anchorX, double anchorY) {
         float old = zoom;
         float target = direction > 0 ? zoom * 2f : zoom / 2f;
-        zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, target));
+        zoom = Math.clamp(target, ZOOM_MIN, ZOOM_MAX);
         double wx = centerX + (anchorX - width / 2.0) / old;
         double wz = centerZ + (anchorY - height / 2.0) / old;
         centerX = wx - (anchorX - width / 2.0) / zoom;

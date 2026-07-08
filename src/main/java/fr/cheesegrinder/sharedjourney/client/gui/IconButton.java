@@ -6,6 +6,8 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Bouton carré à icône d'item (style barre d'actions JourneyMap) avec
  * tooltip et état "sélectionné" (contour surligné) pour les toggles et la
@@ -27,7 +29,7 @@ public class IconButton extends Button {
     }
 
     @Override
-    protected void renderWidget(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
+    protected void renderWidget(@NotNull GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         super.renderWidget(gg, mouseX, mouseY, partialTick);
         gg.renderItem(icon, getX() + (width - 16) / 2, getY() + (height - 16) / 2);
         if (selected) {

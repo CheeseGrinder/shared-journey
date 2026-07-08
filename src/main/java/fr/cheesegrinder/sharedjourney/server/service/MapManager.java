@@ -105,7 +105,7 @@ public final class MapManager {
 
         // Formule d'allocation de la spec §4.
         int cores = Runtime.getRuntime().availableProcessors();
-        this.workerCount = Math.max(1, Math.min(cores - 2, EngineServerConfig.MAX_WORKER_THREADS.get()));
+        this.workerCount = Math.clamp(EngineServerConfig.MAX_WORKER_THREADS.get(), 1, cores - 2);
         this.workers = Executors.newFixedThreadPool(workerCount, r -> {
             Thread t = new Thread(r, "SharedJourney-Render");
             t.setDaemon(true);

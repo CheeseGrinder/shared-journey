@@ -20,7 +20,7 @@ import org.lwjgl.glfw.GLFW;
  * Enregistrements du bus MOD : raccourcis clavier et couche HUD de la
  * minimap. Les touches sont consommées dans {@link ClientInputEvents}.
  */
-@EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
+@EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID, value = Dist.CLIENT)
 public final class ClientSetupEvents {
 
     public static final KeyMapping OPEN_FULL_MAP = new KeyMapping(

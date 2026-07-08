@@ -98,7 +98,7 @@ public final class MinimapRenderer {
             return MapLayer.DAY;
         }
 
-        return allowed.get(0);
+        return allowed.getFirst();
     }
 
     /**
@@ -123,7 +123,7 @@ public final class MinimapRenderer {
 
         if (autoMode()) {
             autoMode = false;
-            currentLayer = allowed.get(0);
+            currentLayer = allowed.getFirst();
             return;
         }
 
@@ -188,7 +188,7 @@ public final class MinimapRenderer {
         MapLayer layer = displayedLayer();
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
         if (!allowed.isEmpty() && !allowed.contains(layer)) {
-            layer = allowed.get(0);
+            layer = allowed.getFirst();
         }
 
         int size = ClientConfig.MINIMAP_SIZE.get();

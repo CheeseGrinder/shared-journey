@@ -11,6 +11,8 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Édition d'un waypoint (spec §6.2) : nom, couleur (palette), visibilité,
  * suppression. Sert aussi à la création (creating=true).
@@ -112,7 +114,7 @@ public class WaypointEditScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
+    public void render(@NotNull GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         super.render(gg, mouseX, mouseY, partialTick);
         int cx = width / 2;
         int y = height / 2 - 40;
