@@ -19,10 +19,15 @@ public final class ClientNetHandler {
                 payload.key(), payload.version(), payload.part(), payload.totalParts(), payload.data());
     }
 
-    public static void handleMapInfoReply(Payloads.MapInfoReplyPayload payload) {
-        ClientMapCache.putHoverInfo(
-                payload.x(),
-                payload.z(),
-                new ClientMapCache.HoverInfo(payload.y(), payload.biomeId(), payload.blockId()));
+    public static void handleMapInfoChunk(Payloads.MapInfoChunkPayload payload) {
+        ClientMapCache.putHoverChunk(
+                payload.chunkX(),
+                payload.chunkZ(),
+                new ClientMapCache.HoverChunk(
+                        payload.heights(),
+                        payload.blockIdx(),
+                        payload.blockPalette(),
+                        payload.biomeIdx(),
+                        payload.biomePalette()));
     }
 }

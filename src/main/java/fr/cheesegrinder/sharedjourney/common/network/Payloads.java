@@ -41,7 +41,7 @@ public final class Payloads {
     public static final class Hooks {
         public static Consumer<LayerSettingsPayload> clientLayerSettings = p -> {};
         public static Consumer<RegionDataPayload> clientRegionData = p -> {};
-        public static Consumer<MapInfoReplyPayload> clientMapInfoReply = p -> {};
+        public static Consumer<MapInfoChunkPayload> clientMapInfoChunk = p -> {};
         public static BiConsumer<Player, RegionRequestPayload> serverRegionRequest = (pl, p) -> {};
         public static BiConsumer<Player, ClientIndexPayload> serverClientIndex = (pl, p) -> {};
         public static BiConsumer<Player, MapInfoRequestPayload> serverMapInfoRequest = (pl, p) -> {};
@@ -243,21 +243,74 @@ public final class Payloads {
         }
     }
 
-    /** Infos d'une colonne pour l'affichage au survol (identifiants vides si inconnus). */
-    public record MapInfoReplyPayload(int x, int z, int y, String biomeId, String blockId)
+    /**
+     * Infos de survol d'un chunk ENTIER (256 colonnes) : hauteurs, bloc de
+     * surface par colonne et biome par cellule 4x4, palettisés (~1 Ko). Une
+     * seule réponse rend le survol instantané sur tout le chunk.
+     */
+    public record MapInfoChunkPayload(
+            int chunkX,
+            int chunkZ,
+            short[] heights,
+            byte[] blockIdx,
+            List<String> blockPalette,
+            byte[] biomeIdx,
+            List<String> biomePalette)
             implements CustomPacketPayload {
-        public static final Type<MapInfoReplyPayload> TYPE = new Type<>(id("map_info_reply"));
 
-        public static final StreamCodec<FriendlyByteBuf, MapInfoReplyPayload> CODEC = StreamCodec.of(
-                (buf, p) -> {
-                    buf.writeInt(p.x);
-                    buf.writeInt(p.z);
-                    buf.writeInt(p.y);
-                    buf.writeUtf(p.biomeId);
-                    buf.writeUtf(p.blockId);
-                },
-                buf -> new MapInfoReplyPayload(
-                        buf.readInt(), buf.readInt(), buf.readInt(), buf.readUtf(), buf.readUtf()));
+        public static final int COLUMNS = 256;
+        public static final int BIOME_CELLS = 16;
+
+        public static final Type<MapInfoChunkPayload> TYPE = new Type<>(id("map_info_chunk"));
+
+        public static final StreamCodec<FriendlyByteBuf, MapInfoChunkPayload> CODEC =
+                StreamCodec.of(MapInfoChunkPayload::write, MapInfoChunkPayload::read);
+
+        private static void write(FriendlyByteBuf buf, MapInfoChunkPayload p) {
+            buf.writeVarInt(p.chunkX);
+            buf.writeVarInt(p.chunkZ);
+            for (short h : p.heights) {
+                buf.writeShort(h);
+            }
+
+            buf.writeBytes(p.blockIdx);
+            writePalette(buf, p.blockPalette);
+            buf.writeBytes(p.biomeIdx);
+            writePalette(buf, p.biomePalette);
+        }
+
+        private static MapInfoChunkPayload read(FriendlyByteBuf buf) {
+            int cx = buf.readVarInt();
+            int cz = buf.readVarInt();
+            short[] heights = new short[COLUMNS];
+            for (int i = 0; i < COLUMNS; i++) {
+                heights[i] = buf.readShort();
+            }
+
+            byte[] blockIdx = new byte[COLUMNS];
+            buf.readBytes(blockIdx);
+            List<String> blockPalette = readPalette(buf);
+            byte[] biomeIdx = new byte[BIOME_CELLS];
+            buf.readBytes(biomeIdx);
+            List<String> biomePalette = readPalette(buf);
+            return new MapInfoChunkPayload(cx, cz, heights, blockIdx, blockPalette, biomeIdx, biomePalette);
+        }
+
+        private static void writePalette(FriendlyByteBuf buf, List<String> palette) {
+            buf.writeVarInt(palette.size());
+            for (String s : palette) {
+                buf.writeUtf(s);
+            }
+        }
+
+        private static List<String> readPalette(FriendlyByteBuf buf) {
+            int size = buf.readVarInt();
+            List<String> palette = new ArrayList<>(size);
+            for (int i = 0; i < size; i++) {
+                palette.add(buf.readUtf());
+            }
+            return palette;
+        }
 
         @Override
         public @NotNull Type<? extends CustomPacketPayload> type() {
@@ -292,9 +345,9 @@ public final class Payloads {
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.serverClientIndex.accept(ctx.player(), payload)));
 
         registrar.playToClient(
-                MapInfoReplyPayload.TYPE,
-                MapInfoReplyPayload.CODEC,
-                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientMapInfoReply.accept(payload)));
+                MapInfoChunkPayload.TYPE,
+                MapInfoChunkPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientMapInfoChunk.accept(payload)));
 
         registrar.playToServer(
                 MapInfoRequestPayload.TYPE,

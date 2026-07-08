@@ -2,6 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.gui;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
+import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapFullscreenBridge;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientSetupEvents;
 import fr.cheesegrinder.sharedjourney.client.render.EntityDots;
@@ -102,10 +103,6 @@ public class FullMapScreen extends Screen {
     private Button locateGo;
     private boolean locateOpen;
 
-    // Throttle des requêtes d'infos de survol (colonne + horodatage).
-    private long lastInfoRequestKey = Long.MIN_VALUE;
-    private long lastInfoRequestAt;
-
     // Bloc sélectionné (simple clic) et suivi du double-clic.
     private boolean hasSelection;
     private int selectedBlockX;
@@ -200,13 +197,14 @@ public class FullMapScreen extends Screen {
         addRenderableWidget(locateGo);
         updateLocateWidgets();
 
-        addIcon(6, y + 24, Items.ENDER_EYE, "sharedjourney.action.follow", b -> centerOnPlayer());
+        // Boutons empilés au même pas (22 px) pour une colonne régulière.
+        addIcon(6, y + 22, Items.ENDER_EYE, "sharedjourney.action.follow", b -> centerOnPlayer());
         addRenderableWidget(Button.builder(Component.literal("+"), b -> zoomStep(1, width / 2.0, height / 2.0))
-                .bounds(6, y + 48, 20, 20)
+                .bounds(6, y + 44, 20, 20)
                 .tooltip(Tooltip.create(Component.translatable("sharedjourney.action.zoom_in")))
                 .build());
         addRenderableWidget(Button.builder(Component.literal("-"), b -> zoomStep(-1, width / 2.0, height / 2.0))
-                .bounds(6, y + 72, 20, 20)
+                .bounds(6, y + 66, 20, 20)
                 .tooltip(Tooltip.create(Component.translatable("sharedjourney.action.zoom_out")))
                 .build());
     }
@@ -309,11 +307,13 @@ public class FullMapScreen extends Screen {
 
     // ------------------------------------------------------------------ conversions écran <-> monde
 
-    private double worldX(double mouseX) {
+    /** Conversion écran -> monde (publique : utilisée par le bridge JourneyMap). */
+    public double worldX(double mouseX) {
         return centerX + (mouseX - width / 2.0) / zoom;
     }
 
-    private double worldZ(double mouseY) {
+    /** Conversion écran -> monde (publique : utilisée par le bridge JourneyMap). */
+    public double worldZ(double mouseY) {
         return centerZ + (mouseY - height / 2.0) / zoom;
     }
 
@@ -323,6 +323,38 @@ public class FullMapScreen extends Screen {
 
     private double screenY(double wz) {
         return height / 2.0 + (wz - centerZ) * zoom;
+    }
+
+    // ------------------------------------------------------------------ accès pour le bridge JourneyMap (IFullscreen)
+
+    public double centerX() {
+        return centerX;
+    }
+
+    public double centerZ() {
+        return centerZ;
+    }
+
+    /** Zoom courant en pixels écran par bloc. */
+    public float zoomScale() {
+        return zoom;
+    }
+
+    public MapLayer currentLayer() {
+        return layer;
+    }
+
+    public void centerOn(double x, double z) {
+        centerX = x;
+        centerZ = z;
+    }
+
+    public void zoomInStep() {
+        zoomStep(1, width / 2.0, height / 2.0);
+    }
+
+    public void zoomOutStep() {
+        zoomStep(-1, width / 2.0, height / 2.0);
     }
 
     // ------------------------------------------------------------------ interactions
@@ -360,14 +392,24 @@ public class FullMapScreen extends Screen {
             return false;
         }
 
-        if (button == 0 && !dragged) {
-            return handleLeftClick(mc, mouseX, mouseY);
-        }
+        if ((button == 0 || button == 1) && !dragged) {
+            // Clic JourneyMap PRE (annulable) : un plugin bridgé (gisements
+            // RNS...) peut consommer le clic avant notre traitement.
+            if (JourneyMapFullscreenBridge.fireClick(this, true, mouseX, mouseY, button)) {
+                return true;
+            }
 
-        if (button == 1 && !dragged) {
-            // Clic droit : menu contextuel (TP, waypoints, position dans le chat)
-            openContextMenu(mouseX, mouseY);
-            return true;
+            boolean handled;
+            if (button == 0) {
+                handled = handleLeftClick(mc, mouseX, mouseY);
+            } else {
+                // Clic droit : menu contextuel (TP, waypoints, position dans le chat)
+                openContextMenu(mouseX, mouseY);
+                handled = true;
+            }
+
+            JourneyMapFullscreenBridge.fireClick(this, false, mouseX, mouseY, button);
+            return handled;
         }
         return false;
     }
@@ -580,7 +622,9 @@ public class FullMapScreen extends Screen {
 
     /**
      * Infos de la colonne survolée : lues du chunk local s'il est chargé,
-     * sinon du cache des réponses serveur (avec requête throttlée si absent).
+     * sinon du cache des chunks d'infos reçus du serveur. Sur cache absent,
+     * le chunk survolé est demandé immédiatement et ses 8 voisins sont
+     * préchargés pour que le déplacement du curseur reste instantané.
      */
     private ClientMapCache.HoverInfo hoverInfoAt(Minecraft mc, int wx, int wz) {
         if (mc.level == null) {
@@ -604,21 +648,20 @@ public class FullMapScreen extends Screen {
         }
 
         ClientMapCache.HoverInfo cached = ClientMapCache.hoverInfo(wx, wz);
-        if (cached != null) {
-            return cached;
+        int cx = wx >> 4;
+        int cz = wz >> 4;
+        if (cached == null) {
+            ClientMapCache.requestHoverChunk(cx, cz, true);
         }
 
-        // Requête au serveur, throttlée : une par colonne survolée, re-tentée
-        // au plus toutes les 500 ms si la réponse n'est pas encore arrivée.
-        long key = ClientMapCache.columnKey(wx, wz);
-        long now = System.currentTimeMillis();
-        if (key != lastInfoRequestKey || now - lastInfoRequestAt > 500) {
-            lastInfoRequestKey = key;
-            lastInfoRequestAt = now;
-            PacketDistributor.sendToServer(new Payloads.MapInfoRequestPayload(wx, wz));
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (dx != 0 || dz != 0) {
+                    ClientMapCache.requestHoverChunk(cx + dx, cz + dz, false);
+                }
+            }
         }
-
-        return null;
+        return cached;
     }
 
     private Waypoint nearestWaypoint(double mouseX, double mouseY) {
@@ -773,6 +816,9 @@ public class FullMapScreen extends Screen {
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         renderBackgroundLayers(gg);
+        // Overlays des plugins JourneyMap bridgés (trains Create, gisements
+        // RNS...) : au-dessus de la carte, sous les widgets.
+        JourneyMapFullscreenBridge.fireRender(this, gg, mouseX, mouseY, partialTick);
         super.render(gg, mouseX, mouseY, partialTick);
 
         var mc = Minecraft.getInstance();

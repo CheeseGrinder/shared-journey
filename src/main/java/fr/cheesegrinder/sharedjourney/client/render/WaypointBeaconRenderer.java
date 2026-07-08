@@ -118,14 +118,16 @@ public final class WaypointBeaconRenderer {
     }
 
     /**
-     * Étiquette flottante (nom + distance) au-dessus du point, orientée face
-     * caméra et grossie avec la distance pour rester lisible de loin.
+     * Étiquette flottante (nom + distance) accrochée au faisceau À HAUTEUR
+     * DES YEUX (comme JourneyMap) : sa position ne dépend ni de l'altitude
+     * du waypoint ni de l'angle de vue. Orientée face caméra et grossie avec
+     * la distance pour rester lisible de loin.
      */
     private static void drawLabel(
             PoseStack pose, Camera camera, MultiBufferSource buffers, Font font, Vec3 cam, Waypoint wp, double dist) {
         String text = wp.name() + " (" + (int) dist + "m)";
         pose.pushPose();
-        pose.translate(wp.x() + 0.5 - cam.x, wp.y() + 1.2 - cam.y, wp.z() + 0.5 - cam.z);
+        pose.translate(wp.x() + 0.5 - cam.x, 0, wp.z() + 0.5 - cam.z);
         pose.mulPose(camera.rotation());
         float scale = 0.025f * (float) Math.max(1.0, dist / 12.0);
         pose.scale(scale, -scale, scale);

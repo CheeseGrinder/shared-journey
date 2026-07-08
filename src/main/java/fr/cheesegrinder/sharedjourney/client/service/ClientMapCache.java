@@ -2,11 +2,14 @@ package fr.cheesegrinder.sharedjourney.client.service;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
+import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
+
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.logging.LogUtils;
@@ -43,34 +46,97 @@ public final class ClientMapCache {
     /** Anti-spam de requêtes à la demande. */
     public static final Map<RegionKey, Long> LAST_REQUESTED = new ConcurrentHashMap<>();
 
-    /** Cap du cache d'infos de survol (colonnes) reçues du serveur. */
-    private static final int HOVER_INFO_CAP = 4096;
+    /** Cap du cache d'infos de survol (chunks entiers de 256 colonnes). */
+    private static final int HOVER_CHUNK_CAP = 512;
+
+    /** Nouvelle tentative pour un chunk déjà demandé sans réponse (ms). */
+    private static final long HOVER_RETRY_MS = 3_000;
+
+    /** Espacement des préchargements de chunks voisins (ms, anti-spam serveur). */
+    private static final long HOVER_PREFETCH_SPACING_MS = 60;
 
     /**
-     * Infos de survol (biome/bloc/Y) reçues du serveur pour les colonnes hors
-     * des chunks chargés localement. LRU borné ; clé = colonne (x, z) packée.
+     * Infos de survol (biome/bloc/Y) reçues du serveur pour les chunks hors
+     * de la zone chargée localement. LRU borné ; clé = chunk (cx, cz) packé.
      * Accédé uniquement depuis le thread client (réception via enqueueWork).
      */
-    private static final Map<Long, HoverInfo> HOVER_INFO = new LinkedHashMap<>(256, 0.75f, true) {
+    private static final Map<Long, HoverChunk> HOVER_CHUNKS = new LinkedHashMap<>(64, 0.75f, true) {
         @Override
-        protected boolean removeEldestEntry(Map.Entry<Long, HoverInfo> eldest) {
-            return size() > HOVER_INFO_CAP;
+        protected boolean removeEldestEntry(Map.Entry<Long, HoverChunk> eldest) {
+            return size() > HOVER_CHUNK_CAP;
         }
     };
 
+    /** Anti-spam des requêtes de survol : dernier envoi par chunk. */
+    private static final Map<Long, Long> HOVER_REQUESTED = new ConcurrentHashMap<>();
+
+    private static long lastHoverRequestAt;
+
     public record HoverInfo(int y, String biomeId, String blockId) {}
 
-    /** Clé de colonne pour le cache d'infos de survol. */
-    public static long columnKey(int x, int z) {
-        return ((long) x << 32) | (z & 0xFFFFFFFFL);
+    /** Chunk d'infos de survol palettisé, tel que reçu du serveur. */
+    public record HoverChunk(
+            short[] heights, byte[] blockIdx, List<String> blockPalette, byte[] biomeIdx, List<String> biomePalette) {
+
+        HoverInfo at(int wx, int wz) {
+            int i = (wz & 15) * 16 + (wx & 15);
+            String block = palette(blockPalette, blockIdx[i]);
+            String biome = palette(biomePalette, biomeIdx[((wz & 15) >> 2) * 4 + ((wx & 15) >> 2)]);
+            return new HoverInfo(heights[i], biome, block);
+        }
+
+        private static String palette(List<String> palette, byte idx) {
+            int i = idx & 0xFF;
+            if (i < palette.size()) {
+                return palette.get(i);
+            }
+
+            return "";
+        }
     }
 
-    public static HoverInfo hoverInfo(int x, int z) {
-        return HOVER_INFO.get(columnKey(x, z));
+    /** Clé de chunk pour le cache d'infos de survol. */
+    public static long chunkKey(int cx, int cz) {
+        return ((long) cx << 32) | (cz & 0xFFFFFFFFL);
     }
 
-    public static void putHoverInfo(int x, int z, HoverInfo info) {
-        HOVER_INFO.put(columnKey(x, z), info);
+    public static HoverInfo hoverInfo(int wx, int wz) {
+        HoverChunk chunk = HOVER_CHUNKS.get(chunkKey(wx >> 4, wz >> 4));
+        if (chunk == null) {
+            return null;
+        }
+
+        return chunk.at(wx, wz);
+    }
+
+    public static void putHoverChunk(int cx, int cz, HoverChunk chunk) {
+        HOVER_CHUNKS.put(chunkKey(cx, cz), chunk);
+    }
+
+    /**
+     * Demande (throttlée) les infos de survol d'un chunk. Le chunk sous le
+     * curseur part immédiatement (immediate=true) ; les préchargements des
+     * voisins sont espacés pour respecter l'anti-spam du serveur.
+     */
+    public static void requestHoverChunk(int cx, int cz, boolean immediate) {
+        long key = chunkKey(cx, cz);
+        if (HOVER_CHUNKS.containsKey(key)) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        Long last = HOVER_REQUESTED.get(key);
+        if (last != null && now - last < HOVER_RETRY_MS) {
+            return;
+        }
+
+        if (!immediate && now - lastHoverRequestAt < HOVER_PREFETCH_SPACING_MS) {
+            return;
+        }
+
+        lastHoverRequestAt = now;
+        HOVER_REQUESTED.put(key, now);
+        PacketDistributor.sendToServer(new Payloads.MapInfoRequestPayload(cx << 4, cz << 4));
     }
 
     public record Region(long version, ResourceLocation texture) {}
@@ -145,6 +211,8 @@ public final class ClientMapCache {
         PENDING.clear();
         DISK_MISSES.clear();
         LAST_REQUESTED.clear();
+        HOVER_CHUNKS.clear();
+        HOVER_REQUESTED.clear();
     }
 
     public static int loadedCount() {

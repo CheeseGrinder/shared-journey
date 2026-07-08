@@ -76,10 +76,9 @@ dependencies {
     // Maven Modrinth ne saurait pas choisir le bon jar.
     localRuntime 'maven.modrinth:chunky:LuFhm4eU'
 
-    // Create: Rock & Stone : overlay carte quand un gisement est découvert
-    // -> teste la voie "overlays" du bridge (voir README §Bridge : les
-    // overlays sont pour l'instant journalisés, pas rendus).
-    localRuntime 'maven.modrinth:create-rns:1.0.2-1.21.1-6'
+    // Create: Rock & Stone : gisements sur la carte via l'API fullscreen de
+    // JourneyMap (intégration ajoutée en v1.1.x) -> teste le bridge fullscreen.
+    localRuntime 'maven.modrinth:create-rns:v1.1.2-1.21.1-6'
 
     // Chaîne officielle de Create 6.0.10 pour NeoForge 1.21.1 (wiki Create) :
     // le jar "slim" n'embarque pas ses libs, d'où Ponder/Flywheel/Registrate.

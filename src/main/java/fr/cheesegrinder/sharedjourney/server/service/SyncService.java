@@ -43,8 +43,12 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 public final class SyncService {
 
-    /** Intervalle minimal entre deux requêtes d'infos de survol par joueur (anti-spam IO). */
-    private static final long INFO_REQUEST_MIN_INTERVAL_MS = 100;
+    /**
+     * Intervalle minimal entre deux requêtes d'infos de survol par joueur
+     * (anti-spam IO). Court : le client précharge les chunks voisins du
+     * curseur (espacés de 60 ms de son côté).
+     */
+    private static final long INFO_REQUEST_MIN_INTERVAL_MS = 40;
 
     private static final Map<UUID, PlayerState> STATES = new ConcurrentHashMap<>();
 
@@ -326,7 +330,7 @@ public final class SyncService {
         int cz = payload.z() >> 4;
         ChunkAccess chunk = level.getChunkSource().getChunkNow(cx, cz);
         if (chunk != null) {
-            sendMapInfo(player, chunk, payload.x(), payload.z());
+            sendMapInfo(player, chunk);
             return;
         }
 
@@ -342,22 +346,73 @@ public final class SyncService {
                     return;
                 }
 
-                sendMapInfo(player, level.getChunk(cx, cz), payload.x(), payload.z());
+                sendMapInfo(player, level.getChunk(cx, cz));
             });
         });
     }
 
-    private static void sendMapInfo(ServerPlayer player, ChunkAccess chunk, int x, int z) {
-        int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x & 15, z & 15);
-        BlockState state = chunk.getBlockState(new BlockPos(x, y, z));
-        String biomeId = chunk.getNoiseBiome(x >> 2, y >> 2, z >> 2)
-                .unwrapKey()
-                .map(k -> k.location().toString())
-                .orElse("");
-        String blockId = state.isAir()
-                ? ""
-                : BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-        PacketDistributor.sendToPlayer(player, new Payloads.MapInfoReplyPayload(x, z, y, biomeId, blockId));
+    /**
+     * Envoie les infos de survol du chunk ENTIER (hauteurs, blocs de surface,
+     * biomes par cellule 4x4, palettisés) : une réponse couvre 256 colonnes,
+     * le survol devient instantané côté client.
+     */
+    private static void sendMapInfo(ServerPlayer player, ChunkAccess chunk) {
+        int baseX = chunk.getPos().getMinBlockX();
+        int baseZ = chunk.getPos().getMinBlockZ();
+        short[] heights = new short[Payloads.MapInfoChunkPayload.COLUMNS];
+        byte[] blockIdx = new byte[Payloads.MapInfoChunkPayload.COLUMNS];
+        List<String> blockPalette = new ArrayList<>();
+        Map<String, Integer> blockLookup = new HashMap<>();
+        for (int dz = 0; dz < 16; dz++) {
+            for (int dx = 0; dx < 16; dx++) {
+                int i = dz * 16 + dx;
+                int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, dx, dz);
+                heights[i] = (short) y;
+                BlockState state = chunk.getBlockState(new BlockPos(baseX + dx, y, baseZ + dz));
+                String blockId = state.isAir()
+                        ? ""
+                        : BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+                blockIdx[i] = (byte) paletteIndex(blockPalette, blockLookup, blockId);
+            }
+        }
+
+        byte[] biomeIdx = new byte[Payloads.MapInfoChunkPayload.BIOME_CELLS];
+        List<String> biomePalette = new ArrayList<>();
+        Map<String, Integer> biomeLookup = new HashMap<>();
+        for (int bz = 0; bz < 4; bz++) {
+            for (int bx = 0; bx < 4; bx++) {
+                // Centre de la cellule 4x4, au Y de surface de sa colonne.
+                int dx = bx * 4 + 2;
+                int dz = bz * 4 + 2;
+                int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, dx, dz);
+                String biomeId = chunk.getNoiseBiome((baseX + dx) >> 2, y >> 2, (baseZ + dz) >> 2)
+                        .unwrapKey()
+                        .map(k -> k.location().toString())
+                        .orElse("");
+                biomeIdx[bz * 4 + bx] = (byte) paletteIndex(biomePalette, biomeLookup, biomeId);
+            }
+        }
+
+        PacketDistributor.sendToPlayer(
+                player,
+                new Payloads.MapInfoChunkPayload(
+                        chunk.getPos().x, chunk.getPos().z, heights, blockIdx, blockPalette, biomeIdx, biomePalette));
+    }
+
+    /** Index de l'identifiant dans la palette (ajouté si absent, borné à 255). */
+    private static int paletteIndex(List<String> palette, Map<String, Integer> lookup, String id) {
+        Integer existing = lookup.get(id);
+        if (existing != null) {
+            return existing;
+        }
+
+        if (palette.size() >= 255) {
+            return 0;
+        }
+
+        palette.add(id);
+        lookup.put(id, palette.size() - 1);
+        return palette.size() - 1;
     }
 
     // ------------------------------------------------------------------ administration / stats
