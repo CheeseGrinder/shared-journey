@@ -26,6 +26,9 @@ public final class ClientConfig {
     public static ModConfigSpec.BooleanValue RADAR_PETS;
     public static ModConfigSpec.BooleanValue RADAR_VILLAGERS;
 
+    /** Rayon (blocs) auquel un waypoint temporaire est considéré atteint et supprimé. */
+    public static ModConfigSpec.IntValue TEMP_WAYPOINT_RADIUS;
+
     /** Grille de chunks superposée à la minimap et à la carte plein écran. */
     public static ModConfigSpec.BooleanValue SHOW_GRID;
     /** Autorise la bascule auto vers les couches CAVE quand le joueur est sous terre. */
@@ -73,6 +76,9 @@ public final class ClientConfig {
         RADAR_VILLAGERS = b.define("showVillagers", true);
         b.pop();
 
+        TEMP_WAYPOINT_RADIUS = b.comment(
+                        "Rayon (blocs) auquel un waypoint temporaire est considéré atteint et supprimé.")
+                .defineInRange("tempWaypointRadius", 8, 1, 128);
         SHOW_GRID = b.comment("Grille de chunks superposée à la minimap et à la carte plein écran.")
                 .define("showGrid", false);
         SHOW_CAVE = b.comment("Bascule auto vers les couches CAVE quand le joueur est sous terre.")

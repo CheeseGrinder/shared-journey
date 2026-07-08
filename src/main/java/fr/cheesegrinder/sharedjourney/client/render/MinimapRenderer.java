@@ -470,8 +470,13 @@ public final class MinimapRenderer {
     private static void drawCardinal(GuiGraphics gg, Minecraft mc, String letter, float x, float y) {
         int ix = Math.round(x);
         int iy = Math.round(y);
-        fillCircle(gg, ix, iy, 6f, 0xA0202020);
-        gg.drawCenteredString(mc.font, letter, ix, iy - 4, 0xFFFFFF);
+        fillCircle(gg, ix, iy, 5f, 0xA0202020);
+        // Lettre à échelle réduite pour tenir dans la pastille.
+        gg.pose().pushPose();
+        gg.pose().translate(ix, iy, 0);
+        gg.pose().scale(0.75f, 0.75f, 1f);
+        gg.drawCenteredString(mc.font, letter, 0, -4, 0xFFFFFF);
+        gg.pose().popPose();
     }
 
     // ------------------------------------------------------------------ formes (mode rond)

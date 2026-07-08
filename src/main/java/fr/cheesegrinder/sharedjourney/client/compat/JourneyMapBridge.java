@@ -313,8 +313,17 @@ public final class JourneyMapBridge {
             ResourceLocation dim = dimOf(jmWaypoint);
 
             UUID id = knownWaypoints.computeIfAbsent(guid, g -> UUID.nameUUIDFromBytes((modId + "|" + g).getBytes()));
-            Waypoint wp =
-                    new Waypoint(id, name, dim, pos.getX(), pos.getY(), pos.getZ(), color & 0xFFFFFF, modId, true);
+            Waypoint wp = new Waypoint(
+                    id,
+                    name,
+                    dim,
+                    pos.getX(),
+                    pos.getY(),
+                    pos.getZ(),
+                    color & 0xFFFFFF,
+                    modId,
+                    true,
+                    Waypoint.Type.DIMENSION);
             // add() poste WaypointEvent.Added (annulable) ; update si déjà présent.
             if (WaypointStore.get(id) != null) {
                 WaypointStore.update(wp);

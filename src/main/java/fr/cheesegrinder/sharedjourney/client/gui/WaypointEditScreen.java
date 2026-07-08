@@ -13,6 +13,8 @@ import net.minecraft.network.chat.Component;
 
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Locale;
+
 /**
  * Édition d'un waypoint (spec §6.2) : nom, couleur (palette), visibilité,
  * suppression. Sert aussi à la création (creating=true).
@@ -61,12 +63,19 @@ public class WaypointEditScreen extends Screen {
                     .build());
         }
 
-        // Visibilité
+        // Visibilité + type (Dimension / Global / Temporaire)
         addRenderableWidget(Button.builder(visibilityLabel(), b -> {
                     waypoint = waypoint.withVisible(!waypoint.visible());
                     b.setMessage(visibilityLabel());
                 })
-                .bounds(cx - 100, y + 56, 200, 20)
+                .bounds(cx - 100, y + 56, 97, 20)
+                .build());
+        addRenderableWidget(Button.builder(typeLabel(), b -> {
+                    waypoint = waypoint.withType(nextType(waypoint.type()));
+                    b.setMessage(typeLabel());
+                })
+                .bounds(cx + 3, y + 56, 97, 20)
+                .tooltip(Tooltip.create(Component.translatable("sharedjourney.waypoint.type.tooltip")))
                 .build());
 
         // Valider / Supprimer / Annuler
@@ -93,6 +102,16 @@ public class WaypointEditScreen extends Screen {
     private Component visibilityLabel() {
         return Component.translatable(
                 waypoint.visible() ? "sharedjourney.waypoint.visible" : "sharedjourney.waypoint.hidden");
+    }
+
+    private Component typeLabel() {
+        String key = "sharedjourney.waypoint.type." + waypoint.type().name().toLowerCase(Locale.ROOT);
+        return Component.translatable("sharedjourney.waypoint.type", Component.translatable(key));
+    }
+
+    private static Waypoint.Type nextType(Waypoint.Type type) {
+        Waypoint.Type[] values = Waypoint.Type.values();
+        return values[(type.ordinal() + 1) % values.length];
     }
 
     private void save() {

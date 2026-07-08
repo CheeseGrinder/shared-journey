@@ -18,6 +18,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -45,14 +46,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 
 /**
  * Carte plein écran (spec §6.2) :
  * - glisser pour se déplacer (pan), molette pour zoomer
- * - clic droit : créer un waypoint à l'endroit cliqué
- * - clic gauche sur un waypoint : l'éditer (nom, couleur, suppression)
+ * - clic gauche : sélectionner un bloc (contour) ; double-clic : créer un waypoint
+ * - double-clic sur un waypoint : l'éditer (nom, couleur, suppression)
+ * - clic droit : menu contextuel (téléportation, waypoints, chat)
+ * - raccourcis façon JourneyMap : flèches (pan), B, C, F, J, T, =, -
  * - barre d'icônes en haut pour changer de couche ; +/- en bas pour la bande CAVE
  * Les régions manquantes/périmées visibles sont demandées au serveur (throttle).
  */
@@ -60,6 +64,9 @@ public class FullMapScreen extends Screen {
 
     private static final long REQUEST_COOLDOWN_MS = 5_000;
     private static final int WAYPOINT_CLICK_PX = 6;
+    private static final long DOUBLE_CLICK_MS = 350;
+    /** Pas de déplacement clavier (flèches), en blocs — comme JourneyMap. */
+    private static final int PAN_STEP_BLOCKS = 16;
 
     /**
      * Échelle du zoom : puissances de 2 affichées comme JourneyMap
@@ -98,6 +105,13 @@ public class FullMapScreen extends Screen {
     // Throttle des requêtes d'infos de survol (colonne + horodatage).
     private long lastInfoRequestKey = Long.MIN_VALUE;
     private long lastInfoRequestAt;
+
+    // Bloc sélectionné (simple clic) et suivi du double-clic.
+    private boolean hasSelection;
+    private int selectedBlockX;
+    private int selectedBlockZ;
+    private long lastClickAt;
+    private UUID lastClickWaypoint;
 
     public FullMapScreen() {
         super(Component.literal("SharedJourney"));
@@ -363,22 +377,64 @@ public class FullMapScreen extends Screen {
         }
 
         if (button == 0 && !dragged) {
-            // Clic gauche : édition du waypoint le plus proche du curseur
-            Waypoint nearest = nearestWaypoint(mouseX, mouseY);
-            if (nearest != null) {
-                mc.setScreen(new WaypointEditScreen(this, nearest));
-                return true;
-            }
-        } else if (button == 1 && !dragged) {
-            // Clic droit : menu contextuel (TP, waypoint, position dans le chat)
+            return handleLeftClick(mc, mouseX, mouseY);
+        }
+
+        if (button == 1 && !dragged) {
+            // Clic droit : menu contextuel (TP, waypoints, position dans le chat)
             openContextMenu(mouseX, mouseY);
             return true;
         }
         return false;
     }
 
+    /**
+     * Clic gauche façon JourneyMap : simple clic = sélection d'un bloc
+     * (contour), double-clic sur un bloc = création d'un waypoint (modal),
+     * double-clic sur un waypoint = édition. Pas d'action au simple clic
+     * sur un waypoint.
+     */
+    private boolean handleLeftClick(Minecraft mc, double mouseX, double mouseY) {
+        long now = System.currentTimeMillis();
+        boolean doubleClick = now - lastClickAt < DOUBLE_CLICK_MS;
+        Waypoint nearest = nearestWaypoint(mouseX, mouseY);
+        if (nearest != null) {
+            if (doubleClick && nearest.id().equals(lastClickWaypoint)) {
+                lastClickAt = 0;
+                lastClickWaypoint = null;
+                mc.setScreen(new WaypointEditScreen(this, nearest));
+                return true;
+            }
+
+            lastClickAt = now;
+            lastClickWaypoint = nearest.id();
+            hasSelection = false;
+            return true;
+        }
+
+        int wx = (int) Math.floor(worldX(mouseX));
+        int wz = (int) Math.floor(worldZ(mouseY));
+        boolean sameBlock = hasSelection && selectedBlockX == wx && selectedBlockZ == wz;
+        if (doubleClick && sameBlock && lastClickWaypoint == null) {
+            lastClickAt = 0;
+            createWaypointAt(wx, wz, Waypoint.Type.DIMENSION);
+            return true;
+        }
+
+        hasSelection = true;
+        selectedBlockX = wx;
+        selectedBlockZ = wz;
+        lastClickAt = now;
+        lastClickWaypoint = null;
+        return true;
+    }
+
     // ------------------------------------------------------------------ menu contextuel
 
+    /**
+     * Menu façon JourneyMap : Se téléporter (op), Waypoints > (sous-menu :
+     * créer, temporaire, global, tout afficher/masquer), Position dans le chat.
+     */
     private void openContextMenu(double mouseX, double mouseY) {
         closeContextMenu();
         var mc = Minecraft.getInstance();
@@ -398,8 +454,47 @@ public class FullMapScreen extends Screen {
             addContextButton(bx, by, w, h, "sharedjourney.context.teleport", () -> teleportTo(wx, wz));
             by += h + 1;
         }
-        addContextButton(bx, by, w, h, "sharedjourney.context.waypoint", () -> createWaypointAt(wx, wz));
+
+        // "Waypoints >" n'exécute pas d'action : il déplie le sous-menu.
+        int subY = by;
+        Button waypoints = Button.builder(
+                        Component.translatable("sharedjourney.context.waypoints"),
+                        btn -> openWaypointsSubmenu(bx, subY, w, h, wx, wz))
+                .bounds(bx, by, w, h)
+                .build();
+        contextButtons.add(waypoints);
+        addRenderableWidget(waypoints);
+
         addContextButton(bx, by + h + 1, w, h, "sharedjourney.context.chat", () -> logCoords(wx, wz));
+    }
+
+    /** Sous-menu Waypoints, déplié à côté du menu principal. */
+    private void openWaypointsSubmenu(int menuX, int menuY, int w, int h, int wx, int wz) {
+        var mc = Minecraft.getInstance();
+        if (mc.level == null) {
+            return;
+        }
+
+        var dim = mc.level.dimension().location();
+        int sx = menuX + w + 2;
+        if (sx + w > width - 4) {
+            sx = menuX - w - 2;
+        }
+
+        int rows = 5;
+        int sy = Math.min(menuY, height - rows * (h + 1) - 4);
+        addContextButton(sx, sy, w, h, "sharedjourney.context.waypoint", () -> createWaypointAt(
+                wx, wz, Waypoint.Type.DIMENSION));
+        addContextButton(sx, sy + (h + 1), w, h, "sharedjourney.context.waypoint_temp", () -> createTempWaypointAt(
+                wx, wz));
+        addContextButton(sx, sy + 2 * (h + 1), w, h, "sharedjourney.context.waypoint_global", () -> createWaypointAt(
+                wx, wz, Waypoint.Type.GLOBAL));
+        addContextButton(
+                sx, sy + 3 * (h + 1), w, h, "sharedjourney.context.show_all", () -> WaypointStore.setAllVisible(
+                        dim, true));
+        addContextButton(
+                sx, sy + 4 * (h + 1), w, h, "sharedjourney.context.hide_all", () -> WaypointStore.setAllVisible(
+                        dim, false));
     }
 
     private void addContextButton(int x, int y, int w, int h, String key, Runnable action) {
@@ -441,21 +536,49 @@ public class FullMapScreen extends Screen {
         onClose();
     }
 
-    private void createWaypointAt(int wx, int wz) {
+    /** Ouvre la modal de création d'un waypoint du type demandé. */
+    private void createWaypointAt(int wx, int wz, Waypoint.Type type) {
         var mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) {
             return;
         }
 
-        int y = surfaceYAt(wx, wz);
-        int wy = y >= 0 ? y : mc.player.blockPosition().getY();
         Waypoint wp = Waypoint.create(
                 "X:" + wx + " Z:" + wz,
                 mc.level.dimension().location(),
-                new BlockPos(wx, wy, wz),
+                new BlockPos(wx, surfaceOrPlayerY(wx, wz), wz),
                 0xFFFFFF & ThreadLocalRandom.current().nextInt(),
-                "user");
+                "user",
+                type);
         mc.setScreen(new WaypointEditScreen(this, wp, true));
+    }
+
+    /** Crée directement un waypoint temporaire (sans modal, style JourneyMap). */
+    private void createTempWaypointAt(int wx, int wz) {
+        var mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null) {
+            return;
+        }
+
+        Waypoint wp = Waypoint.create(
+                "Temp X:" + wx + " Z:" + wz,
+                mc.level.dimension().location(),
+                new BlockPos(wx, surfaceOrPlayerY(wx, wz), wz),
+                0xFFFFFF & ThreadLocalRandom.current().nextInt(),
+                "user",
+                Waypoint.Type.TEMP);
+        WaypointStore.add(wp);
+    }
+
+    /** Y de surface si connu localement, sinon le y du joueur. */
+    private int surfaceOrPlayerY(int wx, int wz) {
+        var mc = Minecraft.getInstance();
+        int y = surfaceYAt(wx, wz);
+        if (y >= 0) {
+            return y;
+        }
+
+        return mc.player != null ? mc.player.blockPosition().getY() : 64;
     }
 
     /** Écrit la position dans le chat (local) ; cliquer dessus rouvre la carte ici. */
@@ -548,7 +671,117 @@ public class FullMapScreen extends Screen {
             return true;
         }
 
+        // Pas de raccourcis pendant une saisie de texte.
+        if (getFocused() instanceof EditBox) {
+            return super.keyPressed(keyCode, scanCode, modifiers);
+        }
+
+        if (handleShortcut(keyCode, scanCode)) {
+            return true;
+        }
+
         return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    /**
+     * Raccourcis façon JourneyMap : flèches = pan de 16 blocs, B = waypoint
+     * au curseur, C = position du curseur dans le chat, F = suivre le joueur,
+     * J = fermer la carte, T = ouvrir le chat, =/- = zoom. Les touches
+     * configurées du mod (couche, carte) sont aussi honorées.
+     */
+    private boolean handleShortcut(int keyCode, int scanCode) {
+        var mc = Minecraft.getInstance();
+        switch (keyCode) {
+            case GLFW.GLFW_KEY_UP -> {
+                centerZ -= PAN_STEP_BLOCKS;
+                return true;
+            }
+            case GLFW.GLFW_KEY_DOWN -> {
+                centerZ += PAN_STEP_BLOCKS;
+                return true;
+            }
+            case GLFW.GLFW_KEY_LEFT -> {
+                centerX -= PAN_STEP_BLOCKS;
+                return true;
+            }
+            case GLFW.GLFW_KEY_RIGHT -> {
+                centerX += PAN_STEP_BLOCKS;
+                return true;
+            }
+            case GLFW.GLFW_KEY_B -> {
+                createWaypointAt(
+                        (int) Math.floor(worldX(cursorX())),
+                        (int) Math.floor(worldZ(cursorY())),
+                        Waypoint.Type.DIMENSION);
+                return true;
+            }
+            case GLFW.GLFW_KEY_C -> {
+                logCoords((int) Math.floor(worldX(cursorX())), (int) Math.floor(worldZ(cursorY())));
+                return true;
+            }
+            case GLFW.GLFW_KEY_F -> {
+                centerOnPlayer();
+                return true;
+            }
+            case GLFW.GLFW_KEY_J -> {
+                onClose();
+                return true;
+            }
+            case GLFW.GLFW_KEY_T -> {
+                mc.setScreen(new ChatScreen(""));
+                return true;
+            }
+            case GLFW.GLFW_KEY_EQUAL, GLFW.GLFW_KEY_KP_ADD -> {
+                zoomStep(1, width / 2.0, height / 2.0);
+                return true;
+            }
+            case GLFW.GLFW_KEY_MINUS, GLFW.GLFW_KEY_KP_SUBTRACT -> {
+                zoomStep(-1, width / 2.0, height / 2.0);
+                return true;
+            }
+            default -> {
+                // Touches configurables du mod, testées ci-dessous.
+            }
+        }
+
+        if (ClientSetupEvents.CYCLE_LAYER.matches(keyCode, scanCode)) {
+            cycleLayer();
+            return true;
+        }
+
+        if (ClientSetupEvents.OPEN_FULL_MAP.matches(keyCode, scanCode)) {
+            onClose();
+            return true;
+        }
+
+        return false;
+    }
+
+    /** Changement de couche au clavier, parmi les couches autorisées. */
+    private void cycleLayer() {
+        List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
+        if (allowed.isEmpty()) {
+            return;
+        }
+
+        int idx = allowed.indexOf(layer);
+        selectLayer(allowed.get((idx + 1) % allowed.size()));
+    }
+
+    /** Position x du curseur en coordonnées GUI (hors événement souris). */
+    private double cursorX() {
+        var mc = Minecraft.getInstance();
+        return mc.mouseHandler.xpos()
+                * mc.getWindow().getGuiScaledWidth()
+                / (double) mc.getWindow().getScreenWidth();
+    }
+
+    /** Position y du curseur en coordonnées GUI (hors événement souris). */
+    private double cursorY() {
+        var mc = Minecraft.getInstance();
+        return mc.mouseHandler.ypos()
+                * mc.getWindow().getGuiScaledHeight()
+                / (double) mc.getWindow().getScreenHeight();
     }
 
     // ------------------------------------------------------------------ rendu
@@ -650,8 +883,14 @@ public class FullMapScreen extends Screen {
         }
         lines.add(Component.translatable("sharedjourney.legend.drag").getString());
         lines.add(Component.translatable("sharedjourney.legend.scroll").getString());
-        lines.add(Component.translatable("sharedjourney.legend.left_click").getString());
+        lines.add(Component.translatable("sharedjourney.legend.double_click").getString());
         lines.add(Component.translatable("sharedjourney.legend.right_click").getString());
+        lines.add(Component.translatable("sharedjourney.legend.arrows").getString());
+        lines.add(Component.translatable("sharedjourney.legend.key_b").getString());
+        lines.add(Component.translatable("sharedjourney.legend.key_c").getString());
+        lines.add(Component.translatable("sharedjourney.legend.key_f").getString());
+        lines.add(Component.translatable("sharedjourney.legend.key_t").getString());
+        lines.add(Component.translatable("sharedjourney.legend.key_j").getString());
 
         int maxW = 0;
         for (String line : lines) {
@@ -737,6 +976,15 @@ public class FullMapScreen extends Screen {
                 int sy = (int) Math.round(screenY(gcz * 16));
                 gg.fill(0, sy, width, sy + 1, gridColor);
             }
+        }
+
+        // Contour du bloc sélectionné (simple clic) ; double-clic = waypoint.
+        if (hasSelection) {
+            int sx0 = (int) Math.round(screenX(selectedBlockX));
+            int sy0 = (int) Math.round(screenY(selectedBlockZ));
+            int sx1 = (int) Math.round(screenX(selectedBlockX + 1));
+            int sy1 = (int) Math.round(screenY(selectedBlockZ + 1));
+            gg.renderOutline(sx0, sy0, Math.max(1, sx1 - sx0), Math.max(1, sy1 - sy0), 0xFFE0E0E0);
         }
 
         // Flèche du joueur (taille constante quel que soit le zoom).

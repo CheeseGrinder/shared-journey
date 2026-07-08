@@ -2,9 +2,11 @@ package fr.cheesegrinder.sharedjourney.client.service;
 
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.api.event.WaypointEvent;
+import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
 
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -79,9 +81,10 @@ public final class WaypointStore {
         return new ArrayList<>(WAYPOINTS.values());
     }
 
+    /** Waypoints affichables dans une dimension : les siens + les globaux. */
     public static List<Waypoint> forDimension(ResourceLocation dim) {
         return WAYPOINTS.values().stream()
-                .filter(w -> w.dimension().equals(dim))
+                .filter(w -> w.type() == Waypoint.Type.GLOBAL || w.dimension().equals(dim))
                 .toList();
     }
 
@@ -113,6 +116,37 @@ public final class WaypointStore {
         if (wp != null) {
             NeoForge.EVENT_BUS.post(new WaypointEvent.Removed(wp));
             save();
+        }
+    }
+
+    /** Force la visibilité de tous les waypoints d'une dimension (+ globaux). */
+    public static void setAllVisible(ResourceLocation dim, boolean visible) {
+        for (Waypoint wp : forDimension(dim)) {
+            if (wp.visible() != visible) {
+                update(wp.withVisible(visible));
+            }
+        }
+    }
+
+    /**
+     * Supprime les waypoints temporaires que le joueur a atteints (rayon
+     * configurable). Appelé périodiquement depuis le tick client.
+     */
+    public static void removeReachedTemp(Player player) {
+        ResourceLocation dim = player.level().dimension().location();
+        int radius = ClientConfig.TEMP_WAYPOINT_RADIUS.get();
+        long radiusSq = (long) radius * radius;
+        for (Waypoint wp : all()) {
+            if (wp.type() != Waypoint.Type.TEMP || !wp.dimension().equals(dim)) {
+                continue;
+            }
+
+            double dx = player.getX() - (wp.x() + 0.5);
+            double dy = player.getY() - wp.y();
+            double dz = player.getZ() - (wp.z() + 0.5);
+            if (dx * dx + dy * dy + dz * dz <= radiusSq) {
+                remove(wp.id());
+            }
         }
     }
 
@@ -156,11 +190,25 @@ public final class WaypointStore {
                         o.get("z").getAsInt(),
                         o.get("color").getAsInt(),
                         o.has("source") ? o.get("source").getAsString() : "user",
-                        !o.has("visible") || o.get("visible").getAsBoolean());
+                        !o.has("visible") || o.get("visible").getAsBoolean(),
+                        readType(o));
                 WAYPOINTS.put(wp.id(), wp);
             }
         } catch (Exception e) {
             LOGGER.error("Echec de lecture des waypoints", e);
+        }
+    }
+
+    /** Type du waypoint, DIMENSION par défaut (fichiers d'anciennes versions). */
+    private static Waypoint.Type readType(JsonObject o) {
+        if (!o.has("type")) {
+            return Waypoint.Type.DIMENSION;
+        }
+
+        try {
+            return Waypoint.Type.valueOf(o.get("type").getAsString());
+        } catch (IllegalArgumentException e) {
+            return Waypoint.Type.DIMENSION;
         }
     }
 
@@ -181,6 +229,7 @@ public final class WaypointStore {
             o.addProperty("color", wp.colorRgb());
             o.addProperty("source", wp.source());
             o.addProperty("visible", wp.visible());
+            o.addProperty("type", wp.type().name());
             arr.add(o);
         }
         try {

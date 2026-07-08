@@ -3,6 +3,7 @@ package fr.cheesegrinder.sharedjourney.client.event;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.gui.FullMapScreen;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
+import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 
 import net.minecraft.client.Minecraft;
 
@@ -19,6 +20,11 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 public final class ClientInputEvents {
 
     public static boolean minimapVisible = true;
+
+    /** Cadence (ticks) de la vérification des waypoints temporaires atteints. */
+    private static final int TEMP_WAYPOINT_CHECK_TICKS = 20;
+
+    private static int tickCounter;
 
     /**
      * Cible d'ouverture différée de la carte (/sj goto, clic sur un message
@@ -57,6 +63,12 @@ public final class ClientInputEvents {
         }
         while (ClientSetupEvents.ZOOM_OUT.consumeClick()) {
             MinimapRenderer.zoomOut();
+        }
+
+        tickCounter++;
+        if (tickCounter >= TEMP_WAYPOINT_CHECK_TICKS && mc.player != null) {
+            tickCounter = 0;
+            WaypointStore.removeReachedTemp(mc.player);
         }
     }
 }

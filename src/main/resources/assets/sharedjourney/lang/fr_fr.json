@@ -19,10 +19,20 @@
   "sharedjourney.waypoint.delete": "Supprimer",
   "sharedjourney.waypoint.visible": "Visible : oui",
   "sharedjourney.waypoint.hidden": "Visible : non",
+  "sharedjourney.waypoint.type": "Type : %s",
+  "sharedjourney.waypoint.type.dimension": "Dimension",
+  "sharedjourney.waypoint.type.global": "Global",
+  "sharedjourney.waypoint.type.temp": "Temporaire",
+  "sharedjourney.waypoint.type.tooltip": "Dimension : visible dans sa dimension. Global : visible dans toutes les dimensions. Temporaire : supprimé automatiquement à l'approche.",
   "sharedjourney.command.purged": "%s fichier(s) de région supprimé(s) du cache pour le calque '%s'",
 
   "sharedjourney.context.teleport": "Se téléporter ici",
+  "sharedjourney.context.waypoints": "Waypoints",
   "sharedjourney.context.waypoint": "Créer un waypoint",
+  "sharedjourney.context.waypoint_temp": "Waypoint temporaire",
+  "sharedjourney.context.waypoint_global": "Créer un waypoint global",
+  "sharedjourney.context.show_all": "Tout afficher",
+  "sharedjourney.context.hide_all": "Tout masquer",
   "sharedjourney.context.chat": "Noter la position dans le chat",
   "sharedjourney.coords.chat": "Position : %s, %s",
   "sharedjourney.coords.open": "Cliquer pour ouvrir la carte ici",
@@ -54,8 +64,14 @@
 
   "sharedjourney.legend.drag": "Glisser  Déplacer la carte",
   "sharedjourney.legend.scroll": "Molette  Zoom",
-  "sharedjourney.legend.left_click": "Clic gauche  Éditer un waypoint",
+  "sharedjourney.legend.double_click": "Double clic  Créer/éditer un waypoint",
   "sharedjourney.legend.right_click": "Clic droit  Menu contextuel",
+  "sharedjourney.legend.arrows": "Flèches  Déplacer la carte (16 blocs)",
+  "sharedjourney.legend.key_b": "B  Waypoint au curseur",
+  "sharedjourney.legend.key_c": "C  Position du curseur dans le chat",
+  "sharedjourney.legend.key_f": "F  Suivre le joueur",
+  "sharedjourney.legend.key_t": "T  Ouvrir le chat",
+  "sharedjourney.legend.key_j": "J  Fermer la carte",
 
   "sharedjourney.configuration.title": "Configuration Shared Journey",
   "sharedjourney.configuration.section.sharedjourney.client.toml": "Client (minimap, radar, cache)",
@@ -139,6 +155,9 @@
 
   "sharedjourney.configuration.showVillagers": "Afficher les villageois",
   "sharedjourney.configuration.showVillagers.tooltip": "Afficher les villageois sur le radar.",
+
+  "sharedjourney.configuration.tempWaypointRadius": "Rayon des waypoints temporaires",
+  "sharedjourney.configuration.tempWaypointRadius.tooltip": "Distance (blocs) à laquelle un waypoint temporaire est considéré atteint et supprimé.",
 
   "sharedjourney.configuration.showGrid": "Afficher la grille de chunks",
   "sharedjourney.configuration.showGrid.tooltip": "Superpose la grille de chunks à la minimap et à la carte plein écran.",

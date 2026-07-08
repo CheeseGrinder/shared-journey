@@ -19,10 +19,20 @@
   "sharedjourney.waypoint.delete": "Delete",
   "sharedjourney.waypoint.visible": "Visible: yes",
   "sharedjourney.waypoint.hidden": "Visible: no",
+  "sharedjourney.waypoint.type": "Type: %s",
+  "sharedjourney.waypoint.type.dimension": "Dimension",
+  "sharedjourney.waypoint.type.global": "Global",
+  "sharedjourney.waypoint.type.temp": "Temporary",
+  "sharedjourney.waypoint.type.tooltip": "Dimension: visible in its dimension. Global: visible in every dimension. Temporary: automatically deleted when reached.",
   "sharedjourney.command.purged": "%s cached region file(s) deleted for layer '%s'",
 
   "sharedjourney.context.teleport": "Teleport here",
+  "sharedjourney.context.waypoints": "Waypoints",
   "sharedjourney.context.waypoint": "Create waypoint",
+  "sharedjourney.context.waypoint_temp": "Temp waypoint",
+  "sharedjourney.context.waypoint_global": "Create global waypoint",
+  "sharedjourney.context.show_all": "Show all",
+  "sharedjourney.context.hide_all": "Hide all",
   "sharedjourney.context.chat": "Log position in chat",
   "sharedjourney.coords.chat": "Position: %s, %s",
   "sharedjourney.coords.open": "Click to open the map here",
@@ -54,8 +64,14 @@
 
   "sharedjourney.legend.drag": "Drag  Pan the map",
   "sharedjourney.legend.scroll": "Wheel  Zoom",
-  "sharedjourney.legend.left_click": "Left click  Edit waypoint",
+  "sharedjourney.legend.double_click": "Double click  Create/edit waypoint",
   "sharedjourney.legend.right_click": "Right click  Context menu",
+  "sharedjourney.legend.arrows": "Arrows  Pan the map (16 blocks)",
+  "sharedjourney.legend.key_b": "B  Waypoint at cursor",
+  "sharedjourney.legend.key_c": "C  Cursor position in chat",
+  "sharedjourney.legend.key_f": "F  Follow player",
+  "sharedjourney.legend.key_t": "T  Open chat",
+  "sharedjourney.legend.key_j": "J  Close the map",
 
   "sharedjourney.configuration.title": "Shared Journey Configs",
   "sharedjourney.configuration.section.sharedjourney.client.toml": "Client (minimap, radar, cache)",
@@ -139,6 +155,9 @@
 
   "sharedjourney.configuration.showVillagers": "Show Villagers",
   "sharedjourney.configuration.showVillagers.tooltip": "Show villagers on the radar.",
+
+  "sharedjourney.configuration.tempWaypointRadius": "Temp Waypoint Radius",
+  "sharedjourney.configuration.tempWaypointRadius.tooltip": "Distance (blocks) at which a temporary waypoint is considered reached and deleted.",
 
   "sharedjourney.configuration.showGrid": "Show Chunk Grid",
   "sharedjourney.configuration.showGrid.tooltip": "Overlay the chunk grid on the minimap and the fullscreen map.",
