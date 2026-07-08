@@ -138,21 +138,21 @@ public final class WaypointBeaconRenderer {
         float scale = 0.025f * (float) Math.max(1.0, dist / 12.0);
         pose.scale(scale, -scale, scale);
         Matrix4f mat = pose.last().pose();
-        // Bord gauche du texte à ~0.45 bloc du centre : hors du faisceau (rayon 0.25).
+        // Bord gauche du texte à ~0.45 bloc du centre : hors du faisceau
+        // (rayon 0.25). SEE_THROUGH pleine intensité : l'étiquette reste
+        // lisible en toute circonstance, même un bloc devant.
         float xStart = LABEL_SIDE_OFFSET_BLOCKS / scale;
         font.drawInBatch(
                 text,
                 xStart,
                 -4,
-                0x20FFFFFF,
+                0xFFFFFFFF,
                 false,
                 mat,
                 buffers,
                 Font.DisplayMode.SEE_THROUGH,
                 0x80000000,
                 LightTexture.FULL_BRIGHT);
-        font.drawInBatch(
-                text, xStart, -4, 0xFFFFFFFF, false, mat, buffers, Font.DisplayMode.NORMAL, 0, LightTexture.FULL_BRIGHT);
         pose.popPose();
     }
 }

@@ -50,6 +50,7 @@
   "sharedjourney.action.show_pets": "Show pets",
   "sharedjourney.action.show_villagers": "Show villagers",
   "sharedjourney.action.show_grid": "Show chunk grid",
+  "sharedjourney.action.hide_from_map": "Hide me from other players' maps",
   "sharedjourney.action.show_keys": "Show legend",
   "sharedjourney.action.close": "Close",
   "sharedjourney.action.locate": "Go to coordinates",
@@ -143,6 +144,9 @@
 
   "sharedjourney.configuration.showPlayers": "Show Players",
   "sharedjourney.configuration.showPlayers.tooltip": "Show other players on the radar.",
+
+  "sharedjourney.configuration.hideFromMap": "Hide Me From the Map",
+  "sharedjourney.configuration.hideFromMap.tooltip": "Ask the server to hide you from other players' maps.",
 
   "sharedjourney.configuration.showHostile": "Show Hostile Mobs",
   "sharedjourney.configuration.showHostile.tooltip": "Show hostile mobs on the radar.",

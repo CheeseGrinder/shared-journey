@@ -34,6 +34,8 @@ public class SharedJourneyClient {
         Payloads.Hooks.clientLayerSettings = ClientNetHandler::handleLayerSettings;
         Payloads.Hooks.clientRegionData = ClientNetHandler::handleRegionData;
         Payloads.Hooks.clientMapInfoChunk = ClientNetHandler::handleMapInfoChunk;
+        Payloads.Hooks.clientHiddenPlayers = ClientNetHandler::handleHiddenPlayers;
+        Payloads.Hooks.clientPlayerPositions = ClientNetHandler::handlePlayerPositions;
     }
 
     @SubscribeEvent

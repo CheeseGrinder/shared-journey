@@ -2,7 +2,10 @@ package fr.cheesegrinder.sharedjourney.client.render;
 
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.PlayerFaceRenderer;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.TamableAnimal;
@@ -19,6 +22,8 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.math.Axis;
 import org.joml.Matrix4f;
+
+import java.util.UUID;
 
 /**
  * Points d'entités du radar (minimap + carte plein écran) : classification
@@ -41,7 +46,9 @@ public final class EntityDots {
      */
     public static Integer colorFor(Entity e) {
         if (e instanceof Player) {
-            return ClientConfig.RADAR_PLAYERS.get() ? COLOR_PLAYER : null;
+            // Les joueurs sont rendus en "tête de skin" via les positions
+            // diffusées par le serveur (drawPlayerHead), pas en point radar.
+            return null;
         }
         if (e instanceof TamableAnimal tamed && tamed.isTame()) {
             return ClientConfig.RADAR_PETS.get() ? COLOR_PET : null;
@@ -64,6 +71,18 @@ public final class EntityDots {
         gg.fill(x - 1, y - 1, x + 2, y + 2, argb);
     }
 
+    /** Tête (face du skin) d'un joueur, centrée, avec un liseré blanc. */
+    public static void drawPlayerHead(GuiGraphics gg, int x, int y, UUID playerId, int size) {
+        var connection = Minecraft.getInstance().getConnection();
+        PlayerInfo info = connection == null ? null : connection.getPlayerInfo(playerId);
+        gg.fill(x - size / 2 - 1, y - size / 2 - 1, x + size / 2 + 1, y + size / 2 + 1, 0xFFFFFFFF);
+        if (info != null) {
+            PlayerFaceRenderer.draw(gg, info.getSkin(), x - size / 2, y - size / 2, size);
+        } else {
+            gg.fill(x - size / 2, y - size / 2, x + size / 2, y + size / 2, 0xFF808080);
+        }
+    }
+
     /** Losange de waypoint (style JourneyMap) : carré tourné à 45°, contour sombre. */
     public static void drawWaypointDiamond(GuiGraphics gg, float x, float y, int rgb, float scale) {
         gg.pose().pushPose();
@@ -82,6 +101,9 @@ public final class EntityDots {
      */
     public static void drawPlayerArrow(GuiGraphics gg, float cx, float cy, float angleDeg, float scale) {
         gg.flush();
+        // Marqueur HUD toujours visible : pas de test de profondeur (les
+        // overlays des plugins bridgés peuvent laisser un état GL différent).
+        RenderSystem.disableDepthTest();
         gg.pose().pushPose();
         gg.pose().translate(cx, cy, 0);
         gg.pose().mulPose(Axis.ZP.rotationDegrees(angleDeg));
@@ -92,6 +114,7 @@ public final class EntityDots {
         triangle(gg, 0xFFFFFFFF, 0f, -4.5f, 3.6f, 4.6f, -3.6f, 4.6f);
         triangle(gg, 0xFF2653C1, 0f, 1.5f, 2.8f, 6f, -2.8f, 6f);
         gg.pose().popPose();
+        RenderSystem.enableDepthTest();
     }
 
     /** Triangle plein en mode immédiat, dans la pose courante. */

@@ -19,6 +19,7 @@ public final class PlayerEvents {
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer sp) {
             SyncService.onPlayerJoin(sp);
+            SyncService.sendHiddenPlayers(sp);
         }
     }
 
@@ -26,6 +27,7 @@ public final class PlayerEvents {
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer sp) {
             SyncService.onPlayerLeave(sp);
+            SyncService.clearHiddenPlayer(sp);
         }
     }
 

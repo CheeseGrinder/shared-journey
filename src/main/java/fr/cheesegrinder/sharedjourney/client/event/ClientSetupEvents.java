@@ -1,17 +1,22 @@
 package fr.cheesegrinder.sharedjourney.client.event;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
+import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
+import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import org.lwjgl.glfw.GLFW;
@@ -55,6 +60,19 @@ public final class ClientSetupEvents {
         event.register(CYCLE_LAYER);
         event.register(ZOOM_IN);
         event.register(ZOOM_OUT);
+    }
+
+    /** À chaque sauvegarde de la config client : renvoie la préférence de visibilité. */
+    @SubscribeEvent
+    public static void onConfigReloaded(ModConfigEvent.Reloading event) {
+        if (event.getConfig().getSpec() != ClientConfig.SPEC) {
+            return;
+        }
+
+        var mc = Minecraft.getInstance();
+        if (mc.getConnection() != null) {
+            PacketDistributor.sendToServer(new Payloads.MapVisibilityPayload(ClientConfig.HIDE_FROM_MAP.get()));
+        }
     }
 
     @SubscribeEvent

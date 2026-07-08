@@ -123,6 +123,10 @@ public final class SyncService {
         mgr.tick();
 
         long gameTime = server.overworld().getGameTime();
+        // Positions des joueurs (non cachés) pour les cartes clientes : ~1x/s.
+        if (gameTime % PLAYER_POSITIONS_INTERVAL_TICKS == 0) {
+            broadcastPlayerPositions(server);
+        }
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             PlayerState st = STATES.get(player.getUUID());
             if (st == null) {
@@ -397,6 +401,62 @@ public final class SyncService {
                 player,
                 new Payloads.MapInfoChunkPayload(
                         chunk.getPos().x, chunk.getPos().z, heights, blockIdx, blockPalette, biomeIdx, biomePalette));
+    }
+
+    // ------------------------------------------------------------------ visibilité des joueurs sur la carte
+
+    /** Cadence (ticks) de diffusion des positions des joueurs aux cartes. */
+    private static final int PLAYER_POSITIONS_INTERVAL_TICKS = 20;
+
+    /** Joueurs ayant demandé à être cachés de la carte des autres joueurs. */
+    private static final Set<UUID> HIDDEN_PLAYERS = ConcurrentHashMap.newKeySet();
+
+    /** Diffuse la position (dimension, x, z) de tous les joueurs non cachés. */
+    private static void broadcastPlayerPositions(MinecraftServer server) {
+        List<Payloads.PlayerPositionsPayload.PlayerPos> players = new ArrayList<>();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (HIDDEN_PLAYERS.contains(player.getUUID())) {
+                continue;
+            }
+
+            players.add(new Payloads.PlayerPositionsPayload.PlayerPos(
+                    player.getUUID(), player.level().dimension().location(), player.getX(), player.getZ()));
+        }
+        PacketDistributor.sendToAllPlayers(new Payloads.PlayerPositionsPayload(players));
+    }
+
+    /** Préférence "caché de la carte" reçue d'un client : appliquée et diffusée. */
+    public static void handleMapVisibility(Player playerRaw, Payloads.MapVisibilityPayload payload) {
+        if (!(playerRaw instanceof ServerPlayer player)) {
+            return;
+        }
+
+        boolean changed;
+        if (payload.hidden()) {
+            changed = HIDDEN_PLAYERS.add(player.getUUID());
+        } else {
+            changed = HIDDEN_PLAYERS.remove(player.getUUID());
+        }
+
+        if (changed) {
+            broadcastHiddenPlayers();
+        }
+    }
+
+    /** Envoie la liste courante des joueurs cachés à un joueur qui rejoint. */
+    public static void sendHiddenPlayers(ServerPlayer player) {
+        PacketDistributor.sendToPlayer(player, new Payloads.HiddenPlayersPayload(List.copyOf(HIDDEN_PLAYERS)));
+    }
+
+    /** Purge à la déconnexion (la préférence est renvoyée à la reconnexion). */
+    public static void clearHiddenPlayer(ServerPlayer player) {
+        if (HIDDEN_PLAYERS.remove(player.getUUID())) {
+            broadcastHiddenPlayers();
+        }
+    }
+
+    private static void broadcastHiddenPlayers() {
+        PacketDistributor.sendToAllPlayers(new Payloads.HiddenPlayersPayload(List.copyOf(HIDDEN_PLAYERS)));
     }
 
     /** Index de l'identifiant dans la palette (ajouté si absent, borné à 255). */

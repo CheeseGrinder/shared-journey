@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.zip.GZIPInputStream;
@@ -42,9 +43,12 @@ public final class Payloads {
         public static Consumer<LayerSettingsPayload> clientLayerSettings = p -> {};
         public static Consumer<RegionDataPayload> clientRegionData = p -> {};
         public static Consumer<MapInfoChunkPayload> clientMapInfoChunk = p -> {};
+        public static Consumer<HiddenPlayersPayload> clientHiddenPlayers = p -> {};
+        public static Consumer<PlayerPositionsPayload> clientPlayerPositions = p -> {};
         public static BiConsumer<Player, RegionRequestPayload> serverRegionRequest = (pl, p) -> {};
         public static BiConsumer<Player, ClientIndexPayload> serverClientIndex = (pl, p) -> {};
         public static BiConsumer<Player, MapInfoRequestPayload> serverMapInfoRequest = (pl, p) -> {};
+        public static BiConsumer<Player, MapVisibilityPayload> serverMapVisibility = (pl, p) -> {};
     }
 
     private static ResourceLocation id(String path) {
@@ -318,6 +322,84 @@ public final class Payloads {
         }
     }
 
+    // ---------------------------------------------------------------- C2S/S2C : visibilité des joueurs
+
+    /** Préférence du joueur : être caché de la carte des autres joueurs. */
+    public record MapVisibilityPayload(boolean hidden) implements CustomPacketPayload {
+        public static final Type<MapVisibilityPayload> TYPE = new Type<>(id("map_visibility"));
+
+        public static final StreamCodec<FriendlyByteBuf, MapVisibilityPayload> CODEC = StreamCodec.of(
+                (buf, p) -> buf.writeBoolean(p.hidden), buf -> new MapVisibilityPayload(buf.readBoolean()));
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** Liste des joueurs cachés de la carte, diffusée à tous les clients. */
+    public record HiddenPlayersPayload(List<UUID> hidden) implements CustomPacketPayload {
+        public static final Type<HiddenPlayersPayload> TYPE = new Type<>(id("hidden_players"));
+
+        public static final StreamCodec<FriendlyByteBuf, HiddenPlayersPayload> CODEC = StreamCodec.of(
+                (buf, p) -> {
+                    buf.writeVarInt(p.hidden.size());
+                    for (UUID id : p.hidden) {
+                        buf.writeUUID(id);
+                    }
+                },
+                buf -> {
+                    int count = buf.readVarInt();
+                    List<UUID> ids = new ArrayList<>(count);
+                    for (int i = 0; i < count; i++) {
+                        ids.add(buf.readUUID());
+                    }
+                    return new HiddenPlayersPayload(ids);
+                });
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** Positions (dimension, x, z) de tous les joueurs non cachés, ~1x/s. */
+    public record PlayerPositionsPayload(List<PlayerPos> players) implements CustomPacketPayload {
+
+        /** Position d'un joueur sur la carte. */
+        public record PlayerPos(UUID id, ResourceLocation dimension, double x, double z) {}
+
+        public static final Type<PlayerPositionsPayload> TYPE = new Type<>(id("player_positions"));
+
+        public static final StreamCodec<FriendlyByteBuf, PlayerPositionsPayload> CODEC =
+                StreamCodec.of(PlayerPositionsPayload::write, PlayerPositionsPayload::read);
+
+        private static void write(FriendlyByteBuf buf, PlayerPositionsPayload p) {
+            buf.writeVarInt(p.players.size());
+            for (PlayerPos pos : p.players) {
+                buf.writeUUID(pos.id);
+                buf.writeResourceLocation(pos.dimension);
+                buf.writeDouble(pos.x);
+                buf.writeDouble(pos.z);
+            }
+        }
+
+        private static PlayerPositionsPayload read(FriendlyByteBuf buf) {
+            int count = buf.readVarInt();
+            List<PlayerPos> players = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                players.add(
+                        new PlayerPos(buf.readUUID(), buf.readResourceLocation(), buf.readDouble(), buf.readDouble()));
+            }
+            return new PlayerPositionsPayload(players);
+        }
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     // ---------------------------------------------------------------- enregistrement
 
     public static void register(final RegisterPayloadHandlersEvent event) {
@@ -353,5 +435,20 @@ public final class Payloads {
                 MapInfoRequestPayload.TYPE,
                 MapInfoRequestPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.serverMapInfoRequest.accept(ctx.player(), payload)));
+
+        registrar.playToServer(
+                MapVisibilityPayload.TYPE,
+                MapVisibilityPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.serverMapVisibility.accept(ctx.player(), payload)));
+
+        registrar.playToClient(
+                HiddenPlayersPayload.TYPE,
+                HiddenPlayersPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientHiddenPlayers.accept(payload)));
+
+        registrar.playToClient(
+                PlayerPositionsPayload.TYPE,
+                PlayerPositionsPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientPlayerPositions.accept(payload)));
     }
 }

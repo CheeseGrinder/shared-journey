@@ -2,6 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.event;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapBridge;
+import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.DiskCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
@@ -36,6 +37,9 @@ public final class ClientSessionEvents {
         // Signale "mapping démarré" aux plugins JourneyMap bridgés (Waystones
         // attend cet événement avant de créer ses waypoints).
         JourneyMapBridge.fireMappingEvent(true, event.getPlayer().level().dimension());
+
+        // Préférence de visibilité sur la carte des autres joueurs.
+        PacketDistributor.sendToServer(new Payloads.MapVisibilityPayload(ClientConfig.HIDE_FROM_MAP.get()));
     }
 
     @SubscribeEvent

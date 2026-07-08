@@ -306,15 +306,6 @@ public final class MinimapRenderer {
             }
         }
 
-        // ---- Waypoints de la dimension (points colorés, sous le radar)
-        for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
-            if (!wp.visible()) {
-                continue;
-            }
-
-            EntityDots.drawWaypointDiamond(gg, wp.x(), wp.z(), wp.colorRgb(), 0.9f);
-        }
-
         // ---- Radar d'entités (spec §6.1) : rayon plafonné par le serveur
         if (ClientConfig.RADAR_ENABLED.get() && ClientMapCache.radarMaxRadius > 0) {
             int radius = Math.min(ClientConfig.RADAR_RADIUS.get(), ClientMapCache.radarMaxRadius);
@@ -352,6 +343,70 @@ public final class MinimapRenderer {
             gg.flush();
             resetDepth(gg, x - 2, y - 2, x + size + 2, y + size + 2);
             drawRing(gg, cx, cy, half, half + 1.5f, 0xFF202020);
+        }
+
+        // ---- Waypoints en espace écran : taille constante, et épinglés SUR
+        // la bordure de la minimap quand ils sont hors de vue (direction).
+        double theta = rotate ? Math.toRadians(-yaw - 180f) : 0;
+        double cosT = Math.cos(theta);
+        double sinT = Math.sin(theta);
+        float maxR = half;
+        for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
+            if (!wp.visible()) {
+                continue;
+            }
+
+            double ox = (wp.x() + 0.5 - px) * zoom;
+            double oz = (wp.z() + 0.5 - pz) * zoom;
+            double sx = ox * cosT - oz * sinT;
+            double sy = ox * sinT + oz * cosT;
+            if (circle) {
+                double r = Math.sqrt(sx * sx + sy * sy);
+                if (r > maxR) {
+                    sx = sx / r * maxR;
+                    sy = sy / r * maxR;
+                }
+            } else {
+                sx = Math.clamp(sx, -maxR, maxR);
+                sy = Math.clamp(sy, -maxR, maxR);
+            }
+            EntityDots.drawWaypointDiamond(gg, cx + (float) sx, cy + (float) sy, wp.colorRgb(), 0.9f);
+        }
+
+        // ---- Têtes des autres joueurs (positions serveur, sans limite de
+        // distance), épinglées sur la bordure comme les waypoints.
+        if (ClientConfig.RADAR_PLAYERS.get()) {
+            var selfId = player.getUUID();
+            for (var pos : ClientMapCache.playerPositions.values()) {
+                if (pos.id().equals(selfId) || !pos.dimension().equals(dim.location())) {
+                    continue;
+                }
+
+                double wx = pos.x();
+                double wz = pos.z();
+                // Position vivante si le joueur est suivi localement (fluide).
+                Player live = mc.level == null ? null : mc.level.getPlayerByUUID(pos.id());
+                if (live != null) {
+                    wx = live.getX();
+                    wz = live.getZ();
+                }
+
+                double ox = (wx - px) * zoom;
+                double oz = (wz - pz) * zoom;
+                double sx = ox * cosT - oz * sinT;
+                double sy = ox * sinT + oz * cosT;
+                if (circle) {
+                    double r = Math.sqrt(sx * sx + sy * sy);
+                    if (r > maxR) {
+                        sx = sx / r * maxR;
+                        sy = sy / r * maxR;
+                    }
+                } else {
+                    sx = Math.clamp(sx, -maxR, maxR);
+                    sy = Math.clamp(sy, -maxR, maxR);
+                }
+                EntityDots.drawPlayerHead(gg, cx + (int) Math.round(sx), cy + (int) Math.round(sy), pos.id(), 8);
+            }
         }
 
         // Flèche du joueur au centre. En rotation, le joueur "regarde vers le

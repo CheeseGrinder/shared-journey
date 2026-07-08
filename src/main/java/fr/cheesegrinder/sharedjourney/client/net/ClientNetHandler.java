@@ -3,6 +3,11 @@ package fr.cheesegrinder.sharedjourney.client.net;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
 /** Réception des paquets côté client (thread client via enqueueWork). */
 public final class ClientNetHandler {
 
@@ -17,6 +22,18 @@ public final class ClientNetHandler {
     public static void handleRegionData(Payloads.RegionDataPayload payload) {
         ClientMapCache.acceptFragment(
                 payload.key(), payload.version(), payload.part(), payload.totalParts(), payload.data());
+    }
+
+    public static void handleHiddenPlayers(Payloads.HiddenPlayersPayload payload) {
+        ClientMapCache.hiddenPlayers = Set.copyOf(payload.hidden());
+    }
+
+    public static void handlePlayerPositions(Payloads.PlayerPositionsPayload payload) {
+        Map<UUID, Payloads.PlayerPositionsPayload.PlayerPos> positions = new HashMap<>();
+        for (Payloads.PlayerPositionsPayload.PlayerPos pos : payload.players()) {
+            positions.put(pos.id(), pos);
+        }
+        ClientMapCache.playerPositions = Map.copyOf(positions);
     }
 
     public static void handleMapInfoChunk(Payloads.MapInfoChunkPayload payload) {

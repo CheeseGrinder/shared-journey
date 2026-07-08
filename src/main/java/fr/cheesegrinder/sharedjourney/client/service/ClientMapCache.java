@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -38,6 +39,10 @@ public final class ClientMapCache {
     public static volatile Map<ResourceLocation, List<MapLayer>> layersByDim = Map.of();
     public static volatile List<Integer> caveBands = List.of();
     public static volatile int radarMaxRadius = 64;
+    /** Joueurs ayant demandé à être cachés de la carte (diffusé par le serveur). */
+    public static volatile Set<UUID> hiddenPlayers = Set.of();
+    /** Positions des joueurs (non cachés) diffusées par le serveur (~1x/s). */
+    public static volatile Map<UUID, Payloads.PlayerPositionsPayload.PlayerPos> playerPositions = Map.of();
 
     private static final Map<RegionKey, Region> REGIONS = new ConcurrentHashMap<>();
     private static final Map<RegionKey, Assembly> PENDING = new ConcurrentHashMap<>();

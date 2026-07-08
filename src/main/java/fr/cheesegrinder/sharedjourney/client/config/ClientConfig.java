@@ -21,6 +21,8 @@ public final class ClientConfig {
     public static ModConfigSpec.IntValue RADAR_RADIUS;
 
     public static ModConfigSpec.BooleanValue RADAR_PLAYERS;
+    /** Demande au serveur d'être caché de la carte des AUTRES joueurs. */
+    public static ModConfigSpec.BooleanValue HIDE_FROM_MAP;
     public static ModConfigSpec.BooleanValue RADAR_HOSTILE;
     public static ModConfigSpec.BooleanValue RADAR_PASSIVE;
     public static ModConfigSpec.BooleanValue RADAR_PETS;
@@ -84,6 +86,8 @@ public final class ClientConfig {
         RADAR_RADIUS =
                 b.comment("Rayon du radar en blocs (plafonné par le serveur).").defineInRange("radius", 48, 8, 128);
         RADAR_PLAYERS = b.define("showPlayers", true);
+        HIDE_FROM_MAP = b.comment("Demande au serveur d'être caché de la carte des autres joueurs.")
+                .define("hideFromMap", false);
         RADAR_HOSTILE = b.define("showHostile", true);
         RADAR_PASSIVE = b.define("showPassive", false);
         RADAR_PETS = b.define("showPets", true);

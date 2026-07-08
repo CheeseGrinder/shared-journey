@@ -50,6 +50,7 @@
   "sharedjourney.action.show_pets": "Afficher les animaux apprivoisés",
   "sharedjourney.action.show_villagers": "Afficher les villageois",
   "sharedjourney.action.show_grid": "Afficher la grille de chunks",
+  "sharedjourney.action.hide_from_map": "Me cacher de la carte des autres joueurs",
   "sharedjourney.action.show_keys": "Afficher la légende",
   "sharedjourney.action.close": "Fermer",
   "sharedjourney.action.locate": "Aller aux coordonnées",
@@ -143,6 +144,9 @@
 
   "sharedjourney.configuration.showPlayers": "Afficher les joueurs",
   "sharedjourney.configuration.showPlayers.tooltip": "Afficher les autres joueurs sur le radar.",
+
+  "sharedjourney.configuration.hideFromMap": "Me cacher de la carte",
+  "sharedjourney.configuration.hideFromMap.tooltip": "Demande au serveur de vous cacher de la carte des autres joueurs.",
 
   "sharedjourney.configuration.showHostile": "Afficher les mobs hostiles",
   "sharedjourney.configuration.showHostile.tooltip": "Afficher les mobs hostiles sur le radar.",

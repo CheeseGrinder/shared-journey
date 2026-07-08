@@ -30,6 +30,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -152,7 +153,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         toggleIcons.clear();
         int size = 20;
         int step = size + 2;
-        int total = 5 * step + 6 + 7 * step - 2;
+        int total = 5 * step + 6 + 8 * step - 2;
         int x = (width - total) / 2;
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
 
@@ -169,6 +170,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         x = addToggleIcon(x, step, Items.BONE, "sharedjourney.action.show_pets", ClientConfig.RADAR_PETS);
         x = addToggleIcon(x, step, Items.EMERALD, "sharedjourney.action.show_villagers", ClientConfig.RADAR_VILLAGERS);
         x = addToggleIcon(x, step, Items.IRON_BARS, "sharedjourney.action.show_grid", ClientConfig.SHOW_GRID);
+        x = addToggleIcon(x, step, Items.PLAYER_HEAD, "sharedjourney.action.hide_from_map", ClientConfig.HIDE_FROM_MAP);
 
         IconButton keys = addIcon(x, 6, Items.WRITABLE_BOOK, "sharedjourney.action.show_keys", b -> {
             showKeys = !showKeys;
@@ -236,6 +238,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             // set() ne modifie que la valeur en mémoire : on force l'écriture
             // du fichier pour que le réglage survive à la session.
             ClientConfig.SPEC.save();
+            if (value == ClientConfig.HIDE_FROM_MAP) {
+                // Préférence appliquée par le serveur : envoi immédiat.
+                PacketDistributor.sendToServer(new Payloads.MapVisibilityPayload(value.get()));
+            }
+
             refreshToolbar();
         });
         toggleIcons.put(b, value);
@@ -884,15 +891,26 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
+        var mc = Minecraft.getInstance();
         renderBackgroundLayers(gg);
         // Overlays des plugins JourneyMap bridgés (trains Create, gisements
         // RNS...) : au-dessus de la carte, sous les widgets.
         if (pluginOverlaysActive()) {
             JourneyMapFullscreenBridge.fireRender(this, gg, mouseX, mouseY, partialTick);
         }
+
+        // Flèche du joueur AU-DESSUS de la carte et des overlays des plugins.
+        if (mc.player != null) {
+            EntityDots.drawPlayerArrow(
+                    gg,
+                    (float) screenX(mc.player.getX()),
+                    (float) screenY(mc.player.getZ()),
+                    mc.player.getYRot() + 180f,
+                    1.1f);
+        }
+
         super.render(gg, mouseX, mouseY, partialTick);
 
-        var mc = Minecraft.getInstance();
         renderTopInfoBar(gg, mc);
         renderHoverBar(gg, mc, mouseX, mouseY);
         if (showKeys) {
@@ -1097,14 +1115,6 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             gg.renderOutline(sx0, sy0, Math.max(1, sx1 - sx0), Math.max(1, sy1 - sy0), 0xFFE0E0E0);
         }
 
-        // Flèche du joueur (taille constante quel que soit le zoom).
-        EntityDots.drawPlayerArrow(
-                gg,
-                (float) screenX(mc.player.getX()),
-                (float) screenY(mc.player.getZ()),
-                mc.player.getYRot() + 180f,
-                1.1f);
-
         // Waypoints par-dessus, en coordonnées écran (taille constante quel que soit le zoom)
         for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
             if (!wp.visible()) {
@@ -1120,6 +1130,32 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             EntityDots.drawWaypointDiamond(gg, sx, sy, wp.colorRgb(), 1.2f);
             if (zoom >= 0.5f && ClientConfig.SHOW_WAYPOINT_NAMES.get()) {
                 gg.drawCenteredString(font, wp.name(), sx, sy - 13, 0xFFFFFF);
+            }
+        }
+
+        // ---- Têtes des autres joueurs (positions serveur, sans limite de distance)
+        if (ClientConfig.RADAR_PLAYERS.get()) {
+            var selfId = mc.player.getUUID();
+            for (var pos : ClientMapCache.playerPositions.values()) {
+                if (pos.id().equals(selfId) || !pos.dimension().equals(dim.location())) {
+                    continue;
+                }
+
+                double pwx = pos.x();
+                double pwz = pos.z();
+                Player live = mc.level.getPlayerByUUID(pos.id());
+                if (live != null) {
+                    pwx = live.getX();
+                    pwz = live.getZ();
+                }
+
+                int sx = (int) Math.round(screenX(pwx));
+                int sy = (int) Math.round(screenY(pwz));
+                if (sx < -8 || sx > width + 8 || sy < -8 || sy > height + 8) {
+                    continue;
+                }
+
+                EntityDots.drawPlayerHead(gg, sx, sy, pos.id(), 8);
             }
         }
 
