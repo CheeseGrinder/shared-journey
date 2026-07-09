@@ -631,18 +631,10 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             return;
         }
 
-        // Y de surface : chunk local, sinon cache d'infos de survol reçu du
-        // serveur — jamais un TP à l'aveugle dans le sol.
-        int y = surfaceYAt(wx, wz);
-        if (y < 0) {
-            ClientMapCache.HoverInfo info = ClientMapCache.hoverInfo(wx, wz);
-            if (info != null) {
-                y = info.y();
-            }
-        }
-
-        String yArg = y >= 0 ? String.valueOf(y) : "~";
-        mc.player.connection.sendUnsignedCommand("tp @s " + (wx + 0.5) + " " + yArg + " " + (wz + 0.5));
+        // Y d'arrivée calculé côté serveur (/sj tp) : le client n'a pas
+        // toujours le chunk cible en local, et un « ~ » conserverait
+        // l'altitude de vol (arrivée dans la roche ou en plein ciel).
+        mc.player.connection.sendUnsignedCommand("sj tp " + wx + " " + wz);
         onClose();
     }
 

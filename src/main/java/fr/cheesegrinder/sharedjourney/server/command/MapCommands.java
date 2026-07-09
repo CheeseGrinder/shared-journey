@@ -10,18 +10,24 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.DimensionArgument;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
 import java.util.Collection;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Racines /sharedjourney et /sj (alias) — spec §7.
@@ -70,6 +76,17 @@ public final class MapCommands {
                             ctx.getSource().sendSuccess(() -> Component.literal(SyncService.statsFor(p)), false);
                             return 1;
                         })));
+
+        // ---- /sj tp <x> <z> : téléportation depuis la carte, Y calculé
+        // côté serveur (même niveau de permission que le /tp vanilla).
+        root.then(Commands.literal("tp")
+                .requires(src -> src.hasPermission(2))
+                .then(Commands.argument("x", IntegerArgumentType.integer())
+                        .then(Commands.argument("z", IntegerArgumentType.integer())
+                                .executes(ctx -> teleportToSurface(
+                                        ctx.getSource(),
+                                        IntegerArgumentType.getInteger(ctx, "x"),
+                                        IntegerArgumentType.getInteger(ctx, "z"))))));
 
         // ---- /map admin ... (OP)
         LiteralArgumentBuilder<CommandSourceStack> admin =
@@ -211,6 +228,53 @@ public final class MapCommands {
 
         root.then(admin);
         return root;
+    }
+
+    /**
+     * Téléporte le joueur aux coordonnées cliquées sur la carte, avec un Y
+     * d'arrivée TOUJOURS calculé côté serveur : le client n'a pas forcément
+     * le chunk cible en local, et un « ~ » conserverait l'altitude de vol
+     * (arrivée dans la roche ou en plein ciel). Le chargement synchrone du
+     * chunk est assumé : commande ponctuelle, et la téléportation le
+     * chargerait de toute façon.
+     */
+    private static int teleportToSurface(CommandSourceStack src, int x, int z) throws CommandSyntaxException {
+        ServerPlayer player = src.getPlayerOrException();
+        ServerLevel level = player.serverLevel();
+        ChunkAccess chunk = level.getChunk(x >> 4, z >> 4);
+        int y = arrivalY(level, chunk, x, z);
+        player.teleportTo(level, x + 0.5, y, z + 0.5, Set.of(), player.getYRot(), player.getXRot());
+        src.sendSuccess(() -> Component.literal("Téléporté en " + x + " " + y + " " + z), true);
+        return 1;
+    }
+
+    /**
+     * Y d'arrivée : surface (heightmap MOTION_BLOCKING, +1 pour être posé
+     * dessus). Dans les dimensions à plafond (Nether), la heightmap renvoie
+     * le toit de bedrock : on cherche à la place, du plafond logique vers le
+     * bas, un sol non liquide surmonté de 2 blocs d'air.
+     */
+    private static int arrivalY(ServerLevel level, ChunkAccess chunk, int x, int z) {
+        int surface = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15) + 1;
+        if (!level.dimensionType().hasCeiling()) {
+            return surface;
+        }
+
+        int top = level.getMinBuildHeight() + level.dimensionType().logicalHeight();
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        int airRun = 0;
+        for (int yy = top - 1; yy > level.getMinBuildHeight(); yy--) {
+            BlockState state = chunk.getBlockState(pos.set(x, yy, z));
+            if (state.isAir()) {
+                airRun++;
+                continue;
+            }
+            if (airRun >= 2 && state.getFluidState().isEmpty()) {
+                return yy + 1;
+            }
+            airRun = 0;
+        }
+        return surface;
     }
 
     private static int forceAll(CommandSourceStack src, int[] region) {

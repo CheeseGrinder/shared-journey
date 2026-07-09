@@ -10,11 +10,12 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
   vanilla → éliminés par le back-face culling. Winding corrigé + `disableCull` +
   `setShaderColor(1,1,1,1)` contre l'état GL laissé par les overlays des plugins.
   → Suite : asset dédié pour le marqueur (voir UI / UX).
-- [ ] **P1 · ★★★★☆ — Couleur des beacons de waypoints instable** : les waypoints globaux (et
-  ceux des waystones) changent de couleur entre les sessions et ne correspondent pas entre
-  joueurs.
-  _Cause probable : couleur aléatoire attribuée à chaque création par la WaypointFactory du
-  bridge (non persistée). Fix : dériver une couleur stable d'un hash de l'id/guid._
+- [x] **P1 · ★★★★☆ — Couleur des beacons de waypoints instable** — **corrigé** : la
+  WaypointFactory du bridge tirait une couleur aléatoire à chaque création (et le guid étant
+  lui-même aléatoire par session, le hasher n'aurait rien réglé). La couleur est maintenant
+  dérivée de l'identité stable du waypoint (modId + dimension + position) via une teinte HSV
+  (`stableColor`) — identique entre sessions et entre joueurs ; `setColor` d'un mod garde la
+  priorité.
 - [ ] **P1 · ★★★★★ — Couleurs de blocs incomplètes** : les feuilles de cerisier sont grises ;
   pas compatible vanilla ni mods (Biomes O' Plenty...). Faire comme JourneyMap : extraire une
   palette de couleurs depuis les textures des blocs plutôt que se limiter aux `MapColor`.
@@ -24,8 +25,9 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
 - [ ] **P2 · ★★★☆☆ — Noms des gares et des trains toujours absents** sur la carte (le tooltip
   au survol via `renderAndPick` de Create ne s'affiche pas — instrumenter le `Rect2i` de bornes
   et le pick).
-- [ ] **P2 · ★★☆☆☆ — Téléportation en vol** : le `/tp` ne change pas la hauteur quand on vole
-  (le `~` ou le Y de surface est ignoré/inadapté) — corriger le calcul du Y à l'arrivée.
+- [x] **P2 · ★★☆☆☆ — Téléportation en vol** — **corrigé** : le Y d'arrivée est maintenant
+  calculé côté serveur via la nouvelle commande `/sj tp <x> <z>` (heightmap MOTION_BLOCKING+1,
+  scan sous le plafond dans le Nether) au lieu du `/tp` vanilla avec Y client ou `~`.
 - [ ] **P2 · ★★★★☆ — Infos de survol (bloc/biome) : perf et tenue en charge** : plus la zone
   survolée est loin, plus la réponse est lente — déjà sensible à 1 serveur / 2 joueurs. Doit
   être « charge-proof ». Investiguer l'approche JourneyMap (instantané car 100 % local).
@@ -163,10 +165,9 @@ grand chantier** pour repartir d'une base saine — mais ciblé sur les parties 
 (écrans, menus) sera nettoyée par son propre rework, inutile de la documenter avant de la
 réécrire.
 
-1. **Micro-fixes testabilité** : ~~marqueur du joueur local (P0 ★★★★★)~~ ✔ fait (l'asset
-   dédié suivra avec le chantier UI), couleur des beacons stable (P1 ★★★★☆, hash du guid),
-   téléportation en vol (P2 ★★☆☆☆). Quelques heures en tout, et on peut tester proprement
-   pendant tout le refactor.
+1. ~~**Micro-fixes testabilité** : marqueur du joueur local (P0 ★★★★★), couleur des beacons
+   stable (P1 ★★★★☆), téléportation en vol (P2 ★★☆☆☆).~~ ✔ **fait** (l'asset dédié du
+   marqueur suivra avec le chantier UI). On peut tester proprement pendant tout le refactor.
 2. **Clean code — le socle** (P3 ★★★☆☆) : `common`, `server` (moteur, services, réseau),
    `client.service`, bridge JourneyMap. Responsabilité unique, utils, constantes, docs et
    commentaires de config en anglais, **configs par section** (P4). L'UI est EXCLUE de cette
