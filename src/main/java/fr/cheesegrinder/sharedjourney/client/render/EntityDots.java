@@ -101,19 +101,25 @@ public final class EntityDots {
      */
     public static void drawPlayerArrow(GuiGraphics gg, float cx, float cy, float angleDeg, float scale) {
         gg.flush();
-        // Marqueur HUD toujours visible : pas de test de profondeur (les
-        // overlays des plugins bridgés peuvent laisser un état GL différent).
+        // Marqueur HUD toujours visible : pas de test de profondeur ni de
+        // culling, et couleur de shader neutre (les overlays des plugins
+        // bridgés peuvent laisser un état GL différent).
         RenderSystem.disableDepthTest();
+        RenderSystem.disableCull();
+        RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
         gg.pose().pushPose();
         gg.pose().translate(cx, cy, 0);
         gg.pose().mulPose(Axis.ZP.rotationDegrees(angleDeg));
         gg.pose().scale(scale, scale, 1f);
         // Contour bleu, corps blanc, puis encoche arrière bleue (dos concave)
-        // pour rendre la direction lisible d'un coup d'oeil.
-        triangle(gg, 0xFF2653C1, 0f, -7f, 5.5f, 6f, -5.5f, 6f);
-        triangle(gg, 0xFFFFFFFF, 0f, -4.5f, 3.6f, 4.6f, -3.6f, 4.6f);
-        triangle(gg, 0xFF2653C1, 0f, 1.5f, 2.8f, 6f, -2.8f, 6f);
+        // pour rendre la direction lisible d'un coup d'oeil. Sommets en ordre
+        // horaire écran (sommet, bas-gauche, bas-droite) : même winding que
+        // les quads GUI vanilla, sinon le back-face culling élimine la flèche.
+        triangle(gg, 0xFF2653C1, 0f, -7f, -5.5f, 6f, 5.5f, 6f);
+        triangle(gg, 0xFFFFFFFF, 0f, -4.5f, -3.6f, 4.6f, 3.6f, 4.6f);
+        triangle(gg, 0xFF2653C1, 0f, 1.5f, -2.8f, 6f, 2.8f, 6f);
         gg.pose().popPose();
+        RenderSystem.enableCull();
         RenderSystem.enableDepthTest();
     }
 

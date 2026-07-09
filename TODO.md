@@ -4,12 +4,12 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
 
 ## Bugs
 
-- [ ] **P0 · ★★★★★ — Marqueur du joueur local absent** : afficher un marqueur pour le joueur
-  dont c'est la session (minimap + carte plein écran) — actuellement rien ne s'affiche.
-  Prévoir des **assets dédiés** (reprendre le style des assets JourneyMap ou en créer).
-  _Piste : la flèche (`EntityDots.drawPlayerArrow`) est dessinée mais invisible ; les derniers
-  correctifs (test de profondeur désactivé, dessin après les overlays) restent à valider.
-  Suspect suivant : un `RenderSystem.setShaderColor` laissé par les overlays des plugins._
+- [x] **P0 · ★★★★★ — Marqueur du joueur local absent** : ~~afficher un marqueur pour le joueur
+  dont c'est la session (minimap + carte plein écran)~~ — **corrigé** : les triangles de
+  `EntityDots.drawPlayerArrow` étaient émis avec un winding inversé par rapport aux quads GUI
+  vanilla → éliminés par le back-face culling. Winding corrigé + `disableCull` +
+  `setShaderColor(1,1,1,1)` contre l'état GL laissé par les overlays des plugins.
+  → Suite : asset dédié pour le marqueur (voir UI / UX).
 - [ ] **P1 · ★★★★☆ — Couleur des beacons de waypoints instable** : les waypoints globaux (et
   ceux des waystones) changent de couleur entre les sessions et ne correspondent pas entre
   joueurs.
@@ -131,6 +131,9 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
 
 ## UI / UX
 
+- [ ] **P3 · ★★★☆☆ — Asset dédié pour le marqueur du joueur** : remplacer le triangle vectoriel
+  (`EntityDots.drawPlayerArrow`) par une image/texture dédiée (reprendre le style des assets
+  JourneyMap ou en créer), sur la minimap et la carte plein écran.
 - [ ] **P2 · ★★★★☆ — Rework de l'écran de création/édition de waypoint** : en faire un vrai
   screen structuré style JourneyMap (l'actuel est brouillon).
 - [ ] **P3 · ★★★☆☆ — Rework du menu clic droit** : rendu propre style JourneyMap (panneau
@@ -160,9 +163,10 @@ grand chantier** pour repartir d'une base saine — mais ciblé sur les parties 
 (écrans, menus) sera nettoyée par son propre rework, inutile de la documenter avant de la
 réécrire.
 
-1. **Micro-fixes testabilité** : marqueur du joueur local (P0 ★★★★★, assets à prévoir),
-   couleur des beacons stable (P1 ★★★★☆, hash du guid), téléportation en vol (P2 ★★☆☆☆).
-   Quelques heures en tout, et on peut tester proprement pendant tout le refactor.
+1. **Micro-fixes testabilité** : ~~marqueur du joueur local (P0 ★★★★★)~~ ✔ fait (l'asset
+   dédié suivra avec le chantier UI), couleur des beacons stable (P1 ★★★★☆, hash du guid),
+   téléportation en vol (P2 ★★☆☆☆). Quelques heures en tout, et on peut tester proprement
+   pendant tout le refactor.
 2. **Clean code — le socle** (P3 ★★★☆☆) : `common`, `server` (moteur, services, réseau),
    `client.service`, bridge JourneyMap. Responsabilité unique, utils, constantes, docs et
    commentaires de config en anglais, **configs par section** (P4). L'UI est EXCLUE de cette
