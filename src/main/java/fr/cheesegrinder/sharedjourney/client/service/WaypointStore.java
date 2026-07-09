@@ -2,9 +2,8 @@ package fr.cheesegrinder.sharedjourney.client.service;
 
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.api.event.WaypointEvent;
-import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 
@@ -44,28 +43,14 @@ public final class WaypointStore {
 
     // ------------------------------------------------------------------ session
 
+    /**
+     * Opens the session's waypoint file, in the same per-server cache folder
+     * as the tiles. Requires {@link DiskCache#openSession()} to have run
+     * first (see ClientSessionEvents).
+     */
     public static void openSession() {
-        Minecraft mc = Minecraft.getInstance();
-        String id;
-        var server = mc.getCurrentServer();
-        if (server != null) {
-            id = server.ip.toLowerCase().replaceAll("[^a-z0-9._-]", "_");
-        } else if (mc.getSingleplayerServer() != null) {
-            id = "sp_"
-                    + mc.getSingleplayerServer()
-                            .getWorldData()
-                            .getLevelName()
-                            .toLowerCase()
-                            .replaceAll("[^a-z0-9._-]", "_");
-        } else {
-            id = "unknown";
-        }
-
-        file = mc.gameDirectory
-                .toPath()
-                .resolve("sharedjourney_cache")
-                .resolve(id)
-                .resolve("waypoints.json");
+        Path root = DiskCache.sessionRoot();
+        file = root == null ? null : root.resolve("waypoints.json");
         load();
     }
 
@@ -134,7 +119,7 @@ public final class WaypointStore {
      */
     public static void removeReachedTemp(Player player) {
         ResourceLocation dim = player.level().dimension().location();
-        int radius = ClientConfig.TEMP_WAYPOINT_RADIUS.get();
+        int radius = WaypointClientConfig.TEMP_WAYPOINT_RADIUS.get();
         long radiusSq = (long) radius * radius;
         for (Waypoint wp : all()) {
             if (wp.type() != Waypoint.Type.TEMP || !wp.dimension().equals(dim)) {
@@ -175,10 +160,11 @@ public final class WaypointStore {
 
             for (JsonElement el : arr) {
                 JsonObject o = el.getAsJsonObject();
-                // Only "user" waypoints are persisted: those of bridged mods
+                // Only user waypoints are persisted: those of bridged mods
                 // (Waystones...) are resynchronized every session by their
                 // mod. Also purges duplicates from older versions.
-                if (o.has("source") && !"user".equals(o.get("source").getAsString())) {
+                if (o.has("source")
+                        && !Waypoint.SOURCE_USER.equals(o.get("source").getAsString())) {
                     continue;
                 }
 
@@ -196,7 +182,7 @@ public final class WaypointStore {
                         o.get("y").getAsInt(),
                         o.get("z").getAsInt(),
                         o.get("color").getAsInt(),
-                        o.has("source") ? o.get("source").getAsString() : "user",
+                        o.has("source") ? o.get("source").getAsString() : Waypoint.SOURCE_USER,
                         !o.has("visible") || o.get("visible").getAsBoolean(),
                         readType(o));
                 WAYPOINTS.put(wp.id(), wp);
@@ -227,7 +213,7 @@ public final class WaypointStore {
         JsonArray arr = new JsonArray();
         for (Waypoint wp : WAYPOINTS.values()) {
             // Bridged mods' waypoints are volatile (see load()).
-            if (!"user".equals(wp.source())) {
+            if (!Waypoint.SOURCE_USER.equals(wp.source())) {
                 continue;
             }
 

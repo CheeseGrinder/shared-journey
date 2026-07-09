@@ -101,7 +101,7 @@ public final class MapManager {
         this.customLayers = customLayers;
         this.root = server.getWorldPath(LevelResource.ROOT).resolve("data").resolve("sharedjourney");
         RegionStorage.migrateLegacyCaveFolders(root);
-        this.index.load(root.resolve("index.json"));
+        this.index.load(root.resolve(RegionIndex.FILE_NAME));
 
         // Allocation formula from spec §4: min(cores-2, config), floor 1.
         // Math.clamp would throw on machines with <= 2 cores (min > max).
@@ -496,7 +496,7 @@ public final class MapManager {
             }
         }
         try {
-            index.save(root.resolve("index.json"));
+            index.save(root.resolve(RegionIndex.FILE_NAME));
         } catch (IOException ex) {
             LOGGER.error("Failed to save the index", ex);
         }

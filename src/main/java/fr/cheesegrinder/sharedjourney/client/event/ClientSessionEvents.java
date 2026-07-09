@@ -2,7 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.event;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapBridge;
-import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.DiskCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
@@ -39,7 +39,7 @@ public final class ClientSessionEvents {
         JourneyMapBridge.fireMappingEvent(true, event.getPlayer().level().dimension());
 
         // Visibility preference on the other players' map.
-        PacketDistributor.sendToServer(new Payloads.MapVisibilityPayload(ClientConfig.HIDE_FROM_MAP.get()));
+        PacketDistributor.sendToServer(new Payloads.MapVisibilityPayload(RadarClientConfig.HIDE_FROM_MAP.get()));
     }
 
     @SubscribeEvent

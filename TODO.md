@@ -158,8 +158,9 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
 - [ ] **P3 · ★★★☆☆ — Nettoyage** : responsabilité unique par fichier, documentation
   systématique, passer la doc et les commentaires de config en anglais, créer des
   utilitaires/globals, remplacer les chaînes répétées par des constantes statiques.
-- [ ] **P4 · ★★☆☆☆ — Configs client par section** : éclater `ClientConfig` en un fichier par
-  section, comme ce qui a été fait côté serveur (`LayersServerConfig`, `EngineServerConfig`...).
+- [x] **P4 · ★★☆☆☆ — Configs client par section** — **fait** : `ClientConfig` est maintenant
+  une façade qui assemble `MinimapClientConfig`, `RadarClientConfig`, `WaypointClientConfig`
+  et `MapClientConfig` (clés TOML inchangées, pas de reset de config).
 - [ ] **P4 · ★★☆☆☆ — Optimisation** : passe de perf générale (allocations par frame, réflexion
   dans les chemins chauds du bridge, caches).
 - [ ] **P5 · ★★☆☆☆ — Rendu via shader** : JourneyMap dessine avec ses propres shaders (au sens

@@ -3,7 +3,9 @@ package fr.cheesegrinder.sharedjourney.client.render;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapFullscreenBridge;
-import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
@@ -56,8 +58,8 @@ public final class MinimapRenderer {
     public static MapLayer currentLayer() {
         if (currentLayer == null) {
             try {
-                currentLayer =
-                        MapLayer.valueOf(ClientConfig.DEFAULT_LAYER.get().trim().toUpperCase(Locale.ROOT));
+                currentLayer = MapLayer.valueOf(
+                        MapClientConfig.DEFAULT_LAYER.get().trim().toUpperCase(Locale.ROOT));
             } catch (IllegalArgumentException e) {
                 currentLayer = MapLayer.DAY;
             }
@@ -68,7 +70,7 @@ public final class MinimapRenderer {
     /** Auto mode follows day/night and going underground. */
     public static boolean autoMode() {
         if (autoMode == null) {
-            autoMode = ClientConfig.AUTO_LAYER.get();
+            autoMode = MapClientConfig.AUTO_LAYER.get();
         }
         return autoMode;
     }
@@ -86,7 +88,7 @@ public final class MinimapRenderer {
 
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
         if (allowed.contains(MapLayer.CAVE)
-                && ClientConfig.SHOW_CAVE.get()
+                && MapClientConfig.SHOW_CAVE.get()
                 && UndergroundCheck.isUnderground(mc.level, mc.player)) {
             return MapLayer.CAVE;
         }
@@ -183,7 +185,7 @@ public final class MinimapRenderer {
             return;
         }
 
-        if (!ClientConfig.MINIMAP_ENABLED.get()) {
+        if (!MinimapClientConfig.MINIMAP_ENABLED.get()) {
             return;
         }
 
@@ -193,19 +195,19 @@ public final class MinimapRenderer {
             layer = allowed.getFirst();
         }
 
-        int size = ClientConfig.MINIMAP_SIZE.get();
+        int size = MinimapClientConfig.MINIMAP_SIZE.get();
         int margin = 6;
         int sw = gg.guiWidth();
         int sh = gg.guiHeight();
         int x =
-                switch (ClientConfig.MINIMAP_CORNER.get()) {
+                switch (MinimapClientConfig.MINIMAP_CORNER.get()) {
                     case TOP_LEFT, BOTTOM_LEFT -> margin;
                     case TOP_RIGHT, BOTTOM_RIGHT -> sw - size - margin;
                 };
-        boolean topAnchored = ClientConfig.MINIMAP_CORNER.get() == ClientConfig.Corner.TOP_LEFT
-                || ClientConfig.MINIMAP_CORNER.get() == ClientConfig.Corner.TOP_RIGHT;
+        boolean topAnchored = MinimapClientConfig.MINIMAP_CORNER.get() == MinimapClientConfig.Corner.TOP_LEFT
+                || MinimapClientConfig.MINIMAP_CORNER.get() == MinimapClientConfig.Corner.TOP_RIGHT;
         int y =
-                switch (ClientConfig.MINIMAP_CORNER.get()) {
+                switch (MinimapClientConfig.MINIMAP_CORNER.get()) {
                     case TOP_LEFT, TOP_RIGHT -> margin;
                     case BOTTOM_LEFT, BOTTOM_RIGHT -> sh - size - margin;
                 };
@@ -214,8 +216,8 @@ public final class MinimapRenderer {
             y += 11;
         }
 
-        boolean rotate = ClientConfig.MINIMAP_ROTATE.get();
-        boolean circle = ClientConfig.MINIMAP_SHAPE.get() == ClientConfig.Shape.CIRCLE;
+        boolean rotate = MinimapClientConfig.MINIMAP_ROTATE.get();
+        boolean circle = MinimapClientConfig.MINIMAP_SHAPE.get() == MinimapClientConfig.Shape.CIRCLE;
         // In rotation mode, the map turns around the player so "forward" stays up.
         float yaw = player.getYRot();
 
@@ -295,7 +297,7 @@ public final class MinimapRenderer {
         // ---- Chunk grid (boundaries every 16 blocks), in the content's
         // pose: follows rotation and zoom. Only shown from zoom 1.0 onward
         // (equivalent of the fullscreen map's 2048 label).
-        if (ClientConfig.SHOW_GRID.get() && zoom >= 1.0f) {
+        if (MapClientConfig.SHOW_GRID.get() && zoom >= 1.0f) {
             int gridColor = 0x38000000;
             int gxStart = Math.floorDiv((int) px - reach, 16) * 16;
             int gzStart = Math.floorDiv((int) pz - reach, 16) * 16;
@@ -308,8 +310,8 @@ public final class MinimapRenderer {
         }
 
         // ---- Entity radar (spec §6.1): radius capped by the server
-        if (ClientConfig.RADAR_ENABLED.get() && ClientMapCache.radarMaxRadius > 0) {
-            int radius = Math.min(ClientConfig.RADAR_RADIUS.get(), ClientMapCache.radarMaxRadius);
+        if (RadarClientConfig.RADAR_ENABLED.get() && ClientMapCache.radarMaxRadius > 0) {
+            int radius = Math.min(RadarClientConfig.RADAR_RADIUS.get(), ClientMapCache.radarMaxRadius);
             AABB box = player.getBoundingBox().inflate(radius, 32, radius);
             for (Entity e : player.level().getEntities(player, box)) {
                 Integer color = EntityDots.colorFor(e);
@@ -376,7 +378,7 @@ public final class MinimapRenderer {
 
         // ---- Other players' heads (server positions, no distance limit),
         // pinned to the border like the waypoints.
-        if (ClientConfig.RADAR_PLAYERS.get()) {
+        if (RadarClientConfig.RADAR_PLAYERS.get()) {
             var selfId = player.getUUID();
             for (var pos : ClientMapCache.playerPositions.values()) {
                 if (pos.id().equals(selfId) || !pos.dimension().equals(dim.location())) {
@@ -436,12 +438,12 @@ public final class MinimapRenderer {
                 + player.blockPosition().getZ();
         if (topAnchored) {
             drawSmallCentered(gg, mc, biome, cx, y + size + 4, 0xC0C0FF);
-            if (ClientConfig.SHOW_COORDS.get()) {
+            if (MinimapClientConfig.SHOW_COORDS.get()) {
                 drawSmallCentered(gg, mc, coords, cx, y + size + 13, 0xAAAAAA);
             }
         } else {
             drawSmallCentered(gg, mc, biome, cx, y - 18, 0xC0C0FF);
-            if (ClientConfig.SHOW_COORDS.get()) {
+            if (MinimapClientConfig.SHOW_COORDS.get()) {
                 drawSmallCentered(gg, mc, coords, cx, y - 27, 0xAAAAAA);
             }
         }
@@ -501,15 +503,15 @@ public final class MinimapRenderer {
             return 0;
         }
 
-        if (mc.getDebugOverlay().showDebugScreen() || !ClientConfig.MINIMAP_ENABLED.get()) {
+        if (mc.getDebugOverlay().showDebugScreen() || !MinimapClientConfig.MINIMAP_ENABLED.get()) {
             return 0;
         }
 
-        if (ClientConfig.MINIMAP_CORNER.get() != ClientConfig.Corner.TOP_RIGHT) {
+        if (MinimapClientConfig.MINIMAP_CORNER.get() != MinimapClientConfig.Corner.TOP_RIGHT) {
             return 0;
         }
 
-        return ClientConfig.MINIMAP_SIZE.get() + 12;
+        return MinimapClientConfig.MINIMAP_SIZE.get() + 12;
     }
 
     /**

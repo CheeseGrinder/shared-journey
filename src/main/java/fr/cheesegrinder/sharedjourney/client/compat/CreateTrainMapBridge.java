@@ -1,7 +1,8 @@
 package fr.cheesegrinder.sharedjourney.client.compat;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
-import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
 import fr.cheesegrinder.sharedjourney.client.gui.FullMapScreen;
 
@@ -54,8 +55,8 @@ public final class CreateTrainMapBridge {
         boolean minimapShown = mc.screen == null
                 && !mc.options.hideGui
                 && ClientInputEvents.minimapVisible
-                && ClientConfig.MINIMAP_ENABLED.get();
-        boolean mapOpen = mc.level != null && (fullMapOpen || minimapShown) && ClientConfig.SHOW_TRAIN_OVERLAY.get();
+                && MinimapClientConfig.MINIMAP_ENABLED.get();
+        boolean mapOpen = mc.level != null && (fullMapOpen || minimapShown) && MapClientConfig.SHOW_TRAIN_OVERLAY.get();
         if (mapOpen && JourneyMapBridge.bridgeActive() && resolve()) {
             try {
                 managerTick.invoke(null);
@@ -84,7 +85,7 @@ public final class CreateTrainMapBridge {
      * the click was consumed.
      */
     public static boolean handleToggleClick(int mouseX, int mouseY) {
-        if (!JourneyMapBridge.bridgeActive() || !resolve() || !ClientConfig.SHOW_TRAIN_OVERLAY.get()) {
+        if (!JourneyMapBridge.bridgeActive() || !resolve() || !MapClientConfig.SHOW_TRAIN_OVERLAY.get()) {
             return false;
         }
 

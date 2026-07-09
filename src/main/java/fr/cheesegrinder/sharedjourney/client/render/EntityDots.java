@@ -1,6 +1,6 @@
 package fr.cheesegrinder.sharedjourney.client.render;
 
-import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -51,16 +51,16 @@ public final class EntityDots {
             return null;
         }
         if (e instanceof TamableAnimal tamed && tamed.isTame()) {
-            return ClientConfig.RADAR_PETS.get() ? COLOR_PET : null;
+            return RadarClientConfig.RADAR_PETS.get() ? COLOR_PET : null;
         }
         if (e instanceof AbstractVillager) {
-            return ClientConfig.RADAR_VILLAGERS.get() ? COLOR_VILLAGER : null;
+            return RadarClientConfig.RADAR_VILLAGERS.get() ? COLOR_VILLAGER : null;
         }
         if (e instanceof Enemy) {
-            return ClientConfig.RADAR_HOSTILE.get() ? COLOR_HOSTILE : null;
+            return RadarClientConfig.RADAR_HOSTILE.get() ? COLOR_HOSTILE : null;
         }
         if (e instanceof Animal) {
-            return ClientConfig.RADAR_PASSIVE.get() ? COLOR_PASSIVE : null;
+            return RadarClientConfig.RADAR_PASSIVE.get() ? COLOR_PASSIVE : null;
         }
         return null;
     }

@@ -2,6 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.event;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 
@@ -71,7 +72,7 @@ public final class ClientSetupEvents {
 
         var mc = Minecraft.getInstance();
         if (mc.getConnection() != null) {
-            PacketDistributor.sendToServer(new Payloads.MapVisibilityPayload(ClientConfig.HIDE_FROM_MAP.get()));
+            PacketDistributor.sendToServer(new Payloads.MapVisibilityPayload(RadarClientConfig.HIDE_FROM_MAP.get()));
         }
     }
 

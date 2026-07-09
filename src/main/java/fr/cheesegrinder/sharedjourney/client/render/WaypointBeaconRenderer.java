@@ -2,7 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.render;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
-import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 
 import net.minecraft.client.Camera;
@@ -46,7 +46,7 @@ public final class WaypointBeaconRenderer {
         }
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null || !ClientConfig.WAYPOINT_BEACONS.get()) {
+        if (mc.level == null || mc.player == null || !WaypointClientConfig.WAYPOINT_BEACONS.get()) {
             return;
         }
 
@@ -56,8 +56,8 @@ public final class WaypointBeaconRenderer {
             return;
         }
 
-        int minDist = ClientConfig.BEACON_MIN_DISTANCE.get();
-        int maxDist = ClientConfig.BEACON_MAX_DISTANCE.get();
+        int minDist = WaypointClientConfig.BEACON_MIN_DISTANCE.get();
+        int maxDist = WaypointClientConfig.BEACON_MAX_DISTANCE.get();
         Vec3 cam = event.getCamera().getPosition();
         PoseStack pose = event.getPoseStack();
         MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
@@ -83,7 +83,7 @@ public final class WaypointBeaconRenderer {
         }
         buffers.endBatch();
 
-        if (ClientConfig.SHOW_WAYPOINT_NAMES.get()) {
+        if (WaypointClientConfig.SHOW_WAYPOINT_NAMES.get()) {
             for (Waypoint wp : shown) {
                 double dx = wp.x() + 0.5 - cam.x;
                 double dz = wp.z() + 0.5 - cam.z;

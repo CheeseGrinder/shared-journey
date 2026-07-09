@@ -1,6 +1,6 @@
 package fr.cheesegrinder.sharedjourney.client.service;
 
-import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
 import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
@@ -48,7 +48,7 @@ public final class DiskCache {
         }
         currentRoot = mc.gameDirectory.toPath().resolve("sharedjourney_cache").resolve(id);
         RegionStorage.migrateLegacyCaveFolders(currentRoot);
-        index.load(currentRoot.resolve("index.json"));
+        index.load(currentRoot.resolve(RegionIndex.FILE_NAME));
         LOGGER.info("SharedJourney: local cache '{}' ({} region(s))", id, index.size());
     }
 
@@ -59,6 +59,11 @@ public final class DiskCache {
 
     public static boolean isOpen() {
         return currentRoot != null;
+    }
+
+    /** Root of the current session's cache folder, or null when closed. */
+    public static Path sessionRoot() {
+        return currentRoot;
     }
 
     public static RegionIndex index() {
@@ -73,7 +78,7 @@ public final class DiskCache {
 
     /** Writes a region PNG received from the server (async) and updates the index. */
     public static void store(RegionKey key, long version, byte[] png) {
-        if (currentRoot == null || !ClientConfig.DISK_CACHE_ENABLED.get()) {
+        if (currentRoot == null || !MapClientConfig.DISK_CACHE_ENABLED.get()) {
             return;
         }
 
@@ -117,7 +122,7 @@ public final class DiskCache {
         }
 
         try {
-            index.save(currentRoot.resolve("index.json"));
+            index.save(currentRoot.resolve(RegionIndex.FILE_NAME));
         } catch (IOException e) {
             LOGGER.error("Failed to save the client index", e);
         }

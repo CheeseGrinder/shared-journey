@@ -1,7 +1,7 @@
 package fr.cheesegrinder.sharedjourney.client.compat;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
-import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -110,8 +110,8 @@ public final class JourneyMapFullscreenBridge {
     /** Client config overlay toggles, by plugin modId. */
     private static Predicate<String> overlayFilter() {
         return modId -> switch (modId) {
-            case "create" -> ClientConfig.SHOW_TRAIN_OVERLAY.get();
-            case "create_rns" -> ClientConfig.SHOW_DEPOSIT_OVERLAY.get();
+            case "create" -> MapClientConfig.SHOW_TRAIN_OVERLAY.get();
+            case "create_rns" -> MapClientConfig.SHOW_DEPOSIT_OVERLAY.get();
             default -> true;
         };
     }

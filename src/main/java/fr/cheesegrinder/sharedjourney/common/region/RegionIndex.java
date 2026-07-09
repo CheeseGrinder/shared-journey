@@ -23,6 +23,9 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class RegionIndex {
 
+    /** File name of the serialized index, at the root of a map storage folder. */
+    public static final String FILE_NAME = "index.json";
+
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Type MAP_TYPE = new TypeToken<Map<String, Long>>() {}.getType();
 

@@ -6,9 +6,10 @@ import net.minecraft.resources.ResourceLocation;
 import java.util.UUID;
 
 /**
- * Immutable waypoint. {@code source} identifies the origin: "user" for
- * hand-created points, or the modId of the third-party mod that created it
- * through the JourneyMap bridge (ex: "waystones").
+ * Immutable waypoint. {@code source} identifies the origin:
+ * {@link #SOURCE_USER} for hand-created points, or the modId of the
+ * third-party mod that created it through the JourneyMap bridge
+ * (ex: "waystones").
  */
 public record Waypoint(
         UUID id,
@@ -21,6 +22,9 @@ public record Waypoint(
         String source,
         boolean visible,
         Type type) {
+
+    /** Source of hand-created waypoints — the only ones persisted locally. */
+    public static final String SOURCE_USER = "user";
 
     /**
      * Waypoint scope:

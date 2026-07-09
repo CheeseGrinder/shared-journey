@@ -5,6 +5,9 @@ import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.client.compat.CreateTrainMapBridge;
 import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapFullscreenBridge;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientSetupEvents;
 import fr.cheesegrinder.sharedjourney.client.render.EntityDots;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
@@ -164,13 +167,17 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         x = addLayerIcon(x, step, MapLayer.CAVE, Items.TORCH, allowed);
         x += 6;
 
-        x = addToggleIcon(x, step, Items.LANTERN, "sharedjourney.action.show_cave", ClientConfig.SHOW_CAVE);
-        x = addToggleIcon(x, step, Items.ZOMBIE_HEAD, "sharedjourney.action.show_mobs", ClientConfig.RADAR_HOSTILE);
-        x = addToggleIcon(x, step, Items.PORKCHOP, "sharedjourney.action.show_animals", ClientConfig.RADAR_PASSIVE);
-        x = addToggleIcon(x, step, Items.BONE, "sharedjourney.action.show_pets", ClientConfig.RADAR_PETS);
-        x = addToggleIcon(x, step, Items.EMERALD, "sharedjourney.action.show_villagers", ClientConfig.RADAR_VILLAGERS);
-        x = addToggleIcon(x, step, Items.IRON_BARS, "sharedjourney.action.show_grid", ClientConfig.SHOW_GRID);
-        x = addToggleIcon(x, step, Items.PLAYER_HEAD, "sharedjourney.action.hide_from_map", ClientConfig.HIDE_FROM_MAP);
+        x = addToggleIcon(x, step, Items.LANTERN, "sharedjourney.action.show_cave", MapClientConfig.SHOW_CAVE);
+        x = addToggleIcon(
+                x, step, Items.ZOMBIE_HEAD, "sharedjourney.action.show_mobs", RadarClientConfig.RADAR_HOSTILE);
+        x = addToggleIcon(
+                x, step, Items.PORKCHOP, "sharedjourney.action.show_animals", RadarClientConfig.RADAR_PASSIVE);
+        x = addToggleIcon(x, step, Items.BONE, "sharedjourney.action.show_pets", RadarClientConfig.RADAR_PETS);
+        x = addToggleIcon(
+                x, step, Items.EMERALD, "sharedjourney.action.show_villagers", RadarClientConfig.RADAR_VILLAGERS);
+        x = addToggleIcon(x, step, Items.IRON_BARS, "sharedjourney.action.show_grid", MapClientConfig.SHOW_GRID);
+        x = addToggleIcon(
+                x, step, Items.PLAYER_HEAD, "sharedjourney.action.hide_from_map", RadarClientConfig.HIDE_FROM_MAP);
 
         IconButton keys = addIcon(x, 6, Items.WRITABLE_BOOK, "sharedjourney.action.show_keys", b -> {
             showKeys = !showKeys;
@@ -238,7 +245,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             // set() only changes the in-memory value: force writing the
             // file so the setting survives past this session.
             ClientConfig.SPEC.save();
-            if (value == ClientConfig.HIDE_FROM_MAP) {
+            if (value == RadarClientConfig.HIDE_FROM_MAP) {
                 // Server-enforced preference: send immediately.
                 PacketDistributor.sendToServer(new Payloads.MapVisibilityPayload(value.get()));
             }
@@ -650,7 +657,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 mc.level.dimension().location(),
                 new BlockPos(wx, surfaceOrPlayerY(wx, wz), wz),
                 0xFFFFFF & ThreadLocalRandom.current().nextInt(),
-                "user",
+                Waypoint.SOURCE_USER,
                 type);
         mc.setScreen(new WaypointEditScreen(this, wp, true));
     }
@@ -667,7 +674,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 mc.level.dimension().location(),
                 new BlockPos(wx, surfaceOrPlayerY(wx, wz), wz),
                 0xFFFFFF & ThreadLocalRandom.current().nextInt(),
-                "user",
+                Waypoint.SOURCE_USER,
                 Waypoint.Type.TEMP);
         WaypointStore.add(wp);
     }
@@ -1100,7 +1107,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         // Chunk grid in screen coordinates (1 px thin lines), only from
         // zoom 1024 onward (label = zoom * 2048).
-        if (ClientConfig.SHOW_GRID.get() && zoom >= 1024f / 2048f) {
+        if (MapClientConfig.SHOW_GRID.get() && zoom >= 1024f / 2048f) {
             int gridColor = 0x38000000;
             int firstCx = Math.floorDiv((int) Math.floor(worldX(0)), 16);
             int lastCx = Math.floorDiv((int) Math.ceil(worldX(width)), 16) + 1;
@@ -1138,13 +1145,13 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             }
 
             EntityDots.drawWaypointDiamond(gg, sx, sy, wp.colorRgb(), 1.2f);
-            if (zoom >= 0.5f && ClientConfig.SHOW_WAYPOINT_NAMES.get()) {
+            if (zoom >= 0.5f && WaypointClientConfig.SHOW_WAYPOINT_NAMES.get()) {
                 gg.drawCenteredString(font, wp.name(), sx, sy - 13, 0xFFFFFF);
             }
         }
 
         // ---- Other players' heads (server positions, no distance limit)
-        if (ClientConfig.RADAR_PLAYERS.get()) {
+        if (RadarClientConfig.RADAR_PLAYERS.get()) {
             var selfId = mc.player.getUUID();
             for (var pos : ClientMapCache.playerPositions.values()) {
                 if (pos.id().equals(selfId) || !pos.dimension().equals(dim.location())) {
@@ -1170,8 +1177,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         }
 
         // Entity radar: same filters and server cap as the minimap.
-        if (ClientConfig.RADAR_ENABLED.get() && ClientMapCache.radarMaxRadius > 0) {
-            int radius = Math.min(ClientConfig.RADAR_RADIUS.get(), ClientMapCache.radarMaxRadius);
+        if (RadarClientConfig.RADAR_ENABLED.get() && ClientMapCache.radarMaxRadius > 0) {
+            int radius = Math.min(RadarClientConfig.RADAR_RADIUS.get(), ClientMapCache.radarMaxRadius);
             AABB box = mc.player.getBoundingBox().inflate(radius, 32, radius);
             for (Entity e : mc.level.getEntities(mc.player, box)) {
                 Integer color = EntityDots.colorFor(e);
