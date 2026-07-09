@@ -10,9 +10,13 @@ import java.util.Map;
 
 /**
  * Posted on the MOD bus at server startup so that other mods can register
- * custom layers (in addition to DAY/NIGHT/TOPO/BIOME/CAVE). Custom layers are
- * stored/synchronized like the built-in ones, under the provided identifier
- * ("mymod_something").
+ * custom layers (in addition to DAY/NIGHT/TOPO/BIOME/CAVE), under the
+ * provided identifier ("mymod_something").
+ *
+ * <p><b>NOT WIRED YET</b>: registrations are collected but custom layers are
+ * neither rendered, stored nor synchronized — storage and network are still
+ * indexed on the built-in {@code MapLayer} enum. Kept for forward
+ * compatibility; do not rely on it until a release note says otherwise.
  */
 public class LayerRegisterEvent extends Event implements IModBusEvent {
 

@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.client.compat;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
+import fr.cheesegrinder.sharedjourney.api.client.MapView;
 import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
 
 import net.minecraft.client.Minecraft;
@@ -9,6 +10,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 
 import com.mojang.logging.LogUtils;
@@ -56,28 +59,12 @@ public final class JourneyMapFullscreenBridge {
     /**
      * Map view exposed to plugins via the IFullscreen proxy: the
      * fullscreen map implements it directly, the minimap provides an ad
-     * hoc view.
+     * hoc view. Extends the public {@link MapView} (geometry, layer) with
+     * the navigation actions JourneyMap's IFullscreen expects.
      */
-    public interface BridgedMapView {
+    public interface BridgedMapView extends MapView {
 
         Screen screen();
-
-        int viewWidth();
-
-        int viewHeight();
-
-        double centerX();
-
-        double centerZ();
-
-        /** Zoom in GUI pixels per block. */
-        float zoomScale();
-
-        MapLayer currentLayer();
-
-        double worldX(double screenX);
-
-        double worldZ(double screenY);
 
         default void centerOn(double x, double z) {}
 
@@ -244,13 +231,20 @@ public final class JourneyMapFullscreenBridge {
             implements BridgedMapView {
 
         @Override
-        public double worldX(double screenX) {
-            return centerX + (screenX - viewWidth / 2.0) / zoomScale;
+        public boolean isMinimap() {
+            return true;
         }
 
         @Override
-        public double worldZ(double screenY) {
-            return centerZ + (screenY - viewHeight / 2.0) / zoomScale;
+        public ResourceLocation dimension() {
+            var mc = Minecraft.getInstance();
+            return mc.level != null ? mc.level.dimension().location() : Level.OVERWORLD.location();
+        }
+
+        @Override
+        public int caveBand() {
+            // The bridge never presents the CAVE layer to JM plugins.
+            return 0;
         }
     }
 

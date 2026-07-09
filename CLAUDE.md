@@ -33,6 +33,8 @@ Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
 | *(root)*         | `@Mod` entry points: `SharedJourney`, `SharedJourneyClient`                                                                                                      |
 | `api`            | Public interfaces: `Waypoint`, `MapLayer`, `ChunkLayerRenderer`, `SharedJourneyConstants`                                                                        |
 | `api.event`      | Custom NeoForge events: `LayerRegisterEvent`, `WaypointEvent`                                                                                                    |
+| `api.client`     | Client-only public API: `MapView` (map geometry/conversions)                                                                                                     |
+| `api.client.event` | Client-only events: `MapRenderEvent` (overlay draw hook, minimap + fullscreen), `FullMapScreenEvent`, `MapLayerChangedEvent`                                   |
 | `common.config`  | `CommonConfig`, `ServerConfig` (facade) + per-section `LayersServerConfig`, `EngineServerConfig`, `SyncServerConfig`                                             |
 | `common.network` | `Payloads` (network packets + `Hooks` indirection)                                                                                                               |
 | `common.region`  | `RegionKey`, `RegionIndex`, `RegionStorage` (disk layout + legacy migration)                                                                                     |

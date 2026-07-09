@@ -81,6 +81,6 @@ public final class ClientSetupEvents {
         event.registerAbove(
                 VanillaGuiLayers.DEBUG_OVERLAY,
                 ResourceLocation.fromNamespaceAndPath(SharedJourneyConstants.MOD_ID, "minimap"),
-                (gg, deltaTracker) -> MinimapRenderer.render(gg));
+                MinimapRenderer::render);
     }
 }

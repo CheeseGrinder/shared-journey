@@ -2,6 +2,9 @@ package fr.cheesegrinder.sharedjourney.client.gui;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
+import fr.cheesegrinder.sharedjourney.api.client.event.FullMapScreenEvent;
+import fr.cheesegrinder.sharedjourney.api.client.event.MapLayerChangedEvent;
+import fr.cheesegrinder.sharedjourney.api.client.event.MapRenderEvent;
 import fr.cheesegrinder.sharedjourney.client.compat.CreateTrainMapBridge;
 import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapFullscreenBridge;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
@@ -37,12 +40,14 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import org.lwjgl.glfw.GLFW;
@@ -108,6 +113,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     private Button locateGo;
     private boolean locateOpen;
 
+    /** Visibility tracking for FullMapScreenEvent (init() also fires on resize). */
+    private boolean apiOpened;
+
     // Selected block (single click) and double-click tracking.
     private boolean hasSelection;
     private int selectedBlockX;
@@ -146,6 +154,20 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         buildLeftToolbar();
         updateBandButtons();
         refreshToolbar();
+        if (!apiOpened) {
+            apiOpened = true;
+            NeoForge.EVENT_BUS.post(new FullMapScreenEvent.Opened(this));
+        }
+    }
+
+    @Override
+    public void removed() {
+        if (apiOpened) {
+            apiOpened = false;
+            NeoForge.EVENT_BUS.post(new FullMapScreenEvent.Closed());
+        }
+
+        super.removed();
     }
 
     // ------------------------------------------------------------------ action bars
@@ -264,6 +286,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         layer = target;
         updateBandButtons();
         refreshToolbar();
+        NeoForge.EVENT_BUS.post(new MapLayerChangedEvent(target, false));
     }
 
     private void refreshToolbar() {
@@ -327,25 +350,46 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
     // ------------------------------------------------------------------ screen <-> world conversions
 
-    /** Screen -> world conversion (public: used by the JourneyMap bridge). */
+    /** Screen -> world conversion (public: MapView + JourneyMap bridge). */
+    @Override
     public double worldX(double mouseX) {
         return centerX + (mouseX - width / 2.0) / zoom;
     }
 
-    /** Screen -> world conversion (public: used by the JourneyMap bridge). */
+    /** Screen -> world conversion (public: MapView + JourneyMap bridge). */
+    @Override
     public double worldZ(double mouseY) {
         return centerZ + (mouseY - height / 2.0) / zoom;
     }
 
-    private double screenX(double wx) {
+    @Override
+    public double screenX(double wx) {
         return width / 2.0 + (wx - centerX) * zoom;
     }
 
-    private double screenY(double wz) {
+    @Override
+    public double screenY(double wz) {
         return height / 2.0 + (wz - centerZ) * zoom;
     }
 
-    // ------------------------------------------------------------------ view for the JourneyMap bridge (IFullscreen)
+    // ------------------------------------------------------------------ view for the API (MapView) and the JourneyMap
+    // bridge (IFullscreen)
+
+    @Override
+    public boolean isMinimap() {
+        return false;
+    }
+
+    @Override
+    public ResourceLocation dimension() {
+        var mc = Minecraft.getInstance();
+        return mc.level != null ? mc.level.dimension().location() : Level.OVERWORLD.location();
+    }
+
+    @Override
+    public int caveBand() {
+        return layer == MapLayer.CAVE ? currentBand() : 0;
+    }
 
     @Override
     public Screen screen() {
@@ -915,6 +959,10 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         if (pluginOverlaysActive()) {
             JourneyMapFullscreenBridge.fireRender(this, gg, mouseX, mouseY, partialTick);
         }
+
+        // Public API overlays (api.client.event.MapRenderEvent): same spot
+        // as the bridged overlays, but never gated by zoom or layer.
+        NeoForge.EVENT_BUS.post(new MapRenderEvent(gg, this, partialTick));
 
         // Player arrow ABOVE the map and the plugin overlays.
         if (mc.player != null) {

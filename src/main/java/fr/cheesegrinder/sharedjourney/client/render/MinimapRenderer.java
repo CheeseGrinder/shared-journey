@@ -2,6 +2,9 @@ package fr.cheesegrinder.sharedjourney.client.render;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
+import fr.cheesegrinder.sharedjourney.api.client.MapView;
+import fr.cheesegrinder.sharedjourney.api.client.event.MapLayerChangedEvent;
+import fr.cheesegrinder.sharedjourney.api.client.event.MapRenderEvent;
 import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapFullscreenBridge;
 import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig;
@@ -12,14 +15,18 @@ import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.util.UndergroundCheck;
 
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
+
+import net.neoforged.neoforge.common.NeoForge;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -128,21 +135,22 @@ public final class MinimapRenderer {
         if (autoMode()) {
             autoMode = false;
             currentLayer = allowed.getFirst();
-            return;
+        } else {
+            int idx = allowed.indexOf(currentLayer());
+            if (idx < 0 || idx == allowed.size() - 1) {
+                autoMode = true;
+            } else {
+                currentLayer = allowed.get(idx + 1);
+            }
         }
 
-        int idx = allowed.indexOf(currentLayer());
-        if (idx < 0 || idx == allowed.size() - 1) {
-            autoMode = true;
-            return;
-        }
-
-        currentLayer = allowed.get(idx + 1);
+        NeoForge.EVENT_BUS.post(new MapLayerChangedEvent(displayedLayer(), true));
     }
 
     public static void setLayer(MapLayer layer) {
         autoMode = false;
         currentLayer = layer;
+        NeoForge.EVENT_BUS.post(new MapLayerChangedEvent(layer, true));
     }
 
     public static void zoomIn() {
@@ -174,7 +182,7 @@ public final class MinimapRenderer {
 
     // ------------------------------------------------------------------
 
-    public static void render(GuiGraphics gg) {
+    public static void render(GuiGraphics gg, DeltaTracker deltaTracker) {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
         if (player == null || mc.options.hideGui || !ClientInputEvents.minimapVisible) {
@@ -337,6 +345,23 @@ public final class MinimapRenderer {
         if (layer != MapLayer.CAVE) {
             JourneyMapFullscreenBridge.fireMinimapRender(gg, cx, cy, px, pz, zoom, layer, rotate ? -yaw - 180f : 0f);
         }
+
+        // Public API overlays (api.client.event.MapRenderEvent): drawn in
+        // the minimap's scissor, in a pose where (0,0) is the map's
+        // top-left corner — rotated with the map content when rotation is
+        // on, so world-anchored draws land on the right spot.
+        gg.pose().pushPose();
+        if (rotate) {
+            gg.pose().translate(cx, cy, 0);
+            gg.pose().mulPose(Axis.ZP.rotationDegrees(-yaw - 180f));
+            gg.pose().translate(-cx, -cy, 0);
+        }
+        gg.pose().translate(x, y, 0);
+        NeoForge.EVENT_BUS.post(new MapRenderEvent(
+                gg,
+                new MinimapView(size, size, px, pz, zoom, dim.location(), layer, band),
+                deltaTracker.getGameTimeDeltaPartialTick(true)));
+        gg.pose().popPose();
 
         gg.disableScissor();
 
@@ -626,5 +651,23 @@ public final class MinimapRenderer {
         BufferUploader.drawWithShader(buf.buildOrThrow());
         RenderSystem.depthFunc(GL11.GL_LEQUAL);
         RenderSystem.colorMask(true, true, true, true);
+    }
+
+    /** MapView handed to MapRenderEvent listeners (view-local coordinates). */
+    private record MinimapView(
+            int viewWidth,
+            int viewHeight,
+            double centerX,
+            double centerZ,
+            float zoomScale,
+            ResourceLocation dimension,
+            MapLayer currentLayer,
+            int caveBand)
+            implements MapView {
+
+        @Override
+        public boolean isMinimap() {
+            return true;
+        }
     }
 }

@@ -92,24 +92,32 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
      backup = feature). À trancher pendant le chantier clean code._
 
 - [ ] **P3 · ★★★★☆ — API publique enrichie** : même si le mod reste privé, exposer un maximum
-  dans le package `api` pour permettre à d'autres mods d'interagir :
-  - **rendu écran** : hooks de draw sur la minimap et la carte plein écran (overlays custom
-    natifs, sans passer par le bridge JourneyMap), enregistrement d'icônes/marqueurs ;
-  - **rendu serveur (image de région)** : hooks dans le pipeline de rendu des chunks — pixels
-    custom par couche (s'appuyer sur `ChunkLayerRenderer` qui existe déjà dans l'api),
-    post-traitement de l'image de région avant sauvegarde, surcharge de couleur par bloc
-    (rejoint le chantier palette), ajout de blocs masqués ;
-  - **UI fullscreen** : enregistrement de boutons dans les barres d'actions, d'entrées dans le
-    menu contextuel, de lignes dans la barre d'infos ;
-  - **waypoints** : façade CRUD publique au-dessus de `WaypointStore` (en plus des
-    `WaypointEvent` existants), fournisseurs d'icônes/de rendu de beacon custom ;
-  - **couches** : finaliser le pipeline `LayerRegisterEvent` (les couches custom sont
-    collectées mais stockage/sync ne sont pas câblés) ;
-  - **événements** : ouverture/fermeture de la carte, clic sur la carte, changement de couche ;
-  - **lecture/actions** : positions des joueurs, infos de survol, état des régions, demander le
-    re-rendu d'une zone.
-  _À cadrer pendant le chantier clean code (c'est lui qui fixe la frontière api/interne) ;
-  les hooks de draw atterrissent avec les chantiers rendu/UI._
+  dans le package `api` pour permettre à d'autres mods d'interagir.
+  _**Stratégie retenue (cadrage fait)** : pas de grande API spéculative. Deux règles :_
+  1. _**règle de la couture** : chaque chantier conçoit ses internals AVEC le point
+     d'extension (pipeline, listes d'entrées enregistrables), même non publié ;_
+  2. _**publication en fin de chantier** : chaque tranche d'API est publiée à la fin du
+     chantier qui stabilise son modèle — jamais avant (modèle instable), jamais longtemps
+     après (couture fraîche). Le mod étant privé, casser une tranche publiée trop tôt reste
+     borné à une session de refactor._
+  - [x] **rendu écran (v1 faite)** : `api.client.MapView` (géométrie, conversions
+    monde↔écran, couche) + `api.client.event.MapRenderEvent` (posté chaque frame pour la
+    minimap ET le plein écran, sous les marqueurs joueurs) + `FullMapScreenEvent.Opened/
+    Closed` + `MapLayerChangedEvent`. Le `BridgedMapView` du bridge JM étend `MapView`.
+    **Consommateur de validation prévu : les waypoints de bannière** (icônes sur la carte).
+    Suite v2 : enregistrement d'icônes/marqueurs de haut niveau (clamping bordure fourni).
+  - [ ] **rendu serveur (image de région)** : surcharge de couleur par bloc, post-traitement
+    de région, blocs masqués — **à designer PENDANT le chantier palette** (étape 3), pas
+    avant ;
+  - [ ] **UI fullscreen** (boutons, menu contextuel, barre d'infos) — **après le rework UI**
+    (étape 5), les écrans actuels vont être réécrits ;
+  - [ ] **waypoints** : façade CRUD — **après stabilisation du modèle** (groupes, death
+    waypoints de l'écran de gestion) ; le besoin est couvert d'ici là par le bridge JM ;
+  - [ ] **couches** : finaliser le pipeline `LayerRegisterEvent` — bloqueur structurel :
+    `RegionKey`/réseau/disque sont indexés sur l'enum `MapLayer`, passer à des ids libres est
+    un chantier dédié. En attendant, documenter l'événement comme non câblé ;
+  - [ ] **lecture/actions** (positions joueurs, état des régions, re-rendu) : à la demande,
+    quand un consommateur concret existe (YAGNI).
 - [ ] **P2 · ★★★★☆ — Écran de gestion des waypoints** : groupes, ajout/édition/suppression,
   filtre par dimension, waypoints globaux, groupe « morts » (death waypoints), etc.
 - [ ] **P3 · ★★★☆☆ — Waypoints de bannière** : reprendre le comportement vanilla
