@@ -7,6 +7,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 
 import net.neoforged.fml.ModList;
@@ -29,7 +30,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -203,7 +203,7 @@ public final class JourneyMapBridge {
         BlockPos pos;
         String primaryDimension;
         final TreeSet<String> dimensions = new TreeSet<>();
-        int color = 0xFFFFFF & ThreadLocalRandom.current().nextInt();
+        int color;
         boolean enabled = true;
         boolean persistent = true;
         String groupId = "";
@@ -219,8 +219,22 @@ public final class JourneyMapBridge {
         st.primaryDimension = String.valueOf(args[3]);
         st.dimensions.add(st.primaryDimension);
         st.persistent = Boolean.TRUE.equals(args[4]);
+        // Couleur STABLE dérivée de l'identité du waypoint (les mods comme
+        // Waystones ne fixent jamais la couleur) : identique entre sessions
+        // et entre joueurs, contrairement à un tirage aléatoire.
+        st.color = stableColor(st.modId + "|" + st.primaryDimension + "|" + st.pos);
         InvocationHandler handler = (proxy, method, margs) -> waypointCall(proxy, st, method, margs);
         return Proxy.newProxyInstance(waypointInterface.getClassLoader(), new Class<?>[] {waypointInterface}, handler);
+    }
+
+    /**
+     * Couleur stable dérivée d'une graine textuelle : la teinte vient du hash,
+     * saturation et valeur sont fixes pour rester vif et lisible sur la carte.
+     * Même graine → même couleur, quelle que soit la session ou le joueur.
+     */
+    private static int stableColor(String seed) {
+        float hue = (seed.hashCode() & 0xFFFF) / (float) 0x10000;
+        return 0xFFFFFF & Mth.hsvToRgb(hue, 0.85f, 1.0f);
     }
 
     private static Object waypointCall(Object proxy, BridgeWaypointState st, Method method, Object[] args) {
@@ -640,7 +654,7 @@ public final class JourneyMapBridge {
                 return;
             }
 
-            int color = intOf(call(jmWaypoint, "getColor"), 0x00FFFF & (name.hashCode() | 0x404040));
+            int color = intOf(call(jmWaypoint, "getColor"), stableColor(modId + "|" + name));
             ResourceLocation dim = dimOf(jmWaypoint);
 
             apiWaypoints.put(guid, jmWaypoint);
