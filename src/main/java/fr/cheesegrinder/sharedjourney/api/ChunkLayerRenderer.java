@@ -4,9 +4,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.ChunkAccess;
 
 /**
- * Rendu d'une couche custom : transforme un chunk en 256 pixels ARGB
- * (index = x + z*16). Appelé côté serveur, potentiellement hors main thread
- * (lecture seule du chunk uniquement !).
+ * Custom layer renderer: turns a chunk into 256 ARGB pixels
+ * (index = x + z*16). Called server-side, potentially off the main thread
+ * (read-only access to the chunk!).
  */
 @FunctionalInterface
 public interface ChunkLayerRenderer {

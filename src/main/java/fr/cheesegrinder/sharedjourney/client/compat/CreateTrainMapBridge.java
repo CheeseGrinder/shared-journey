@@ -18,20 +18,20 @@ import org.slf4j.Logger;
 import java.lang.reflect.Method;
 
 /**
- * Pompe de synchronisation de la carte des trains Create : le tick de Create
- * (JourneyTrainMap.tick) ne demande les données trains au serveur que si
- * l'écran ouvert est le Fullscreen INTERNE de JourneyMap — jamais le nôtre.
- * On reproduit donc son travail quand NOTRE carte plein écran est ouverte :
- * TrainMapManager.tick() + TrainMapSyncClient.requestData() chaque tick,
- * puis stopRequesting() à la fermeture. Réflexion pure : aucune dépendance
- * de compilation à Create ; inactif si Create est absent.
+ * Sync pump for Create's train map: Create's tick (JourneyTrainMap.tick)
+ * only requests train data from the server if the open screen is
+ * JourneyMap's INTERNAL Fullscreen — never ours. So we reproduce its work
+ * when OUR fullscreen map is open: TrainMapManager.tick() +
+ * TrainMapSyncClient.requestData() every tick, then stopRequesting() on
+ * close. Pure reflection: no compile-time dependency on Create; inactive
+ * if Create is absent.
  */
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID, value = Dist.CLIENT)
 public final class CreateTrainMapBridge {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /** Position du widget toggle dessiné par la train map (constantes Create). */
+    /** Position of the toggle widget drawn by the train map (Create's constants). */
     private static final int TOGGLE_WIDGET_X = 3;
 
     private static final int TOGGLE_WIDGET_Y = 30;
@@ -50,7 +50,7 @@ public final class CreateTrainMapBridge {
     public static void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         boolean fullMapOpen = mc.screen instanceof FullMapScreen;
-        // La minimap affiche aussi les overlays trains : il lui faut les données.
+        // The minimap also shows train overlays: it needs the data too.
         boolean minimapShown = mc.screen == null
                 && !mc.options.hideGui
                 && ClientInputEvents.minimapVisible
@@ -78,10 +78,10 @@ public final class CreateTrainMapBridge {
     }
 
     /**
-     * Clic sur le widget toggle que la train map dessine en haut à gauche de
-     * la carte : le handler de Create est gaté sur l'écran interne de
-     * JourneyMap, on rappelle donc sa logique nous-mêmes. Retourne true si le
-     * clic a été consommé.
+     * Click on the toggle widget the train map draws in the top-left
+     * corner of the map: Create's handler is gated on JourneyMap's
+     * internal screen, so we call its logic ourselves. Returns true if
+     * the click was consumed.
      */
     public static boolean handleToggleClick(int mouseX, int mouseY) {
         if (!JourneyMapBridge.bridgeActive() || !resolve() || !ClientConfig.SHOW_TRAIN_OVERLAY.get()) {
@@ -98,7 +98,7 @@ public final class CreateTrainMapBridge {
     }
 
     private static void warnAndDisable(Throwable t) {
-        LOGGER.warn("[Bridge JM] Sync de la carte des trains Create en échec, désactivée : {}", t.toString());
+        LOGGER.warn("[Bridge JM] Create train map sync failed, disabling: {}", t.toString());
         available = false;
     }
 
@@ -117,12 +117,12 @@ public final class CreateTrainMapBridge {
             handleToggleWidgetClick =
                     manager.getMethod("handleToggleWidgetClick", int.class, int.class, int.class, int.class);
             available = true;
-            LOGGER.info("[Bridge JM] Carte des trains Create détectée : sync branchée sur la carte SharedJourney.");
+            LOGGER.info("[Bridge JM] Create train map detected: sync wired to the SharedJourney map.");
         } catch (ClassNotFoundException e) {
-            // Create absent (ou sans carte des trains) : rien à faire.
+            // Create absent (or without a train map): nothing to do.
             available = false;
         } catch (Throwable t) {
-            LOGGER.warn("[Bridge JM] Carte des trains Create incompatible : {}", t.toString());
+            LOGGER.warn("[Bridge JM] Create train map incompatible: {}", t.toString());
             available = false;
         }
         return available;

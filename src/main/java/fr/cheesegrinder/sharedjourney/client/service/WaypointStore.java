@@ -28,9 +28,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Waypoints locaux (spec §6.2) : sauvegardés en JSON dans le dossier de cache
- * du serveur courant. Poste les WaypointEvent de l'API pour que d'autres mods
- * (ou le bridge JourneyMap) puissent réagir/intercepter.
+ * Local waypoints (spec §6.2): saved as JSON in the current server's cache
+ * folder. Posts the API's WaypointEvents so that other mods (or the
+ * JourneyMap bridge) can react/intercept.
  */
 public final class WaypointStore {
 
@@ -81,7 +81,7 @@ public final class WaypointStore {
         return new ArrayList<>(WAYPOINTS.values());
     }
 
-    /** Waypoints affichables dans une dimension : les siens + les globaux. */
+    /** Waypoints displayable in a dimension: its own + the global ones. */
     public static List<Waypoint> forDimension(ResourceLocation dim) {
         return WAYPOINTS.values().stream()
                 .filter(w -> w.type() == Waypoint.Type.GLOBAL || w.dimension().equals(dim))
@@ -92,7 +92,7 @@ public final class WaypointStore {
         return WAYPOINTS.get(id);
     }
 
-    /** Ajoute un waypoint. Retourne false si un listener a annulé l'ajout. */
+    /** Adds a waypoint. Returns false if a listener cancelled the addition. */
     public static boolean add(Waypoint wp) {
         WaypointEvent.Added event = new WaypointEvent.Added(wp);
         NeoForge.EVENT_BUS.post(event);
@@ -119,7 +119,7 @@ public final class WaypointStore {
         }
     }
 
-    /** Force la visibilité de tous les waypoints d'une dimension (+ globaux). */
+    /** Forces the visibility of every waypoint of a dimension (+ globals). */
     public static void setAllVisible(ResourceLocation dim, boolean visible) {
         for (Waypoint wp : forDimension(dim)) {
             if (wp.visible() != visible) {
@@ -129,8 +129,8 @@ public final class WaypointStore {
     }
 
     /**
-     * Supprime les waypoints temporaires que le joueur a atteints (rayon
-     * configurable). Appelé périodiquement depuis le tick client.
+     * Removes the temp waypoints the player has reached (configurable
+     * radius). Called periodically from the client tick.
      */
     public static void removeReachedTemp(Player player) {
         ResourceLocation dim = player.level().dimension().location();
@@ -150,7 +150,7 @@ public final class WaypointStore {
         }
     }
 
-    /** Supprime tous les waypoints d'une source donnée (utilisé par le bridge). */
+    /** Removes every waypoint of a given source (used by the bridge). */
     public static void removeBySource(String source) {
         List<UUID> ids = WAYPOINTS.values().stream()
                 .filter(w -> w.source().equals(source))
@@ -175,9 +175,9 @@ public final class WaypointStore {
 
             for (JsonElement el : arr) {
                 JsonObject o = el.getAsJsonObject();
-                // Seuls les waypoints "user" sont persistés : ceux des mods
-                // bridgés (Waystones...) sont resynchronisés à chaque session
-                // par leur mod. Purge aussi les doublons d'anciennes versions.
+                // Only "user" waypoints are persisted: those of bridged mods
+                // (Waystones...) are resynchronized every session by their
+                // mod. Also purges duplicates from older versions.
                 if (o.has("source") && !"user".equals(o.get("source").getAsString())) {
                     continue;
                 }
@@ -202,11 +202,11 @@ public final class WaypointStore {
                 WAYPOINTS.put(wp.id(), wp);
             }
         } catch (Exception e) {
-            LOGGER.error("Echec de lecture des waypoints", e);
+            LOGGER.error("Failed to read waypoints", e);
         }
     }
 
-    /** Type du waypoint, DIMENSION par défaut (fichiers d'anciennes versions). */
+    /** Waypoint type, DIMENSION by default (files from older versions). */
     private static Waypoint.Type readType(JsonObject o) {
         if (!o.has("type")) {
             return Waypoint.Type.DIMENSION;
@@ -226,7 +226,7 @@ public final class WaypointStore {
 
         JsonArray arr = new JsonArray();
         for (Waypoint wp : WAYPOINTS.values()) {
-            // Les waypoints des mods bridgés sont volatils (voir load()).
+            // Bridged mods' waypoints are volatile (see load()).
             if (!"user".equals(wp.source())) {
                 continue;
             }
@@ -248,7 +248,7 @@ public final class WaypointStore {
             Files.createDirectories(file.getParent());
             Files.writeString(file, GSON.toJson(arr));
         } catch (IOException e) {
-            LOGGER.error("Echec de sauvegarde des waypoints", e);
+            LOGGER.error("Failed to save waypoints", e);
         }
     }
 }

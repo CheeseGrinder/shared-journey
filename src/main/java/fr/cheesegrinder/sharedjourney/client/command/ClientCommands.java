@@ -19,9 +19,9 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 
 /**
- * Commandes CLIENT sous les mêmes racines /sharedjourney et /sj (spec §7).
- * Le dispatcher client intercepte "/sj purge ..." et "/sj cache" ; tout autre
- * "/sj ..." passe au serveur (stats, admin).
+ * CLIENT commands under the same /sharedjourney and /sj roots (spec §7).
+ * The client dispatcher intercepts "/sj purge ..." and "/sj cache"; any other
+ * "/sj ..." goes to the server (stats, admin, tp).
  */
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID, value = Dist.CLIENT)
 public final class ClientCommands {
@@ -36,7 +36,7 @@ public final class ClientCommands {
 
     private static LiteralArgumentBuilder<CommandSourceStack> buildRoot(String name) {
         return Commands.literal(name)
-                // /sj purge <layer|all> : supprime le cache local d'un calque
+                // /sj purge <layer|all>: deletes the local cache of a layer
                 .then(Commands.literal("purge")
                         .then(Commands.argument("layer", StringArgumentType.word())
                                 .suggests((ctx, sb) -> {
@@ -58,8 +58,8 @@ public final class ClientCommands {
                                                     false);
                                     return deleted;
                                 })))
-                // /sj goto <x> <z> : ouvre la carte centrée sur la position
-                // (utilisé par le message cliquable posté dans le chat)
+                // /sj goto <x> <z>: opens the map centered on the position
+                // (used by the clickable message posted in the chat)
                 .then(Commands.literal("goto")
                         .then(Commands.argument("x", IntegerArgumentType.integer())
                                 .then(Commands.argument("z", IntegerArgumentType.integer())
@@ -69,14 +69,14 @@ public final class ClientCommands {
                                                     IntegerArgumentType.getInteger(ctx, "z") + 0.5);
                                             return 1;
                                         }))))
-                // /sj cache : état du cache local
+                // /sj cache: local cache state
                 .then(Commands.literal("cache").executes(ctx -> {
                     CommandSourceStack src = ctx.getSource();
                     src.sendSuccess(
                             () -> Component.literal(
-                                    "Cache local : " + DiskCache.index().size() + " région(s) sur disque, "
-                                            + ClientMapCache.loadedCount() + " texture(s) chargée(s), "
-                                            + ClientMapCache.pendingCount() + " en cours de réception"),
+                                    "Local cache: " + DiskCache.index().size() + " region(s) on disk, "
+                                            + ClientMapCache.loadedCount() + " texture(s) loaded, "
+                                            + ClientMapCache.pendingCount() + " being received"),
                             false);
                     return 1;
                 }));

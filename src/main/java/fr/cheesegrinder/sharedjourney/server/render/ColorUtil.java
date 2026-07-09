@@ -1,11 +1,11 @@
 package fr.cheesegrinder.sharedjourney.server.render;
 
-/** Arithmétique de couleurs RGB partagée par les renderers. */
+/** RGB color arithmetic shared by the renderers. */
 final class ColorUtil {
 
     private ColorUtil() {}
 
-    /** Multiplie chaque canal par f (assombrissement/éclaircissement). */
+    /** Multiplies each channel by f (darkening/brightening). */
     static int scaleRgb(int rgb, float f) {
         int r = Math.min(255, (int) (((rgb >> 16) & 0xFF) * f));
         int g = Math.min(255, (int) (((rgb >> 8) & 0xFF) * f));
@@ -13,7 +13,7 @@ final class ColorUtil {
         return (r << 16) | (g << 8) | b;
     }
 
-    /** Interpolation linéaire canal par canal entre deux couleurs. */
+    /** Per-channel linear interpolation between two colors. */
     static int lerpRgb(int a, int b, float t) {
         t = Math.clamp(t, 0f, 1f);
         int r = (int) (((a >> 16) & 0xFF) + t * (((b >> 16) & 0xFF) - ((a >> 16) & 0xFF)));

@@ -8,25 +8,25 @@ import net.minecraft.world.level.biome.BiomeManager;
 import net.minecraft.world.level.chunk.ChunkAccess;
 
 /**
- * Transforme un chunk en 16x16 pixels ARGB pour une couche donnée (façade :
- * le rendu de chaque couche vit dans son propre renderer du package).
- * Tout le rendu se fait côté serveur : le serveur est la source de vérité.
- * Implémentation originale (pas dérivée de JourneyMap) : couleurs basées sur
- * MapColor (comme les cartes vanilla) + ombrage de pente.
+ * Turns a chunk into 16x16 ARGB pixels for a given layer (facade: each
+ * layer's rendering lives in its own renderer within the package).
+ * All rendering happens server-side: the server is the source of truth.
+ * Original implementation (not derived from JourneyMap): MapColor-based
+ * colors (like vanilla maps) + slope shading.
  */
 public final class ChunkColorizer {
 
     private ChunkColorizer() {}
 
-    /** Rendu d'un chunk complet -> tableau 256 pixels ARGB (index = x + z*16). */
+    /** Full chunk render -> 256 ARGB pixel array (index = x + z*16). */
     public static int[] render(
             ServerLevel level, ChunkAccess chunk, ChunkAccess[] neighbors, MapLayer layer, int caveBand) {
         int[] out = new int[256];
         ChunkPos cp = chunk.getPos();
-        // Zoom de biomes du jeu (frontières irrégulières bloc par bloc), branché
-        // sur le chunk ET ses voisins : sûr depuis un thread de rendu, et fidèle
-        // jusqu'aux bordures. Sans lui, les biomes apparaissent en patchs carrés
-        // de 4x4 blocs à bords droits.
+        // The game's biome zoom (irregular block-by-block borders), plugged
+        // into the chunk AND its neighbors: safe from a render thread, and
+        // faithful up to the edges. Without it, biomes show up as square
+        // 4x4-block patches with straight edges.
         BiomeManager zoom =
                 new BiomeManager(neighborSource(chunk, neighbors), BiomeManager.obfuscateSeed(level.getSeed()));
         RenderContext ctx = new RenderContext(level, chunk, zoom);
@@ -50,11 +50,11 @@ public final class ChunkColorizer {
     }
 
     /**
-     * Source de biomes couvrant le chunk et ses 8 voisins (index 3x3, [4] =
-     * centre). Le zoom de biomes lit jusqu'à une cellule au-delà du bloc : sans
-     * les voisins, les frontières seraient déformées le long des bords de chunk.
-     * Un voisin absent retombe sur le chunk central (bord approximé, corrigé au
-     * prochain re-rendu).
+     * Biome source covering the chunk and its 8 neighbors (3x3 index, [4] =
+     * center). The biome zoom reads up to one cell beyond the block: without
+     * the neighbors, borders would be distorted along chunk edges. A missing
+     * neighbor falls back to the center chunk (approximated edge, fixed on
+     * the next re-render).
      */
     private static BiomeManager.NoiseBiomeSource neighborSource(ChunkAccess chunk, ChunkAccess[] neighbors) {
         ChunkPos cp = chunk.getPos();

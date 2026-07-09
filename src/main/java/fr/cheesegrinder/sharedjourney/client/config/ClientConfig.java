@@ -2,7 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-/** Config CLIENT (spec §8) : minimap, radar, cache, couche par défaut. */
+/** CLIENT config (spec §8): minimap, radar, cache, default layer. */
 public final class ClientConfig {
 
     public static final ModConfigSpec SPEC;
@@ -11,17 +11,17 @@ public final class ClientConfig {
     public static ModConfigSpec.IntValue MINIMAP_SIZE;
     public static ModConfigSpec.EnumValue<Corner> MINIMAP_CORNER;
     public static ModConfigSpec.EnumValue<Shape> MINIMAP_SHAPE;
-    /** Rotation dynamique de la minimap avec le regard du joueur (spec §6.1). */
+    /** Dynamic minimap rotation following the player's view (spec §6.1). */
     public static ModConfigSpec.BooleanValue MINIMAP_ROTATE;
 
     public static ModConfigSpec.BooleanValue SHOW_COORDS;
 
     public static ModConfigSpec.BooleanValue RADAR_ENABLED;
-    /** Rayon souhaité — plafonné par le serveur (radarMaxRadius). */
+    /** Desired radius — capped by the server (radarMaxRadius). */
     public static ModConfigSpec.IntValue RADAR_RADIUS;
 
     public static ModConfigSpec.BooleanValue RADAR_PLAYERS;
-    /** Demande au serveur d'être caché de la carte des AUTRES joueurs. */
+    /** Asks the server to be hidden from the OTHER players' map. */
     public static ModConfigSpec.BooleanValue HIDE_FROM_MAP;
 
     public static ModConfigSpec.BooleanValue RADAR_HOSTILE;
@@ -29,30 +29,30 @@ public final class ClientConfig {
     public static ModConfigSpec.BooleanValue RADAR_PETS;
     public static ModConfigSpec.BooleanValue RADAR_VILLAGERS;
 
-    /** Rayon (blocs) auquel un waypoint temporaire est considéré atteint et supprimé. */
+    /** Radius (blocks) at which a temp waypoint is considered reached and removed. */
     public static ModConfigSpec.IntValue TEMP_WAYPOINT_RADIUS;
 
-    /** Beacons de waypoints dans le monde : faisceau vertical + nom/distance. */
+    /** Waypoint beacons in the world: vertical beam + name/distance. */
     public static ModConfigSpec.BooleanValue WAYPOINT_BEACONS;
-    /** Distance minimale d'affichage d'un beacon (évite d'aveugler de près). */
+    /** Minimum display distance of a beacon (avoids blinding up close). */
     public static ModConfigSpec.IntValue BEACON_MIN_DISTANCE;
-    /** Distance maximale d'affichage d'un beacon. */
+    /** Maximum display distance of a beacon. */
     public static ModConfigSpec.IntValue BEACON_MAX_DISTANCE;
 
-    /** Nom des waypoints (carte plein écran + étiquettes des beacons). */
+    /** Waypoint names (fullscreen map + beacon labels). */
     public static ModConfigSpec.BooleanValue SHOW_WAYPOINT_NAMES;
-    /** Overlay des trains/rails Create (via le bridge JourneyMap). */
+    /** Create trains/tracks overlay (through the JourneyMap bridge). */
     public static ModConfigSpec.BooleanValue SHOW_TRAIN_OVERLAY;
-    /** Overlay des gisements Create: Rock & Stone (via le bridge JourneyMap). */
+    /** Create: Rock & Stone deposit overlay (through the JourneyMap bridge). */
     public static ModConfigSpec.BooleanValue SHOW_DEPOSIT_OVERLAY;
 
-    /** Grille de chunks superposée à la minimap et à la carte plein écran. */
+    /** Chunk grid overlaid on the minimap and the fullscreen map. */
     public static ModConfigSpec.BooleanValue SHOW_GRID;
-    /** Autorise la bascule auto vers les couches CAVE quand le joueur est sous terre. */
+    /** Allows the auto-switch to CAVE layers when the player is underground. */
     public static ModConfigSpec.BooleanValue SHOW_CAVE;
 
     public static ModConfigSpec.ConfigValue<String> DEFAULT_LAYER;
-    /** Sélection automatique de la couche minimap (jour/nuit, grottes sous terre). */
+    /** Automatic minimap layer selection (day/night, caves underground). */
     public static ModConfigSpec.BooleanValue AUTO_LAYER;
 
     public static ModConfigSpec.BooleanValue DISK_CACHE_ENABLED;
@@ -74,20 +74,20 @@ public final class ClientConfig {
 
         b.push("minimap");
         MINIMAP_ENABLED = b.define("enabled", true);
-        MINIMAP_SIZE = b.comment("Taille de la minimap en pixels écran.").defineInRange("size", 128, 64, 320);
+        MINIMAP_SIZE = b.comment("Minimap size in screen pixels.").defineInRange("size", 128, 64, 320);
         MINIMAP_CORNER = b.defineEnum("corner", Corner.TOP_RIGHT);
-        MINIMAP_SHAPE = b.comment("Forme de la minimap : ronde ou carrée.").defineEnum("shape", Shape.CIRCLE);
-        MINIMAP_ROTATE =
-                b.comment("La carte tourne avec le joueur (sinon nord fixe).").define("rotateWithPlayer", false);
+        MINIMAP_SHAPE = b.comment("Minimap shape: circle or square.").defineEnum("shape", Shape.CIRCLE);
+        MINIMAP_ROTATE = b.comment("The map rotates with the player (otherwise fixed north).")
+                .define("rotateWithPlayer", false);
         SHOW_COORDS = b.define("showCoordinates", true);
         b.pop();
 
         b.push("radar");
         RADAR_ENABLED = b.define("enabled", true);
         RADAR_RADIUS =
-                b.comment("Rayon du radar en blocs (plafonné par le serveur).").defineInRange("radius", 48, 8, 128);
+                b.comment("Radar radius in blocks (capped by the server).").defineInRange("radius", 48, 8, 128);
         RADAR_PLAYERS = b.define("showPlayers", true);
-        HIDE_FROM_MAP = b.comment("Demande au serveur d'être caché de la carte des autres joueurs.")
+        HIDE_FROM_MAP = b.comment("Asks the server to be hidden from the other players' map.")
                 .define("hideFromMap", false);
         RADAR_HOSTILE = b.define("showHostile", true);
         RADAR_PASSIVE = b.define("showPassive", false);
@@ -95,31 +95,30 @@ public final class ClientConfig {
         RADAR_VILLAGERS = b.define("showVillagers", true);
         b.pop();
 
-        TEMP_WAYPOINT_RADIUS = b.comment(
-                        "Rayon (blocs) auquel un waypoint temporaire est considéré atteint et supprimé.")
+        TEMP_WAYPOINT_RADIUS = b.comment("Radius (blocks) at which a temp waypoint is considered reached and removed.")
                 .defineInRange("tempWaypointRadius", 8, 1, 128);
-        WAYPOINT_BEACONS = b.comment("Beacons de waypoints dans le monde (faisceau vertical + nom et distance).")
+        WAYPOINT_BEACONS = b.comment("Waypoint beacons in the world (vertical beam + name and distance).")
                 .define("waypointBeacons", true);
-        BEACON_MIN_DISTANCE = b.comment("Distance minimale (blocs) d'affichage des beacons.")
+        BEACON_MIN_DISTANCE = b.comment("Minimum display distance (blocks) of the beacons.")
                 .defineInRange("beaconMinDistance", 4, 0, 512);
-        BEACON_MAX_DISTANCE = b.comment("Distance maximale (blocs) d'affichage des beacons.")
+        BEACON_MAX_DISTANCE = b.comment("Maximum display distance (blocks) of the beacons.")
                 .defineInRange("beaconMaxDistance", 512, 16, 4096);
-        SHOW_WAYPOINT_NAMES = b.comment("Nom des waypoints (carte plein écran + étiquettes des beacons).")
-                .define("showWaypointNames", true);
-        SHOW_TRAIN_OVERLAY = b.comment("Overlay des trains/rails Create sur les cartes (bridge JourneyMap).")
+        SHOW_WAYPOINT_NAMES =
+                b.comment("Waypoint names (fullscreen map + beacon labels).").define("showWaypointNames", true);
+        SHOW_TRAIN_OVERLAY = b.comment("Create trains/tracks overlay on the maps (JourneyMap bridge).")
                 .define("showTrainOverlay", true);
-        SHOW_DEPOSIT_OVERLAY = b.comment("Overlay des gisements Create: Rock & Stone (bridge JourneyMap).")
+        SHOW_DEPOSIT_OVERLAY = b.comment("Create: Rock & Stone deposit overlay (JourneyMap bridge).")
                 .define("showDepositOverlay", true);
-        SHOW_GRID = b.comment("Grille de chunks superposée à la minimap et à la carte plein écran.")
+        SHOW_GRID = b.comment("Chunk grid overlaid on the minimap and the fullscreen map.")
                 .define("showGrid", false);
-        SHOW_CAVE = b.comment("Bascule auto vers les couches CAVE quand le joueur est sous terre.")
+        SHOW_CAVE = b.comment("Auto-switch to CAVE layers when the player is underground.")
                 .define("showCave", true);
 
-        DEFAULT_LAYER = b.comment("Couche affichée par défaut (DAY, NIGHT, TOPO, BIOME, CAVE).")
+        DEFAULT_LAYER = b.comment("Layer shown by default (DAY, NIGHT, TOPO, BIOME, CAVE).")
                 .define("defaultLayer", "DAY");
-        AUTO_LAYER = b.comment("Bascule automatique de la minimap : jour/nuit selon l'heure, grottes sous terre.")
+        AUTO_LAYER = b.comment("Automatic minimap switching: day/night by time of day, caves underground.")
                 .define("autoLayer", true);
-        DISK_CACHE_ENABLED = b.comment("Cache disque des tuiles reçues (.minecraft/sharedjourney_cache/).")
+        DISK_CACHE_ENABLED = b.comment("Disk cache of received tiles (.minecraft/sharedjourney_cache/).")
                 .define("diskCache", true);
 
         SPEC = b.build();

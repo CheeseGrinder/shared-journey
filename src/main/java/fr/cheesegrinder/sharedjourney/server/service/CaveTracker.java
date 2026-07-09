@@ -10,22 +10,22 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 
 /**
- * Anti-exploit des grottes : les bandes CAVE ne sont peintes que là où un
- * joueur est réellement allé sous terre. Scanne périodiquement la position
- * des joueurs et déverrouille la bande correspondante autour d'eux
- * (MapManager.unlockCave). Sans passage d'un joueur, une bande reste vide
- * (fond gris côté client), même après un /sj admin regen full.
+ * Cave anti-exploit: CAVE bands are only painted where a player actually
+ * went underground. Periodically scans player positions and unlocks the
+ * matching band around them (MapManager.unlockCave). Without a player
+ * passing through, a band stays empty (gray background client-side), even
+ * after a /sj admin regen full.
  */
 public final class CaveTracker {
 
-    /** Un scan par seconde suffit : on ne traverse pas un chunk plus vite en grotte. */
+    /** One scan per second is enough: you cannot cross a chunk faster in a cave. */
     private static final int SCAN_INTERVAL_TICKS = 20;
-    /** Rayon (en chunks) déverrouillé autour d'un joueur sous terre. */
+    /** Radius (in chunks) unlocked around an underground player. */
     private static final int UNLOCK_RADIUS_CHUNKS = 2;
 
     private CaveTracker() {}
 
-    /** Appelé chaque tick serveur (main thread). */
+    /** Called every server tick (main thread). */
     public static void tick(MinecraftServer server) {
         if (server.getTickCount() % SCAN_INTERVAL_TICKS != 0) {
             return;
@@ -52,11 +52,11 @@ public final class CaveTracker {
             return;
         }
 
-        // Sous terre uniquement (bloc solide au-dessus des yeux — fluides et
-        // feuilles exclus) : marcher en surface, nager ou plonger en mer
-        // ouverte ne doit pas révéler la bande traversée. Même règle que la
-        // bascule auto de la minimap côté client. Exception : les spectateurs
-        // (admins en cartographie) déverrouillent sans cette règle.
+        // Underground only (solid block above the eyes — fluids and leaves
+        // excluded): walking on the surface, swimming or diving in open sea
+        // must not reveal the crossed band. Same rule as the client-side
+        // minimap auto-switch. Exception: spectators (admins doing
+        // cartography) unlock without this rule.
         if (!player.isSpectator() && !UndergroundCheck.isUnderground(level, player)) {
             return;
         }

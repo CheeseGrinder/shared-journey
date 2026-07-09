@@ -22,8 +22,8 @@ import com.mojang.blaze3d.platform.InputConstants;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Enregistrements du bus MOD : raccourcis clavier et couche HUD de la
- * minimap. Les touches sont consommées dans {@link ClientInputEvents}.
+ * MOD bus registrations: keyboard shortcuts and the minimap HUD layer.
+ * The keys are consumed in {@link ClientInputEvents}.
  */
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID, value = Dist.CLIENT)
 public final class ClientSetupEvents {
@@ -62,7 +62,7 @@ public final class ClientSetupEvents {
         event.register(ZOOM_OUT);
     }
 
-    /** À chaque sauvegarde de la config client : renvoie la préférence de visibilité. */
+    /** On every client config save: re-send the visibility preference. */
     @SubscribeEvent
     public static void onConfigReloaded(ModConfigEvent.Reloading event) {
         if (event.getConfig().getSpec() != ClientConfig.SPEC) {

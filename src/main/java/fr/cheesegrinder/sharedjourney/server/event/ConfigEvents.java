@@ -9,7 +9,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
-/** Rechargement à chaud de la config serveur (bus MOD). */
+/** Hot reload of the server config (MOD bus). */
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID)
 public final class ConfigEvents {
 

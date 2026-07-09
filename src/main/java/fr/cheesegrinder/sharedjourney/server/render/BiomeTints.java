@@ -7,26 +7,26 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeManager;
 
 /**
- * Couleurs dépendant du biome (herbe, feuillage, eau) côté serveur.
- * Les colormaps texture de vanilla ne sont pas chargées sur un serveur
- * dédié : on approxime le triangle température/précipitations des colormaps
- * (vérifié proche des valeurs réelles : plaines ≈ 0x8CBD57 pour 0x91BD59).
+ * Biome-dependent colors (grass, foliage, water) server-side.
+ * Vanilla's texture colormaps are not loaded on a dedicated server: we
+ * approximate the colormaps' temperature/downfall triangle (verified close
+ * to the real values: plains ≈ 0x8CBD57 vs 0x91BD59).
  */
 final class BiomeTints {
 
     private BiomeTints() {}
 
-    /** Échantillonneur de couleur dépendant du biome à une position donnée. */
+    /** Biome-dependent color sampler at a given position. */
     @FunctionalInterface
     interface Sampler {
         int colorAt(Biome biome, int wx, int wz);
     }
 
     /**
-     * Couleur moyennée sur les blocs voisins (équivalent du lissage de biomes
-     * du client vanilla) : adoucit les frontières entre biomes au lieu d'un
-     * bord franc. Le rayon vient de la config serveur (biomeBlendRadius,
-     * 0 = désactivé, 2 = équivalent vanilla).
+     * Color averaged over neighboring blocks (equivalent of the vanilla
+     * client's biome blending): softens borders between biomes instead of a
+     * hard edge. The radius comes from the server config (biomeBlendRadius,
+     * 0 = disabled, 2 = vanilla equivalent).
      */
     static int blended(BiomeManager zoom, int wx, int y, int wz, Sampler sampler) {
         int radius = EngineServerConfig.BIOME_BLEND_RADIUS.get();
@@ -55,7 +55,7 @@ final class BiomeTints {
     static int grassColor(Biome biome, int wx, int wz) {
         var fx = biome.getSpecialEffects();
         int base = fx.getGrassColorOverride().orElseGet(() -> climateBlend(biome, 0xBFB755, 0x80B497, 0x47CD33));
-        // Modificateur vanilla (marais, forêt sombre) — fonctionne côté serveur.
+        // Vanilla modifier (swamp, dark forest) — works server-side.
         return fx.getGrassColorModifier().modifyColor(wx, wz, base) & 0xFFFFFF;
     }
 
@@ -65,7 +65,7 @@ final class BiomeTints {
                 .orElseGet(() -> climateBlend(biome, 0xAEA42A, 0x60A17B, 0x1ABF00));
     }
 
-    /** Interpolation triangulaire chaud-sec / froid / chaud-humide des colormaps. */
+    /** Triangular hot-dry / cold / hot-wet interpolation of the colormaps. */
     private static int climateBlend(Biome biome, int hotDry, int cold, int hotWet) {
         float t = Math.clamp(biome.getBaseTemperature(), 0f, 1f);
         float d = Math.clamp(biome.getModifiedClimateSettings().downfall(), 0f, 1f);

@@ -27,9 +27,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Événements de chunks et de terrain : génération (exploration, prégénération
- * Chunky) et marquage "dirty" à chaque modification du monde (casse/pose,
- * pistons, explosions, pousse d'arbres).
+ * Chunk and terrain events: generation (exploration, Chunky pregeneration)
+ * and "dirty" marking on every world modification (break/place, pistons,
+ * explosions, tree growth).
  */
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID)
 public final class ChunkEvents {
@@ -37,8 +37,8 @@ public final class ChunkEvents {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     /**
-     * Chunks chargés AVANT l'init du moteur (chunks de spawn, chargés pendant
-     * le démarrage du serveur) : mémorisés puis rejoués au ServerStarted.
+     * Chunks loaded BEFORE the engine init (spawn chunks, loaded during
+     * server startup): remembered, then replayed on ServerStarted.
      */
     private static final List<EarlyChunk> EARLY_CHUNKS = new ArrayList<>();
 
@@ -46,7 +46,7 @@ public final class ChunkEvents {
 
     private ChunkEvents() {}
 
-    /** Rejoue les chunks bufferisés avant l'init du moteur (appelé au ServerStarted). */
+    /** Replays chunks buffered before the engine init (called on ServerStarted). */
     public static void replayEarlyChunks(MinecraftServer server) {
         MapManager mgr = MapManager.get();
         if (mgr == null) {
@@ -73,7 +73,7 @@ public final class ChunkEvents {
         ChunkPos pos = event.getChunk().getPos();
         MapManager mgr = MapManager.get();
         if (mgr == null) {
-            // Moteur pas encore prêt (chunks de spawn) : mémorise pour rejeu.
+            // Engine not ready yet (spawn chunks): remember for replay.
             synchronized (EARLY_CHUNKS) {
                 if (EARLY_CHUNKS.size() < 4096) {
                     EARLY_CHUNKS.add(new EarlyChunk(level.dimension(), pos.x, pos.z));
@@ -82,10 +82,11 @@ public final class ChunkEvents {
             return;
         }
         if (event.isNewChunk() && event.getChunk() instanceof LevelChunk fullChunk) {
-            // Chunk fraîchement généré (exploration ou prégénération Chunky) :
-            // rendu immédiat depuis la référence de l'événement. Les chunks
-            // prégénérés sont déchargés sitôt générés — une résolution différée
-            // au tick suivant (getChunkNow) les manquerait systématiquement.
+            // Freshly generated chunk (exploration or Chunky pregeneration):
+            // immediate render from the event's reference. Pregenerated
+            // chunks are unloaded as soon as they are generated — a deferred
+            // resolution on the next tick (getChunkNow) would systematically
+            // miss them.
             mgr.renderNow(level, fullChunk);
         } else if (event.isNewChunk() || !mgr.isChunkRendered(level, pos.x, pos.z)) {
             mgr.enqueueChunk(level, pos.x, pos.z);
@@ -103,17 +104,17 @@ public final class ChunkEvents {
     }
 
     /**
-     * Modifications programmatiques (sans entité) : rails de Create posés par
-     * snap/extension, machines, mods... Break/EntityPlace ne les voient pas ;
-     * la notification de voisinage accompagne tout setBlock avec UPDATE. Le
-     * coût est absorbé par la déduplication de la file de chunks sales.
+     * Programmatic modifications (no entity): Create rails placed by
+     * snap/extension, machines, mods... Break/EntityPlace do not see them;
+     * the neighbor notification accompanies every setBlock with UPDATE. The
+     * cost is absorbed by the dirty chunk queue's deduplication.
      */
     @SubscribeEvent
     public static void onNeighborNotify(BlockEvent.NeighborNotifyEvent event) {
         markDirty(event);
     }
 
-    /** Pistons : le train de blocs déplacés peut traverser une frontière de chunk. */
+    /** Pistons: the train of moved blocks can cross a chunk border. */
     @SubscribeEvent
     public static void onPistonMove(PistonEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level)) {
@@ -127,7 +128,7 @@ public final class ChunkEvents {
 
         BlockPos pos = event.getPos();
         mgr.enqueueChunk(level, pos.getX() >> 4, pos.getZ() >> 4);
-        BlockPos far = pos.relative(event.getDirection(), 13); // portée max d'un piston
+        BlockPos far = pos.relative(event.getDirection(), 13); // max piston reach
         if ((far.getX() >> 4) != (pos.getX() >> 4) || (far.getZ() >> 4) != (pos.getZ() >> 4)) {
             mgr.enqueueChunk(level, far.getX() >> 4, far.getZ() >> 4);
         }
@@ -145,11 +146,11 @@ public final class ChunkEvents {
         }
 
         for (BlockPos pos : event.getAffectedBlocks()) {
-            mgr.enqueueChunk(level, pos.getX() >> 4, pos.getZ() >> 4); // dédupliqué
+            mgr.enqueueChunk(level, pos.getX() >> 4, pos.getZ() >> 4); // deduplicated
         }
     }
 
-    /** Pousse d'arbre / gros champignon : la canopée peut déborder sur les voisins. */
+    /** Tree / huge mushroom growth: the canopy can spill over onto neighbors. */
     @SubscribeEvent
     public static void onTreeGrow(BlockGrowFeatureEvent event) {
         if (!(event.getLevel() instanceof ServerLevel level)) {
@@ -184,7 +185,7 @@ public final class ChunkEvents {
         mgr.enqueueChunk(level, cx, cz);
         if (CommonConfig.DEBUG_LOGGING.get()) {
             LOGGER.info(
-                    "SharedJourney : chunk {},{} marqué à re-rendre ({})",
+                    "SharedJourney: chunk {},{} marked to re-render ({})",
                     cx,
                     cz,
                     level.dimension().location());

@@ -16,8 +16,8 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Locale;
 
 /**
- * Édition d'un waypoint (spec §6.2) : nom, couleur (palette), visibilité,
- * suppression. Sert aussi à la création (creating=true).
+ * Waypoint editing (spec §6.2): name, color (palette), visibility,
+ * deletion. Also used for creation (creating=true).
  */
 public class WaypointEditScreen extends Screen {
 
@@ -53,7 +53,7 @@ public class WaypointEditScreen extends Screen {
         addRenderableWidget(nameBox);
         setInitialFocus(nameBox);
 
-        // Palette de couleurs
+        // Color palette
         int px = cx - (PALETTE.length * 22 - 2) / 2;
         for (int i = 0; i < PALETTE.length; i++) {
             final int color = PALETTE[i];
@@ -63,7 +63,7 @@ public class WaypointEditScreen extends Screen {
                     .build());
         }
 
-        // Visibilité + type (Dimension / Global / Temporaire)
+        // Visibility + type (Dimension / Global / Temporary)
         addRenderableWidget(Button.builder(visibilityLabel(), b -> {
                     waypoint = waypoint.withVisible(!waypoint.visible());
                     b.setMessage(visibilityLabel());
@@ -78,7 +78,7 @@ public class WaypointEditScreen extends Screen {
                 .tooltip(Tooltip.create(Component.translatable("sharedjourney.waypoint.type.tooltip")))
                 .build());
 
-        // Valider / Supprimer / Annuler
+        // Confirm / Delete / Cancel
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> save())
                 .bounds(cx - 100, y + 84, 95, 20)
                 .build());
@@ -139,7 +139,7 @@ public class WaypointEditScreen extends Screen {
         int y = height / 2 - 40;
         gg.drawCenteredString(font, title, cx, y - 30, 0xFFFFFF);
         gg.drawCenteredString(font, waypoint.x() + ", " + waypoint.y() + ", " + waypoint.z(), cx, y - 16, 0xAAAAAA);
-        // Aperçu de la couleur courante au-dessus de la palette
+        // Preview of the current color above the palette
         int px = cx - (PALETTE.length * 22 - 2) / 2;
         for (int i = 0; i < PALETTE.length; i++) {
             gg.fill(px + i * 22 + 2, y + 30, px + i * 22 + 18, y + 46, 0xFF000000 | PALETTE[i]);

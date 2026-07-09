@@ -32,21 +32,22 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Synchronisation serveur -> clients (spec §5).
+ * Server -> clients synchronization (spec §5).
  *
- * 1. Handshake : le client envoie son index local ; il initialise la vue
- *    "ce que ce joueur possède déjà" (sentVersions).
- * 2. Delta : périodiquement, les régions du rayon configuré dont la version
- *    serveur est plus récente sont mises en ConcurrentLinkedQueue.
- * 3. Batching : chaque tick, la file est dépilée dans la limite du budget
- *    max_kb_per_second_per_player (converti en octets/tick), en fragments.
+ * 1. Handshake: the client sends its local index; it initializes the view of
+ *    "what this player already owns" (sentVersions).
+ * 2. Delta: periodically, regions within the configured radius whose server
+ *    version is newer are put in a ConcurrentLinkedQueue.
+ * 3. Batching: each tick, the queue is drained within the
+ *    max_kb_per_second_per_player budget (converted to bytes/tick), in
+ *    fragments.
  */
 public final class SyncService {
 
     /**
-     * Intervalle minimal entre deux requêtes d'infos de survol par joueur
-     * (anti-spam IO). Court : le client précharge les chunks voisins du
-     * curseur (espacés de 60 ms de son côté).
+     * Minimum interval between two hover info requests per player (IO
+     * anti-spam). Short: the client prefetches the chunks around the cursor
+     * (spaced 60 ms apart on its side).
      */
     private static final long INFO_REQUEST_MIN_INTERVAL_MS = 40;
 
@@ -54,14 +55,15 @@ public final class SyncService {
 
     private SyncService() {}
 
-    // ------------------------------------------------------------------ cycle de vie joueurs
+    // ------------------------------------------------------------------ player lifecycle
 
     public static void onPlayerJoin(ServerPlayer player) {
         STATES.put(player.getUUID(), new PlayerState());
         sendLayerSettings(player);
-        // Le push démarrera après réception du handshake (ou au 1er delta périodique
-        // si le client n'a pas le mod... auquel cas rien ne sera envoyé : le
-        // registre réseau NeoForge n'accepte nos payloads que si le client les connaît.
+        // Pushing starts after the handshake is received (or on the 1st
+        // periodic delta if the client does not have the mod... in which
+        // case nothing is sent: the NeoForge network registry only accepts
+        // our payloads if the client knows them).
         enqueueDelta(player, false);
     }
 
@@ -69,7 +71,7 @@ public final class SyncService {
         STATES.remove(player.getUUID());
     }
 
-    /** Handshake §5.1 : seed des versions connues du client depuis son index local. */
+    /** Handshake §5.1: seeds the client's known versions from its local index. */
     public static void handleClientIndex(Player playerRaw, Payloads.ClientIndexPayload payload) {
         if (!(playerRaw instanceof ServerPlayer player)) {
             return;
@@ -83,11 +85,11 @@ public final class SyncService {
         Map<RegionKey, Long> clientIndex = payload.decodeIndex(50_000);
         st.sentVersions.putAll(clientIndex);
         st.handshakeEntries = clientIndex.size();
-        // Recalcule immédiatement le delta avec cette connaissance.
+        // Immediately recompute the delta with this knowledge.
         enqueueDelta(player, false);
     }
 
-    /** Envoie les couches actives par dimension + bandes CAVE + plafond radar. */
+    /** Sends the active layers per dimension + CAVE bands + radar cap. */
     public static void sendLayerSettings(ServerPlayer player) {
         MinecraftServer server = player.getServer();
         if (server == null) {
@@ -123,7 +125,7 @@ public final class SyncService {
         mgr.tick();
 
         long gameTime = server.overworld().getGameTime();
-        // Positions des joueurs (non cachés) pour les cartes clientes : ~1x/s.
+        // Positions of (non-hidden) players for the client maps: ~1x/s.
         if (gameTime % PLAYER_POSITIONS_INTERVAL_TICKS == 0) {
             broadcastPlayerPositions(server);
         }
@@ -133,7 +135,7 @@ public final class SyncService {
                 continue;
             }
 
-            // Déphasage par joueur pour lisser la charge.
+            // Per-player phase shift to smooth the load.
             if (gameTime % SyncServerConfig.SYNC_RATE_TICKS.get() == (player.getId() & 15)) {
                 enqueueDelta(player, false);
             }
@@ -141,7 +143,7 @@ public final class SyncService {
         }
     }
 
-    /** Delta §5.2 : régions du rayon dont la version serveur > version connue du client. */
+    /** Delta §5.2: regions in the radius whose server version > client's known version. */
     private static void enqueueDelta(ServerPlayer player, boolean force) {
         MapManager mgr = MapManager.get();
         PlayerState st = STATES.get(player.getUUID());
@@ -171,10 +173,10 @@ public final class SyncService {
     }
 
     /**
-     * Notifie qu'une ou plusieurs régions viennent d'être re-rendues : mise en
-     * file immédiate pour les joueurs de la dimension, sans attendre le delta
-     * périodique (réactivité des modifications de terrain). Appelable depuis
-     * un thread de rendu : bascule sur le main thread.
+     * Notifies that one or more regions were just re-rendered: immediate
+     * queueing for the players of that dimension, without waiting for the
+     * periodic delta (terrain modification reactivity). Callable from a
+     * render thread: hops onto the main thread.
      */
     public static void pushRegionUpdates(MinecraftServer server, List<RegionKey> keys) {
         if (keys.isEmpty()) {
@@ -215,14 +217,14 @@ public final class SyncService {
         }
     }
 
-    /** Batching §5.3 : dépile la queue dans la limite du budget d'octets par tick. */
+    /** Batching §5.3: drains the queue within the per-tick byte budget. */
     private static void drainQueue(ServerPlayer player, PlayerState st) {
         MapManager mgr = MapManager.get();
         if (mgr == null) {
             return;
         }
 
-        // max_kb_per_second -> octets par tick (20 ticks/s)
+        // max_kb_per_second -> bytes per tick (20 ticks/s)
         int budget = SyncServerConfig.MAX_KB_PER_SECOND_PER_PLAYER.get() * 1024 / 20;
         int fragSize = CommonConfig.FRAGMENT_SIZE.get();
 
@@ -267,7 +269,7 @@ public final class SyncService {
         }
     }
 
-    // ------------------------------------------------------------------ requêtes plein écran
+    // ------------------------------------------------------------------ fullscreen requests
 
     public static void handleRegionRequest(Player playerRaw, Payloads.RegionRequestPayload payload) {
         if (!(playerRaw instanceof ServerPlayer player)) {
@@ -284,7 +286,7 @@ public final class SyncService {
             return;
         }
 
-        int max = Math.min(payload.keys().size(), 128); // anti-abus
+        int max = Math.min(payload.keys().size(), 128); // anti-abuse
         for (int i = 0; i < max; i++) {
             RegionKey key = payload.keys().get(i);
             if (!key.dimension().equals(player.level().dimension())) {
@@ -304,10 +306,10 @@ public final class SyncService {
     }
 
     /**
-     * Requête d'infos au survol de la carte plein écran : renvoie biome, bloc
-     * de surface et Y de la colonne. Si le chunk n'est pas chargé, il est lu
-     * depuis le disque (statut NBT vérifié : jamais de génération de terrain).
-     * Throttlée par joueur pour borner l'IO.
+     * Hover info request from the fullscreen map: returns the column's
+     * biome, surface block and Y. If the chunk is not loaded, it is read
+     * from disk (NBT status checked: never any terrain generation).
+     * Throttled per player to bound the IO.
      */
     public static void handleMapInfoRequest(Player playerRaw, Payloads.MapInfoRequestPayload payload) {
         if (!(playerRaw instanceof ServerPlayer player)) {
@@ -338,8 +340,8 @@ public final class SyncService {
             return;
         }
 
-        // Chunk pas chargé : statut vérifié sur disque avant chargement (aucune
-        // génération de terrain), puis chargement et réponse sur le main thread.
+        // Chunk not loaded: status checked on disk before loading (no
+        // terrain generation), then load and reply on the main thread.
         level.getChunkSource().chunkMap.read(new ChunkPos(cx, cz)).thenAccept(tag -> {
             if (tag.isEmpty() || !tag.get().getString("Status").endsWith("full")) {
                 return;
@@ -356,9 +358,9 @@ public final class SyncService {
     }
 
     /**
-     * Envoie les infos de survol du chunk ENTIER (hauteurs, blocs de surface,
-     * biomes par cellule 4x4, palettisés) : une réponse couvre 256 colonnes,
-     * le survol devient instantané côté client.
+     * Sends the hover info of the WHOLE chunk (heights, surface blocks,
+     * biomes per 4x4 cell, palettized): one response covers 256 columns,
+     * hovering becomes instantaneous client-side.
      */
     private static void sendMapInfo(ServerPlayer player, ChunkAccess chunk) {
         int baseX = chunk.getPos().getMinBlockX();
@@ -385,7 +387,7 @@ public final class SyncService {
         Map<String, Integer> biomeLookup = new HashMap<>();
         for (int bz = 0; bz < 4; bz++) {
             for (int bx = 0; bx < 4; bx++) {
-                // Centre de la cellule 4x4, au Y de surface de sa colonne.
+                // Center of the 4x4 cell, at its column's surface Y.
                 int dx = bx * 4 + 2;
                 int dz = bz * 4 + 2;
                 int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, dx, dz);
@@ -403,15 +405,15 @@ public final class SyncService {
                         chunk.getPos().x, chunk.getPos().z, heights, blockIdx, blockPalette, biomeIdx, biomePalette));
     }
 
-    // ------------------------------------------------------------------ visibilité des joueurs sur la carte
+    // ------------------------------------------------------------------ player visibility on the map
 
-    /** Cadence (ticks) de diffusion des positions des joueurs aux cartes. */
+    /** Broadcast cadence (ticks) of player positions to the maps. */
     private static final int PLAYER_POSITIONS_INTERVAL_TICKS = 20;
 
-    /** Joueurs ayant demandé à être cachés de la carte des autres joueurs. */
+    /** Players who asked to be hidden from the other players' map. */
     private static final Set<UUID> HIDDEN_PLAYERS = ConcurrentHashMap.newKeySet();
 
-    /** Diffuse la position (dimension, x, z) de tous les joueurs non cachés. */
+    /** Broadcasts the position (dimension, x, z) of every non-hidden player. */
     private static void broadcastPlayerPositions(MinecraftServer server) {
         List<Payloads.PlayerPositionsPayload.PlayerPos> players = new ArrayList<>();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
@@ -425,7 +427,7 @@ public final class SyncService {
         PacketDistributor.sendToAllPlayers(new Payloads.PlayerPositionsPayload(players));
     }
 
-    /** Préférence "caché de la carte" reçue d'un client : appliquée et diffusée. */
+    /** "Hidden from the map" preference received from a client: applied and broadcast. */
     public static void handleMapVisibility(Player playerRaw, Payloads.MapVisibilityPayload payload) {
         if (!(playerRaw instanceof ServerPlayer player)) {
             return;
@@ -443,12 +445,12 @@ public final class SyncService {
         }
     }
 
-    /** Envoie la liste courante des joueurs cachés à un joueur qui rejoint. */
+    /** Sends the current hidden player list to a joining player. */
     public static void sendHiddenPlayers(ServerPlayer player) {
         PacketDistributor.sendToPlayer(player, new Payloads.HiddenPlayersPayload(List.copyOf(HIDDEN_PLAYERS)));
     }
 
-    /** Purge à la déconnexion (la préférence est renvoyée à la reconnexion). */
+    /** Cleared on disconnect (the preference is sent again on reconnect). */
     public static void clearHiddenPlayer(ServerPlayer player) {
         if (HIDDEN_PLAYERS.remove(player.getUUID())) {
             broadcastHiddenPlayers();
@@ -459,7 +461,7 @@ public final class SyncService {
         PacketDistributor.sendToAllPlayers(new Payloads.HiddenPlayersPayload(List.copyOf(HIDDEN_PLAYERS)));
     }
 
-    /** Index de l'identifiant dans la palette (ajouté si absent, borné à 255). */
+    /** Index of the identifier in the palette (added if absent, capped at 255). */
     private static int paletteIndex(List<String> palette, Map<String, Integer> lookup, String id) {
         Integer existing = lookup.get(id);
         if (existing != null) {
@@ -478,9 +480,9 @@ public final class SyncService {
     // ------------------------------------------------------------------ administration / stats
 
     /**
-     * Force la resynchronisation (spec §7 : /map admin sync force).
-     * regionFilter null = tout le rayon ; sinon uniquement la région donnée
-     * (sur toutes les couches actives de la dimension du joueur).
+     * Forces a resynchronization (spec §7: /sj admin sync force).
+     * Null regionFilter = the whole radius; otherwise only the given region
+     * (across all active layers of the player's dimension).
      */
     public static int forceSync(ServerPlayer player, boolean full, int[] regionFilter) {
         PlayerState st = STATES.get(player.getUUID());
@@ -518,12 +520,12 @@ public final class SyncService {
     public static String statsFor(ServerPlayer player) {
         PlayerState st = STATES.get(player.getUUID());
         if (st == null) {
-            return player.getGameProfile().getName() + " : aucun état de sync";
+            return player.getGameProfile().getName() + ": no sync state";
         }
 
         long ago = st.lastSyncMillis == 0 ? -1 : (System.currentTimeMillis() - st.lastSyncMillis) / 1000;
         return String.format(
-                "%s : %d régions envoyées, %.1f Ko, file: %d, handshake: %d entrées, requêtes: %d, forcées: %d, dernier envoi: %s",
+                "%s: %d regions sent, %.1f KB, queue: %d, handshake: %d entries, requests: %d, forced: %d, last sent: %s",
                 player.getGameProfile().getName(),
                 st.regionsSent,
                 st.bytesSent / 1024.0,
@@ -531,14 +533,14 @@ public final class SyncService {
                 st.handshakeEntries,
                 st.requestsReceived,
                 st.forcedCount,
-                ago < 0 ? "jamais" : "il y a " + ago + "s");
+                ago < 0 ? "never" : ago + "s ago");
     }
 
     // ------------------------------------------------------------------
 
     private static final class PlayerState {
         final Map<RegionKey, Long> sentVersions = new ConcurrentHashMap<>();
-        /** ConcurrentLinkedQueue conformément à la spec §5.2. */
+        /** ConcurrentLinkedQueue as required by spec §5.2. */
         private final ConcurrentLinkedQueue<RegionKey> queue = new ConcurrentLinkedQueue<>();
 
         private final Set<RegionKey> queuedSet = ConcurrentHashMap.newKeySet();

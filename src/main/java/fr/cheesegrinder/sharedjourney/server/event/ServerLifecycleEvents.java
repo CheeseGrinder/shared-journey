@@ -21,8 +21,8 @@ import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /**
- * Cycle de vie du serveur : init/arrêt du moteur de carte, tick des services,
- * sauvegardes périodiques et enregistrement des commandes.
+ * Server lifecycle: map engine init/shutdown, service ticking, periodic
+ * saves and command registration.
  */
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID)
 public final class ServerLifecycleEvents {
@@ -31,12 +31,12 @@ public final class ServerLifecycleEvents {
 
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
-        // Collecte des couches custom déclarées par d'autres mods (bus MOD).
+        // Collect custom layers declared by other mods (MOD bus).
         LayerRegisterEvent layerEvent = new LayerRegisterEvent();
         ModLoader.postEvent(layerEvent);
         MapManager.init(event.getServer(), layerEvent.getCustomLayers());
 
-        // Rejoue les chunks chargés avant l'init (chunks de spawn).
+        // Replay chunks loaded before the init (spawn chunks).
         ChunkEvents.replayEarlyChunks(event.getServer());
     }
 

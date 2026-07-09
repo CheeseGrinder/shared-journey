@@ -25,9 +25,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * État client en mémoire. Le client ne rend JAMAIS la carte lui-même : il
- * affiche ce que le serveur a poussé (source de vérité), éventuellement
- * rechargé depuis le cache disque local à la reconnexion.
+ * In-memory client state. The client NEVER renders the map itself: it
+ * displays what the server pushed (source of truth), possibly reloaded from
+ * the local disk cache on reconnect.
  */
 public final class ClientMapCache {
 
@@ -35,35 +35,35 @@ public final class ClientMapCache {
 
     private ClientMapCache() {}
 
-    // Annonces du serveur (couches autorisées, bandes cave, plafond radar).
+    // Server announcements (allowed layers, cave bands, radar cap).
     public static volatile Map<ResourceLocation, List<MapLayer>> layersByDim = Map.of();
     public static volatile List<Integer> caveBands = List.of();
     public static volatile int radarMaxRadius = 64;
-    /** Joueurs ayant demandé à être cachés de la carte (diffusé par le serveur). */
+    /** Players who asked to be hidden from the map (broadcast by the server). */
     public static volatile Set<UUID> hiddenPlayers = Set.of();
-    /** Positions des joueurs (non cachés) diffusées par le serveur (~1x/s). */
+    /** Positions of (non-hidden) players broadcast by the server (~1x/s). */
     public static volatile Map<UUID, Payloads.PlayerPositionsPayload.PlayerPos> playerPositions = Map.of();
 
     private static final Map<RegionKey, Region> REGIONS = new ConcurrentHashMap<>();
     private static final Map<RegionKey, Assembly> PENDING = new ConcurrentHashMap<>();
-    /** Régions déjà cherchées (et absentes) sur le disque : évite de re-tenter chaque frame. */
+    /** Regions already looked up (and absent) on disk: avoids retrying every frame. */
     private static final Set<RegionKey> DISK_MISSES = ConcurrentHashMap.newKeySet();
-    /** Anti-spam de requêtes à la demande. */
+    /** On-demand request anti-spam. */
     public static final Map<RegionKey, Long> LAST_REQUESTED = new ConcurrentHashMap<>();
 
-    /** Cap du cache d'infos de survol (chunks entiers de 256 colonnes). */
+    /** Hover info cache cap (whole chunks of 256 columns). */
     private static final int HOVER_CHUNK_CAP = 512;
 
-    /** Nouvelle tentative pour un chunk déjà demandé sans réponse (ms). */
+    /** Retry delay for a chunk already requested without a response (ms). */
     private static final long HOVER_RETRY_MS = 3_000;
 
-    /** Espacement des préchargements de chunks voisins (ms, anti-spam serveur). */
+    /** Spacing of neighbor chunk prefetches (ms, server anti-spam). */
     private static final long HOVER_PREFETCH_SPACING_MS = 60;
 
     /**
-     * Infos de survol (biome/bloc/Y) reçues du serveur pour les chunks hors
-     * de la zone chargée localement. LRU borné ; clé = chunk (cx, cz) packé.
-     * Accédé uniquement depuis le thread client (réception via enqueueWork).
+     * Hover info (biome/block/Y) received from the server for chunks outside
+     * the locally loaded area. Bounded LRU; key = packed chunk (cx, cz).
+     * Accessed only from the client thread (reception via enqueueWork).
      */
     private static final Map<Long, HoverChunk> HOVER_CHUNKS = new LinkedHashMap<>(64, 0.75f, true) {
         @Override
@@ -72,14 +72,14 @@ public final class ClientMapCache {
         }
     };
 
-    /** Anti-spam des requêtes de survol : dernier envoi par chunk. */
+    /** Hover request anti-spam: last send per chunk. */
     private static final Map<Long, Long> HOVER_REQUESTED = new ConcurrentHashMap<>();
 
     private static long lastHoverRequestAt;
 
     public record HoverInfo(int y, String biomeId, String blockId) {}
 
-    /** Chunk d'infos de survol palettisé, tel que reçu du serveur. */
+    /** Palettized hover info chunk, as received from the server. */
     public record HoverChunk(
             short[] heights, byte[] blockIdx, List<String> blockPalette, byte[] biomeIdx, List<String> biomePalette) {
 
@@ -100,7 +100,7 @@ public final class ClientMapCache {
         }
     }
 
-    /** Clé de chunk pour le cache d'infos de survol. */
+    /** Chunk key for the hover info cache. */
     public static long chunkKey(int cx, int cz) {
         return ((long) cx << 32) | (cz & 0xFFFFFFFFL);
     }
@@ -119,9 +119,9 @@ public final class ClientMapCache {
     }
 
     /**
-     * Demande (throttlée) les infos de survol d'un chunk. Le chunk sous le
-     * curseur part immédiatement (immediate=true) ; les préchargements des
-     * voisins sont espacés pour respecter l'anti-spam du serveur.
+     * Requests (throttled) a chunk's hover info. The chunk under the cursor
+     * goes out immediately (immediate=true); neighbor prefetches are spaced
+     * out to respect the server's anti-spam.
      */
     public static void requestHoverChunk(int cx, int cz, boolean immediate) {
         long key = chunkKey(cx, cz);
@@ -157,11 +157,11 @@ public final class ClientMapCache {
         }
     }
 
-    // ------------------------------------------------------------------ accès
+    // ------------------------------------------------------------------ access
 
     /**
-     * Région pour affichage. Si absente en RAM mais présente dans le cache
-     * disque de la session, elle est chargée à la volée (une seule tentative).
+     * Region for display. If absent from RAM but present in the session's
+     * disk cache, it is loaded on the fly (single attempt).
      */
     public static Region getOrLoad(RegionKey key) {
         Region r = REGIONS.get(key);
@@ -228,7 +228,7 @@ public final class ClientMapCache {
         return PENDING.size();
     }
 
-    // ------------------------------------------------------------------ assemblage
+    // ------------------------------------------------------------------ assembly
 
     public static void acceptFragment(RegionKey key, long version, int part, int totalParts, byte[] data) {
         if (versionOf(key) >= version && REGIONS.containsKey(key)) {
@@ -263,7 +263,7 @@ public final class ClientMapCache {
             }
 
             uploadTexture(key, version, png);
-            DiskCache.store(key, version, png); // persistance locale (spec §3.2)
+            DiskCache.store(key, version, png); // local persistence (spec §3.2)
         }
     }
 
@@ -275,7 +275,7 @@ public final class ClientMapCache {
             REGIONS.put(key, new Region(version, rl));
             DISK_MISSES.remove(key);
         } catch (IOException e) {
-            LOGGER.error("PNG de région invalide pour {}", key, e);
+            LOGGER.error("Invalid region PNG for {}", key, e);
         }
     }
 
@@ -292,7 +292,7 @@ public final class ClientMapCache {
 
     // ------------------------------------------------------------------
 
-    /** Couches proposées pour la dimension courante (vérité serveur). */
+    /** Layers offered for the current dimension (server truth). */
     public static List<MapLayer> layersForCurrentDim() {
         var mc = Minecraft.getInstance();
         if (mc.level == null) {

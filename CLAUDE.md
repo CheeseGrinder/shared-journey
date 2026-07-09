@@ -76,7 +76,7 @@ The packages keep the layering discipline of the former multi-module split: `api
 
 ## Code Conventions
 
-- All source code comments, log messages, and the README are written in **French**. Follow this convention when adding internal documentation.
+- Everything is written in **English**: source code documentation (Javadoc, internal comments, config comments) and runtime user-facing strings (log messages, command feedback). The README is also being translated to English. Legacy French text is being translated progressively during the clean-code effort — translate it to English whenever you touch a file.
 - The custom layer pipeline (`LayerRegisterEvent`) collects registrations but storage/sync for them is not yet wired — only the built-in 5 layers are fully operational.
 - The codebase was authored without being compiled in the target environment; minor API signature adjustments may be needed after changes.
 

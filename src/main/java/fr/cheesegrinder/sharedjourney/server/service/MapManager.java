@@ -37,17 +37,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.imageio.ImageIO;
 
 /**
- * Source de vérité côté serveur (spec §3.1 et §4).
+ * Server-side source of truth (spec §3.1 and §4).
  *
- * - Régions 512x512 px en RAM, persistées en PNG dans
+ * - 512x512 px regions in RAM, persisted as PNG under
  *   world/data/sharedjourney/[dimension]/[layer]/region_X_Z.png
- * - index.json : registre {RegionKey -> Timestamp} (sérialisation du registre RAM)
- * - Moteur ASYNCHRONE : le tick serveur ne fait que dépiler la file de chunks
- *   "dirty" et soumettre les tâches à un pool de threads dimensionné
- *   min(coeurs-2, config.maxWorkerThreads), plancher 1. Le calcul des pixels,
- *   l'encodage PNG et les écritures disque se font hors du main thread.
- *   Note : les tâches lisent le ChunkAccess en lecture seule ; le chunk est
- *   résolu sur le main thread (getChunkNow) avant soumission.
+ * - index.json: {RegionKey -> Timestamp} registry (serialization of the RAM registry)
+ * - ASYNC engine: the server tick only drains the "dirty" chunk queue and
+ *   submits tasks to a thread pool sized min(cores-2, config.maxWorkerThreads),
+ *   floor 1. Pixel computation, PNG encoding and disk writes all happen off
+ *   the main thread.
+ *   Note: tasks read the ChunkAccess read-only; the chunk is resolved on the
+ *   main thread (getChunkNow) before submission.
  */
 public final class MapManager {
 
@@ -81,7 +81,7 @@ public final class MapManager {
     private final int workerCount;
     private final AtomicInteger tasksInFlight = new AtomicInteger();
 
-    /** File de chunks à (re)rendre, dédupliquée (dirty marking, spec §4). */
+    /** Queue of chunks to (re)render, deduplicated (dirty marking, spec §4). */
     private final ArrayDeque<QueuedChunk> renderQueue = new ArrayDeque<>();
 
     private final Set<QueuedChunk> queued = new LinkedHashSet<>();
@@ -89,8 +89,8 @@ public final class MapManager {
     private record QueuedChunk(ResourceKey<Level> dim, int cx, int cz) {}
 
     /**
-     * Déverrouillages de bandes de grottes en attente de rendu (anti-exploit) :
-     * une bande CAVE n'est peinte que si un joueur l'a réellement explorée.
+     * Cave band unlocks awaiting a render (anti-exploit): a CAVE band is
+     * only painted if a player actually explored it.
      */
     private final Set<CaveUnlock> caveUnlocks = ConcurrentHashMap.newKeySet();
 
@@ -103,9 +103,10 @@ public final class MapManager {
         RegionStorage.migrateLegacyCaveFolders(root);
         this.index.load(root.resolve("index.json"));
 
-        // Formule d'allocation de la spec §4.
+        // Allocation formula from spec §4: min(cores-2, config), floor 1.
+        // Math.clamp would throw on machines with <= 2 cores (min > max).
         int cores = Runtime.getRuntime().availableProcessors();
-        this.workerCount = Math.clamp(EngineServerConfig.MAX_WORKER_THREADS.get(), 1, cores - 2);
+        this.workerCount = Math.max(1, Math.min(EngineServerConfig.MAX_WORKER_THREADS.get(), cores - 2));
         this.workers = Executors.newFixedThreadPool(workerCount, r -> {
             Thread t = new Thread(r, "SharedJourney-Render");
             t.setDaemon(true);
@@ -113,7 +114,7 @@ public final class MapManager {
             return t;
         });
         LOGGER.info(
-                "SharedJourney : moteur de rendu initialisé ({} thread(s), index: {} région(s))",
+                "SharedJourney: render engine initialized ({} thread(s), index: {} region(s))",
                 workerCount,
                 index.size());
     }
@@ -130,7 +131,7 @@ public final class MapManager {
         saveAll();
     }
 
-    // ------------------------------------------------------------------ file de rendu
+    // ------------------------------------------------------------------ render queue
 
     public synchronized void enqueueChunk(ServerLevel level, int cx, int cz) {
         QueuedChunk q = new QueuedChunk(level.dimension(), cx, cz);
@@ -152,12 +153,12 @@ public final class MapManager {
     }
 
     /**
-     * Tick serveur : résout les chunks sur le main thread (obligatoire) puis
-     * délègue tout le calcul au pool. Coût main-thread quasi nul.
+     * Server tick: resolves chunks on the main thread (mandatory) then
+     * delegates all computation to the pool. Near-zero main-thread cost.
      */
     public void tick() {
         int budget = EngineServerConfig.RENDER_CHUNKS_PER_TICK.get();
-        // Évite d'inonder le pool si le disque/CPU ne suit pas.
+        // Avoid flooding the pool when the disk/CPU cannot keep up.
         int maxInFlight = workerCount * 8;
         while (budget-- > 0 && tasksInFlight.get() < maxInFlight) {
             QueuedChunk q;
@@ -175,7 +176,7 @@ public final class MapManager {
             }
 
             ChunkAccess chunk = level.getChunkSource().getChunkNow(q.cx(), q.cz());
-            // Déchargé entre-temps.
+            // Unloaded in the meantime.
             if (chunk == null) {
                 continue;
             }
@@ -185,12 +186,13 @@ public final class MapManager {
     }
 
     /**
-     * Rendu immédiat d'un chunk déjà résolu (référence issue d'un événement).
-     * Indispensable pour les chunks fraîchement générés (prégénération
-     * Chunky) : ils sont déchargés sitôt générés, une résolution différée au
-     * tick suivant (getChunkNow) les manquerait systématiquement. Si le pool
-     * est saturé, on retombe sur la file classique plutôt que de retenir en
-     * mémoire un nombre illimité de chunks déchargés.
+     * Immediate render of an already-resolved chunk (reference coming from
+     * an event). Essential for freshly generated chunks (Chunky
+     * pregeneration): they are unloaded as soon as they are generated, and a
+     * deferred resolution on the next tick (getChunkNow) would
+     * systematically miss them. If the pool is saturated, fall back to the
+     * regular queue rather than holding an unbounded number of unloaded
+     * chunks in memory.
      */
     public void renderNow(ServerLevel level, ChunkAccess chunk) {
         if (tasksInFlight.get() < workerCount * 8) {
@@ -200,13 +202,13 @@ public final class MapManager {
         }
     }
 
-    /** Soumet le rendu d'un chunk résolu au pool de workers. */
+    /** Submits the render of a resolved chunk to the worker pool. */
     private void submitRender(ServerLevel level, ChunkAccess chunk) {
-        // Voisinage 3x3 (biomes uniquement, statut BIOMES suffit, jamais de
-        // génération) : le zoom de biomes du jeu lit jusqu'à une cellule au-delà
-        // du chunk, il faut donc les voisins pour des frontières fidèles jusqu'au
-        // bord. Résolu ici, sur le main thread ; un voisin absent sera approximé
-        // par le chunk central dans ChunkColorizer.
+        // 3x3 neighborhood (biomes only, BIOMES status is enough, never any
+        // generation): the game's biome zoom reads up to one cell beyond the
+        // chunk, so neighbors are needed for faithful borders up to the
+        // edge. Resolved here, on the main thread; a missing neighbor is
+        // approximated by the center chunk in ChunkColorizer.
         ChunkPos cp = chunk.getPos();
         ChunkAccess[] neighbors = new ChunkAccess[9];
         for (int dz = -1; dz <= 1; dz++) {
@@ -224,7 +226,7 @@ public final class MapManager {
                     renderChunk(level, chunk, neighbors);
                 } catch (Throwable t) {
                     LOGGER.error(
-                            "Echec de rendu du chunk {},{} en {}",
+                            "Failed to render chunk {},{} in {}",
                             chunk.getPos().x,
                             chunk.getPos().z,
                             level.dimension().location(),
@@ -234,11 +236,11 @@ public final class MapManager {
                 }
             });
         } catch (RejectedExecutionException e) {
-            tasksInFlight.decrementAndGet(); // arrêt du serveur en cours
+            tasksInFlight.decrementAndGet(); // server shutdown in progress
         }
     }
 
-    /** Rendu de toutes les couches actives d'un chunk (exécuté sur un worker). */
+    /** Renders every active layer of a chunk (runs on a worker). */
     private void renderChunk(ServerLevel level, ChunkAccess chunk, ChunkAccess[] neighbors) {
         EnumSet<MapLayer> layers = LayersServerConfig.layersFor(level.dimension());
         ChunkPos cp = chunk.getPos();
@@ -248,9 +250,9 @@ public final class MapManager {
                 for (int band : LayersServerConfig.CAVE_BANDS.get()) {
                     RegionKey key = RegionKey.of(level.dimension(), layer, band, cp.x, cp.z);
                     CaveUnlock unlock = new CaveUnlock(level.dimension(), band, cp.x, cp.z);
-                    // Anti-exploit : une bande de grotte n'est peinte que si un
-                    // joueur l'a explorée (déverrouillage CaveTracker) ou si
-                    // elle l'était déjà (mise à jour d'une zone connue).
+                    // Anti-exploit: a cave band is only painted if a player
+                    // explored it (CaveTracker unlock) or if it already was
+                    // (update of a known area).
                     if (!caveUnlocks.contains(unlock) && !isChunkPainted(key, cp.x, cp.z)) {
                         continue;
                     }
@@ -267,18 +269,18 @@ public final class MapManager {
                 touched.add(key);
             }
         }
-        // Push immédiat aux joueurs concernés (sans attendre le delta périodique).
+        // Immediate push to affected players (without waiting for the periodic delta).
         SyncService.pushRegionUpdates(server, touched);
-        // NB: les couches custom (LayerRegisterEvent) sont collectées mais leur
-        // pipeline de stockage/sync n'est pas encore branché — voir README §Limites.
+        // NB: custom layers (LayerRegisterEvent) are collected but their
+        // storage/sync pipeline is not wired yet — see README §Limites.
     }
 
-    /** Clés de régions connues de l'index (copie, pour la régénération complète). */
+    /** Region keys known to the index (copy, for the full regeneration). */
     public Set<RegionKey> indexedRegions() {
         return index.snapshot().keySet();
     }
 
-    /** Un chunk a-t-il déjà été peint (au moins un pixel opaque sur la 1re couche active) ? */
+    /** Has the chunk already been painted (at least one opaque pixel on the first active layer)? */
     public boolean isChunkRendered(ServerLevel level, int cx, int cz) {
         EnumSet<MapLayer> layers = LayersServerConfig.layersFor(level.dimension());
         if (layers.isEmpty()) {
@@ -290,9 +292,9 @@ public final class MapManager {
         return isChunkPainted(RegionKey.of(level.dimension(), probe, band, cx, cz), cx, cz);
     }
 
-    /** Le chunk a-t-il au moins un pixel opaque sur la région donnée ? */
+    /** Does the chunk have at least one opaque pixel on the given region? */
     private boolean isChunkPainted(RegionKey key, int cx, int cz) {
-        // Astuce rapide : si l'index ne connaît pas la région, rien n'a été peint.
+        // Fast path: if the index does not know the region, nothing was painted.
         if (index.get(key) < 0 && !regions.containsKey(key)) {
             return false;
         }
@@ -310,9 +312,9 @@ public final class MapManager {
     }
 
     /**
-     * Marque une bande de grotte comme explorée par un joueur (CaveTracker) :
-     * le chunk sera peint sur cette bande au prochain rendu. Sans effet si
-     * la bande y est déjà peinte.
+     * Marks a cave band as explored by a player (CaveTracker): the chunk
+     * will be painted on that band on the next render. No-op if the band is
+     * already painted there.
      */
     public void unlockCave(ServerLevel level, int band, int cx, int cz) {
         RegionKey key = RegionKey.of(level.dimension(), MapLayer.CAVE, band, cx, cz);
@@ -330,7 +332,7 @@ public final class MapManager {
         return bands.isEmpty() ? 0 : bands.getFirst();
     }
 
-    // ------------------------------------------------------------------ écriture (workers)
+    // ------------------------------------------------------------------ writes (workers)
 
     private void writeChunk(RegionKey key, int cx, int cz, int[] chunkPixels) {
         RegionImage img = getOrLoad(key, true);
@@ -347,12 +349,12 @@ public final class MapManager {
             img.cachedPng = null;
             version = img.version;
         }
-        index.put(key, version); // registre RAM ; sérialisé par saveAll()
+        index.put(key, version); // RAM registry; serialized by saveAll()
     }
 
-    // ------------------------------------------------------------------ lecture / versions
+    // ------------------------------------------------------------------ reads / versions
 
-    /** Version d'une région : index (vérité) > fichier (mtime) > -1. */
+    /** Version of a region: index (truth) > file (mtime) > -1. */
     public long versionOf(RegionKey key) {
         long fromIndex = index.get(key);
         if (fromIndex >= 0) {
@@ -377,7 +379,7 @@ public final class MapManager {
         return -1;
     }
 
-    /** PNG encodé de la région (mis en cache tant que la région n'est pas réécrite). */
+    /** Encoded PNG of the region (cached until the region is rewritten). */
     public byte[] pngOf(RegionKey key) {
         RegionImage img = getOrLoad(key, false);
         if (img == null) {
@@ -404,7 +406,7 @@ public final class MapManager {
             ImageIO.write(bi, "png", bos);
             return bos.toByteArray();
         } catch (IOException e) {
-            LOGGER.error("Echec d'encodage PNG", e);
+            LOGGER.error("Failed to encode PNG", e);
             return null;
         }
     }
@@ -433,7 +435,7 @@ public final class MapManager {
                 RegionImage prev = regions.putIfAbsent(key, loaded);
                 return prev != null ? prev : loaded;
             } catch (IOException e) {
-                LOGGER.error("Echec de lecture de {}", file, e);
+                LOGGER.error("Failed to read {}", file, e);
             }
         }
         if (!createIfMissing) {
@@ -446,16 +448,16 @@ public final class MapManager {
     }
 
     private Path pathOf(RegionKey key) {
-        String dim = key.dimension().location().getPath(); // "overworld" comme la spec
+        String dim = key.dimension().location().getPath(); // "overworld" as per the spec
         if (!key.dimension().location().getNamespace().equals("minecraft")) {
             dim = key.dimension().location().toString().replace(':', '_');
         }
         return root.resolve(dim).resolve(key.layer().folderName(key.caveBand())).resolve(key.fileName());
     }
 
-    // ------------------------------------------------------------------ persistance
+    // ------------------------------------------------------------------ persistence
 
-    /** Flush asynchrone : sauvegarde régions modifiées + index.json (world save, arrêt). */
+    /** Async flush: saves modified regions + index.json (world save, shutdown). */
     public void saveAllAsync() {
         workers.submit(this::saveAll);
     }
@@ -487,7 +489,7 @@ public final class MapManager {
                 Files.setLastModifiedTime(file, FileTime.fromMillis(version));
                 saved++;
             } catch (IOException ex) {
-                LOGGER.error("Echec de sauvegarde de {}", file, ex);
+                LOGGER.error("Failed to save {}", file, ex);
                 synchronized (img) {
                     img.dirty = true;
                 }
@@ -496,22 +498,22 @@ public final class MapManager {
         try {
             index.save(root.resolve("index.json"));
         } catch (IOException ex) {
-            LOGGER.error("Echec de sauvegarde de l'index", ex);
+            LOGGER.error("Failed to save the index", ex);
         }
         if (saved > 0) {
-            LOGGER.info("SharedJourney : {} région(s) sauvegardée(s)", saved);
+            LOGGER.info("SharedJourney: {} region(s) saved", saved);
         }
     }
 
     // ------------------------------------------------------------------ stats (spec §7)
 
-    /** Etat RAM / file / threads pour /map stats. */
+    /** RAM / queue / thread state for /sj stats. */
     public String engineStats() {
         long dirty = regions.values().stream().filter(r -> r.dirty).count();
         long ramMb = regions.size() * (long) RegionKey.REGION_BLOCKS * RegionKey.REGION_BLOCKS * 4 / (1024 * 1024);
-        return "Moteur: " + workerCount + " thread(s), " + tasksInFlight.get() + " tâche(s) en cours | "
-                + "Régions RAM: " + regions.size() + " (~" + ramMb + " Mo, " + dirty + " modifiées) | "
-                + "Index: " + index.size() + " entrées | File de rendu: " + queueSize() + " chunk(s)";
+        return "Engine: " + workerCount + " thread(s), " + tasksInFlight.get() + " task(s) in flight | "
+                + "RAM regions: " + regions.size() + " (~" + ramMb + " MB, " + dirty + " dirty) | "
+                + "Index: " + index.size() + " entries | Render queue: " + queueSize() + " chunk(s)";
     }
 
     private static final class RegionImage {

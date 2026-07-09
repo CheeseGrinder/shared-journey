@@ -30,15 +30,17 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 /**
- * Paquets réseau (spec §5). Le module common ne connaît ni le client ni le
- * serveur : les handlers sont injectés par le module d'assemblage via les
- * champs Hooks.* (évite toute dépendance circulaire entre modules).
+ * Network packets (spec §5). The common package knows neither the client nor
+ * the server: handlers are injected by the entry points ({@code SharedJourney}
+ * and {@code SharedJourneyClient}) through the Hooks.* fields, which avoids
+ * any circular dependency between packages. Deliberate design choice — do not
+ * refactor it away.
  */
 public final class Payloads {
 
     private Payloads() {}
 
-    /** Indirection des handlers, câblée par :mod au démarrage. */
+    /** Handler indirection, wired by the entry points at startup. */
     public static final class Hooks {
         public static Consumer<LayerSettingsPayload> clientLayerSettings = p -> {};
         public static Consumer<RegionDataPayload> clientRegionData = p -> {};
@@ -55,9 +57,9 @@ public final class Payloads {
         return ResourceLocation.fromNamespaceAndPath(SharedJourneyConstants.MOD_ID, path);
     }
 
-    // ---------------------------------------------------------------- S2C : couches actives
+    // ---------------------------------------------------------------- S2C: active layers
 
-    /** Couches actives par dimension + bandes CAVE (envoyé au login et à chaque reload). */
+    /** Active layers per dimension + CAVE bands (sent at login and on every reload). */
     public record LayerSettingsPayload(
             Map<ResourceLocation, List<MapLayer>> layersByDim, List<Integer> caveBands, int radarMaxRadius)
             implements CustomPacketPayload {
@@ -103,9 +105,9 @@ public final class Payloads {
         }
     }
 
-    // ---------------------------------------------------------------- S2C : données de région
+    // ---------------------------------------------------------------- S2C: region data
 
-    /** Fragment de PNG de région, compressé GZIP côté flux complet (spec §5.3). */
+    /** Region PNG fragment; the full stream is GZIP-compressed (spec §5.3). */
     public record RegionDataPayload(RegionKey key, long version, int part, int totalParts, byte[] data)
             implements CustomPacketPayload {
         public static final Type<RegionDataPayload> TYPE = new Type<>(id("region_data"));
@@ -131,12 +133,12 @@ public final class Payloads {
         }
     }
 
-    // ---------------------------------------------------------------- C2S : handshake d'index
+    // ---------------------------------------------------------------- C2S: index handshake
 
     /**
-     * Handshake (spec §5.1) : à la connexion, le client envoie le résumé de son
-     * index.json local (clés + timestamps, sérialisé et GZIPé). Le serveur
-     * calcule le delta et n'enverra que ce qui manque ou a changé.
+     * Handshake (spec §5.1): on connection, the client sends a summary of its
+     * local index.json (keys + timestamps, serialized and GZIPped). The server
+     * computes the delta and only sends what is missing or has changed.
      */
     public record ClientIndexPayload(byte[] gzippedIndex) implements CustomPacketPayload {
         public static final Type<ClientIndexPayload> TYPE = new Type<>(id("client_index"));
@@ -149,7 +151,7 @@ public final class Payloads {
             return TYPE;
         }
 
-        /** Sérialisation compacte : lignes "indexKey=timestamp", GZIP. */
+        /** Compact serialization: "indexKey=timestamp" lines, GZIPped. */
         public static byte[] encodeIndex(Map<RegionKey, Long> entries) {
             StringBuilder sb = new StringBuilder(entries.size() * 48);
             entries.forEach(
@@ -197,9 +199,9 @@ public final class Payloads {
         }
     }
 
-    // ---------------------------------------------------------------- C2S : requête de régions
+    // ---------------------------------------------------------------- C2S: region request
 
-    /** Le client demande des régions (plein écran) avec la version qu'il possède (-1 sinon). */
+    /** Client requests regions (fullscreen map) with the version it owns (-1 if none). */
     public record RegionRequestPayload(List<RegionKey> keys, List<Long> knownVersions) implements CustomPacketPayload {
         public static final Type<RegionRequestPayload> TYPE = new Type<>(id("region_request"));
 
@@ -228,9 +230,9 @@ public final class Payloads {
         }
     }
 
-    // ---------------------------------------------------------------- C2S/S2C : infos au survol
+    // ---------------------------------------------------------------- C2S/S2C: hover info
 
-    /** Le client demande les infos (biome, bloc, Y) d'une colonne survolée sur la carte. */
+    /** Client requests the info (biome, block, Y) of a column hovered on the map. */
     public record MapInfoRequestPayload(int x, int z) implements CustomPacketPayload {
         public static final Type<MapInfoRequestPayload> TYPE = new Type<>(id("map_info_request"));
 
@@ -248,9 +250,9 @@ public final class Payloads {
     }
 
     /**
-     * Infos de survol d'un chunk ENTIER (256 colonnes) : hauteurs, bloc de
-     * surface par colonne et biome par cellule 4x4, palettisés (~1 Ko). Une
-     * seule réponse rend le survol instantané sur tout le chunk.
+     * Hover info for a WHOLE chunk (256 columns): heights, surface block per
+     * column and biome per 4x4 cell, palettized (~1 KB). A single response
+     * makes hovering instantaneous over the whole chunk.
      */
     public record MapInfoChunkPayload(
             int chunkX,
@@ -322,9 +324,9 @@ public final class Payloads {
         }
     }
 
-    // ---------------------------------------------------------------- C2S/S2C : visibilité des joueurs
+    // ---------------------------------------------------------------- C2S/S2C: player visibility
 
-    /** Préférence du joueur : être caché de la carte des autres joueurs. */
+    /** Player preference: be hidden from the other players' map. */
     public record MapVisibilityPayload(boolean hidden) implements CustomPacketPayload {
         public static final Type<MapVisibilityPayload> TYPE = new Type<>(id("map_visibility"));
 
@@ -337,7 +339,7 @@ public final class Payloads {
         }
     }
 
-    /** Liste des joueurs cachés de la carte, diffusée à tous les clients. */
+    /** List of players hidden from the map, broadcast to every client. */
     public record HiddenPlayersPayload(List<UUID> hidden) implements CustomPacketPayload {
         public static final Type<HiddenPlayersPayload> TYPE = new Type<>(id("hidden_players"));
 
@@ -363,10 +365,10 @@ public final class Payloads {
         }
     }
 
-    /** Positions (dimension, x, z) de tous les joueurs non cachés, ~1x/s. */
+    /** Positions (dimension, x, z) of every non-hidden player, ~1x/s. */
     public record PlayerPositionsPayload(List<PlayerPos> players) implements CustomPacketPayload {
 
-        /** Position d'un joueur sur la carte. */
+        /** A player's position on the map. */
         public record PlayerPos(UUID id, ResourceLocation dimension, double x, double z) {}
 
         public static final Type<PlayerPositionsPayload> TYPE = new Type<>(id("player_positions"));
@@ -400,7 +402,7 @@ public final class Payloads {
         }
     }
 
-    // ---------------------------------------------------------------- enregistrement
+    // ---------------------------------------------------------------- registration
 
     public static void register(final RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar =

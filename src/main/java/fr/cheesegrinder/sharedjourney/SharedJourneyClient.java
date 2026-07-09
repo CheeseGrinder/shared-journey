@@ -17,10 +17,10 @@ import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 
 /**
- * Point d'entrée CLIENT (jamais chargé sur serveur dédié).
- * Câble les handlers réseau client, l'écran de configuration NeoForge, et
- * initialise le bridge JourneyMap une fois TOUS les mods construits (pour que
- * le scan d'annotations voie les plugins des mods tiers).
+ * CLIENT entry point (never loaded on a dedicated server).
+ * Wires the client network handlers and the NeoForge config screen, and
+ * initializes the JourneyMap bridge once ALL mods are constructed (so that
+ * the annotation scan sees third-party mods' plugins).
  */
 @Mod(value = SharedJourney.MODID, dist = Dist.CLIENT)
 @EventBusSubscriber(modid = SharedJourney.MODID, value = Dist.CLIENT)
@@ -30,7 +30,7 @@ public class SharedJourneyClient {
         container.registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
 
-        // Câblage des handlers côté client.
+        // Client-side handler wiring.
         Payloads.Hooks.clientLayerSettings = ClientNetHandler::handleLayerSettings;
         Payloads.Hooks.clientRegionData = ClientNetHandler::handleRegionData;
         Payloads.Hooks.clientMapInfoChunk = ClientNetHandler::handleMapInfoChunk;
@@ -40,7 +40,7 @@ public class SharedJourneyClient {
 
     @SubscribeEvent
     static void onLoadComplete(FMLLoadCompleteEvent event) {
-        // Spec §9 : bridge de compatibilité JourneyMap (Waystones & co).
+        // Spec §9: JourneyMap compatibility bridge (Waystones & co).
         event.enqueueWork(JourneyMapBridge::init);
     }
 }

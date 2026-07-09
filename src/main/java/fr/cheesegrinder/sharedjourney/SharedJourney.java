@@ -15,10 +15,10 @@ import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
 /**
- * Point d'entrée commun (client + serveur dédié).
- * Assemble les modules : enregistre les configs et les payloads, et câble les
- * handlers réseau SERVEUR (les handlers CLIENT sont câblés par
- * SharedJourneyClient, uniquement sur le client).
+ * Common entry point (client + dedicated server).
+ * Assembles the parts: registers configs and payloads, and wires the SERVER
+ * network handlers (CLIENT handlers are wired by SharedJourneyClient, on the
+ * client only).
  */
 @Mod(SharedJourney.MODID)
 public class SharedJourney {
@@ -27,20 +27,20 @@ public class SharedJourney {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public SharedJourney(IEventBus modEventBus, ModContainer modContainer) {
-        // Configs : la hiérarchie de la spec §8 est assurée par NeoForge
-        // (defaultconfigs/ global, puis world/serverconfig/ écrase).
+        // Configs: the hierarchy required by spec §8 is handled by NeoForge
+        // (global defaultconfigs/, then world/serverconfig/ overrides).
         modContainer.registerConfig(ModConfig.Type.SERVER, ServerConfig.SPEC);
         modContainer.registerConfig(ModConfig.Type.COMMON, CommonConfig.SPEC);
 
         // Payloads (spec §5)
         modEventBus.addListener(Payloads::register);
 
-        // Câblage des handlers côté serveur (classes présentes des deux côtés).
+        // Server-side handler wiring (classes present on both sides).
         Payloads.Hooks.serverRegionRequest = SyncService::handleRegionRequest;
         Payloads.Hooks.serverClientIndex = SyncService::handleClientIndex;
         Payloads.Hooks.serverMapInfoRequest = SyncService::handleMapInfoRequest;
         Payloads.Hooks.serverMapVisibility = SyncService::handleMapVisibility;
 
-        LOGGER.info("SharedJourney initialisé");
+        LOGGER.info("SharedJourney initialized");
     }
 }

@@ -18,10 +18,10 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 /**
- * Cache local du client (spec §3.2) :
+ * Client local cache (spec §3.2):
  * .minecraft/sharedjourney_cache/[serverId]/[dimension]/[layer]/region_X_Z.png
- * + index.json (ce que le client possède). serverId = IP du serveur, ou
- * "sp_<monde>" en solo. Les écritures se font sur le pool IO de Minecraft.
+ * + index.json (what the client owns). serverId = server IP, or
+ * "sp_<world>" in singleplayer. Writes happen on Minecraft's IO pool.
  */
 public final class DiskCache {
 
@@ -34,7 +34,7 @@ public final class DiskCache {
 
     // ------------------------------------------------------------------ session
 
-    /** À appeler à la connexion : détermine le dossier du serveur/monde courant. */
+    /** Called on login: determines the current server/world folder. */
     public static void openSession() {
         Minecraft mc = Minecraft.getInstance();
         String id;
@@ -49,7 +49,7 @@ public final class DiskCache {
         currentRoot = mc.gameDirectory.toPath().resolve("sharedjourney_cache").resolve(id);
         RegionStorage.migrateLegacyCaveFolders(currentRoot);
         index.load(currentRoot.resolve("index.json"));
-        LOGGER.info("SharedJourney : cache local '{}' ({} région(s))", id, index.size());
+        LOGGER.info("SharedJourney: local cache '{}' ({} region(s))", id, index.size());
     }
 
     public static void closeSession() {
@@ -71,7 +71,7 @@ public final class DiskCache {
 
     // ------------------------------------------------------------------ IO
 
-    /** Écrit un PNG de région reçu du serveur (asynchrone) et met à jour l'index. */
+    /** Writes a region PNG received from the server (async) and updates the index. */
     public static void store(RegionKey key, long version, byte[] png) {
         if (currentRoot == null || !ClientConfig.DISK_CACHE_ENABLED.get()) {
             return;
@@ -84,12 +84,12 @@ public final class DiskCache {
                 Files.createDirectories(file.getParent());
                 Files.write(file, png);
             } catch (IOException e) {
-                LOGGER.error("Echec d'écriture du cache {}", file, e);
+                LOGGER.error("Failed to write cache {}", file, e);
             }
         });
     }
 
-    /** Lit un PNG du cache disque, ou null. (Appel bloquant : lecture locale rapide.) */
+    /** Reads a PNG from the disk cache, or null. (Blocking call: fast local read.) */
     public static byte[] read(RegionKey key) {
         if (currentRoot == null) {
             return null;
@@ -119,14 +119,14 @@ public final class DiskCache {
         try {
             index.save(currentRoot.resolve("index.json"));
         } catch (IOException e) {
-            LOGGER.error("Echec de sauvegarde de l'index client", e);
+            LOGGER.error("Failed to save the client index", e);
         }
     }
 
     /**
-     * Purge le cache local d'un calque ("day", "cave", "cave/2", ou "all")
-     * pour la session courante (spec §7 : /map purge). Retourne le nombre
-     * de fichiers supprimés.
+     * Purges the local cache of a layer ("day", "cave", "cave/2", or "all")
+     * for the current session (spec §7: /sj purge). Returns the number of
+     * deleted files.
      */
     public static int purge(String layerName) {
         if (currentRoot == null) {

@@ -55,57 +55,57 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 
 /**
- * Carte plein écran (spec §6.2) :
- * - glisser pour se déplacer (pan), molette pour zoomer
- * - clic gauche : sélectionner un bloc (contour) ; double-clic : créer un waypoint
- * - double-clic sur un waypoint : l'éditer (nom, couleur, suppression)
- * - clic droit : menu contextuel (téléportation, waypoints, chat)
- * - raccourcis façon JourneyMap : flèches (pan), B, C, F, J, T, =, -
- * - barre d'icônes en haut pour changer de couche ; +/- en bas pour la bande CAVE
- * Les régions manquantes/périmées visibles sont demandées au serveur (throttle).
+ * Fullscreen map (spec §6.2):
+ * - drag to pan, scroll wheel to zoom
+ * - left click: select a block (outline); double-click: create a waypoint
+ * - double-click on a waypoint: edit it (name, color, deletion)
+ * - right click: context menu (teleport, waypoints, chat)
+ * - JourneyMap-style shortcuts: arrows (pan), B, C, F, J, T, =, -
+ * - icon bar at the top to change layer; +/- at the bottom for the CAVE band
+ * Missing/stale visible regions are requested from the server (throttled).
  */
 public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.BridgedMapView {
 
     private static final long REQUEST_COOLDOWN_MS = 5_000;
     private static final int WAYPOINT_CLICK_PX = 6;
     private static final long DOUBLE_CLICK_MS = 350;
-    /** Pas de déplacement clavier (flèches), en blocs — comme JourneyMap. */
+    /** Keyboard pan step (arrows), in blocks — same as JourneyMap. */
     private static final int PAN_STEP_BLOCKS = 16;
 
     /**
-     * Échelle du zoom : puissances de 2 affichées comme JourneyMap
-     * (libellé = zoom * 2048, de 64 à 16384). La borne basse est limitée pour
-     * borner le nombre de régions parcourues par frame.
+     * Zoom scale: powers of 2 displayed like JourneyMap
+     * (label = zoom * 2048, from 64 to 16384). The lower bound is capped to
+     * bound the number of regions scanned per frame.
      */
     private static final float ZOOM_MIN = 64f / 2048f;
 
     private static final float ZOOM_MAX = 16384f / 2048f;
 
-    /** Légende des touches (Show Keys), conservée le temps de la session. */
+    /** Key legend (Show Keys), kept for the duration of the session. */
     private static boolean showKeys = false;
 
     private double centerX;
     private double centerZ;
-    private float zoom = 1.0f; // pixels écran par bloc
+    private float zoom = 1.0f; // screen pixels per block
     private MapLayer layer;
     private int bandIndex;
     private boolean dragged;
 
     private BandSlider bandSlider;
-    /** Boutons du menu contextuel (clic droit), retirés au prochain clic. */
+    /** Context menu (right click) buttons, removed on the next click. */
     private final List<Button> contextButtons = new ArrayList<>();
 
-    // Barre d'actions du haut : bouton par couche + toggles avec leur état.
+    // Top action bar: one button per layer + toggles with their state.
     private final Map<MapLayer, IconButton> layerIcons = new EnumMap<>(MapLayer.class);
     private final Map<IconButton, Supplier<Boolean>> toggleIcons = new LinkedHashMap<>();
 
-    // Recherche de position (barre de gauche).
+    // Position search (left bar).
     private EditBox locateX;
     private EditBox locateZ;
     private Button locateGo;
     private boolean locateOpen;
 
-    // Bloc sélectionné (simple clic) et suivi du double-clic.
+    // Selected block (single click) and double-click tracking.
     private boolean hasSelection;
     private int selectedBlockX;
     private int selectedBlockZ;
@@ -128,7 +128,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         bandIndex = Math.max(0, ClientMapCache.caveBands.indexOf(MinimapRenderer.currentCaveBand()));
     }
 
-    /** Ouvre la carte centrée sur une position donnée (/sj goto, clic chat). */
+    /** Opens the map centered on a given position (/sj goto, chat click). */
     public FullMapScreen(double centerX, double centerZ) {
         this();
         this.centerX = centerX;
@@ -138,16 +138,16 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     @Override
     protected void init() {
         bandSlider = addRenderableWidget(new BandSlider(width / 2 - 75, height - 40, 150, 20));
-        contextButtons.clear(); // init() recrée tous les widgets (resize)
+        contextButtons.clear(); // init() recreates every widget (resize)
         buildTopToolbar();
         buildLeftToolbar();
         updateBandButtons();
         refreshToolbar();
     }
 
-    // ------------------------------------------------------------------ barres d'actions
+    // ------------------------------------------------------------------ action bars
 
-    /** Barre du haut : couches, toggles d'affichage, et Close à droite. */
+    /** Top bar: layers, display toggles, and Close on the right. */
     private void buildTopToolbar() {
         layerIcons.clear();
         toggleIcons.clear();
@@ -181,10 +181,10 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         addIcon(width - 26, 6, Items.BARRIER, "sharedjourney.action.close", b -> onClose());
     }
 
-    /** Barre de gauche : recherche de position, suivi du joueur, zoom. */
+    /** Left bar: position search, follow player, zoom. */
     private void buildLeftToolbar() {
-        // Sous les contrôles d'overlay des plugins bridgés (train map Create
-        // dessine son toggle en haut à gauche) pour ne pas se chevaucher.
+        // Below the bridged plugins' overlay controls (Create's train map
+        // draws its toggle in the top-left corner) to avoid overlapping.
         int y = 70;
         addIcon(6, y, Items.COMPASS, "sharedjourney.action.locate", b -> {
             locateOpen = !locateOpen;
@@ -202,7 +202,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         addRenderableWidget(locateGo);
         updateLocateWidgets();
 
-        // Boutons empilés au même pas (22 px) pour une colonne régulière.
+        // Buttons stacked at the same step (22 px) for an even column.
         addIcon(6, y + 22, Items.ENDER_EYE, "sharedjourney.action.follow", b -> centerOnPlayer());
         addRenderableWidget(Button.builder(Component.literal("+"), b -> zoomStep(1, width / 2.0, height / 2.0))
                 .bounds(6, y + 44, 20, 20)
@@ -235,11 +235,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     private int addToggleIcon(int x, int step, Item icon, String tooltipKey, ModConfigSpec.BooleanValue value) {
         IconButton b = addIcon(x, 6, icon, tooltipKey, btn -> {
             value.set(!value.get());
-            // set() ne modifie que la valeur en mémoire : on force l'écriture
-            // du fichier pour que le réglage survive à la session.
+            // set() only changes the in-memory value: force writing the
+            // file so the setting survives past this session.
             ClientConfig.SPEC.save();
             if (value == ClientConfig.HIDE_FROM_MAP) {
-                // Préférence appliquée par le serveur : envoi immédiat.
+                // Server-enforced preference: send immediately.
                 PacketDistributor.sendToServer(new Payloads.MapVisibilityPayload(value.get()));
             }
 
@@ -250,8 +250,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     }
 
     /**
-     * Change la couche de la carte plein écran UNIQUEMENT : la minimap garde
-     * sa propre sélection (mode auto jour/nuit/grottes inclus).
+     * Changes the fullscreen map's layer ONLY: the minimap keeps its own
+     * selection (including day/night/cave auto mode).
      */
     private void selectLayer(MapLayer target) {
         layer = target;
@@ -275,11 +275,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             centerX = Integer.parseInt(locateX.getValue().trim()) + 0.5;
             centerZ = Integer.parseInt(locateZ.getValue().trim()) + 0.5;
         } catch (NumberFormatException ignored) {
-            // Entrée invalide : on ne bouge pas.
+            // Invalid input: stay put.
         }
     }
 
-    /** Zoom par pas de x2 (échelle en puissances de 2), ancré sur un point écran. */
+    /** Zoom by x2 steps (power-of-2 scale), anchored on a screen point. */
     private void zoomStep(int direction, double anchorX, double anchorY) {
         float old = zoom;
         float target = direction > 0 ? zoom * 2f : zoom / 2f;
@@ -298,7 +298,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         }
     }
 
-    /** Plage de y de la bande CAVE courante, affichée sur le slider. */
+    /** Y range of the current CAVE band, shown on the slider. */
     private String bandLabel() {
         int band = currentBand();
         return "y" + (band * 16) + ".." + (band * 16 + 15);
@@ -318,14 +318,14 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         bandSlider.visible = layer == MapLayer.CAVE && !ClientMapCache.caveBands.isEmpty();
     }
 
-    // ------------------------------------------------------------------ conversions écran <-> monde
+    // ------------------------------------------------------------------ screen <-> world conversions
 
-    /** Conversion écran -> monde (publique : utilisée par le bridge JourneyMap). */
+    /** Screen -> world conversion (public: used by the JourneyMap bridge). */
     public double worldX(double mouseX) {
         return centerX + (mouseX - width / 2.0) / zoom;
     }
 
-    /** Conversion écran -> monde (publique : utilisée par le bridge JourneyMap). */
+    /** Screen -> world conversion (public: used by the JourneyMap bridge). */
     public double worldZ(double mouseY) {
         return centerZ + (mouseY - height / 2.0) / zoom;
     }
@@ -338,7 +338,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         return height / 2.0 + (wz - centerZ) * zoom;
     }
 
-    // ------------------------------------------------------------------ vue pour le bridge JourneyMap (IFullscreen)
+    // ------------------------------------------------------------------ view for the JourneyMap bridge (IFullscreen)
 
     @Override
     public Screen screen() {
@@ -365,7 +365,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         return centerZ;
     }
 
-    /** Zoom courant en pixels écran par bloc. */
+    /** Current zoom in screen pixels per block. */
     @Override
     public float zoomScale() {
         return zoom;
@@ -402,8 +402,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         dragged = false;
-        // Widget toggle de la train map Create (dessiné en haut à gauche par
-        // son overlay) : son handler natif ne connaît que l'écran de JM.
+        // Create's train map toggle widget (drawn top-left by its overlay):
+        // its native handler only knows about JM's screen.
         if (button == 0
                 && pluginOverlaysActive()
                 && CreateTrainMapBridge.handleToggleClick((int) mouseX, (int) mouseY)) {
@@ -414,14 +414,14 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             return true;
         }
 
-        closeContextMenu(); // clic hors du menu : on le referme
+        closeContextMenu(); // click outside the menu: close it
         return false;
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        // Les widgets d'abord (slider de bande CAVE...) : sinon glisser leur
-        // curseur déplace la carte derrière.
+        // Widgets first (CAVE band slider...): otherwise dragging their
+        // handle would pan the map underneath.
         if (super.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
             return true;
         }
@@ -448,8 +448,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         if ((button == 0 || button == 1) && !dragged) {
             boolean overlays = pluginOverlaysActive();
-            // Clic JourneyMap PRE (annulable) : un plugin bridgé (gisements
-            // RNS...) peut consommer le clic avant notre traitement.
+            // JourneyMap PRE click (cancellable): a bridged plugin (RNS
+            // deposits...) can consume the click before our own handling.
             if (overlays && JourneyMapFullscreenBridge.fireClick(this, true, mouseX, mouseY, button)) {
                 return true;
             }
@@ -458,7 +458,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             if (button == 0) {
                 handled = handleLeftClick(mc, mouseX, mouseY);
             } else {
-                // Clic droit : menu contextuel (TP, waypoints, position dans le chat)
+                // Right click: context menu (TP, waypoints, position in chat)
                 openContextMenu(mouseX, mouseY);
                 handled = true;
             }
@@ -472,10 +472,10 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     }
 
     /**
-     * Clic gauche façon JourneyMap : simple clic = sélection d'un bloc
-     * (contour), double-clic sur un bloc = création d'un waypoint (modal),
-     * double-clic sur un waypoint = édition. Pas d'action au simple clic
-     * sur un waypoint.
+     * JourneyMap-style left click: single click = select a block
+     * (outline), double-click on a block = create a waypoint (modal),
+     * double-click on a waypoint = edit it. No action on a single click
+     * on a waypoint.
      */
     private boolean handleLeftClick(Minecraft mc, double mouseX, double mouseY) {
         long now = System.currentTimeMillis();
@@ -512,11 +512,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         return true;
     }
 
-    // ------------------------------------------------------------------ menu contextuel
+    // ------------------------------------------------------------------ context menu
 
     /**
-     * Menu façon JourneyMap : Se téléporter (op), Waypoints > (sous-menu :
-     * créer, temporaire, global, tout afficher/masquer), Position dans le chat.
+     * JourneyMap-style menu: Teleport (op), Waypoints > (submenu:
+     * create, temporary, global, show/hide all), Position in chat.
      */
     private void openContextMenu(double mouseX, double mouseY) {
         closeContextMenu();
@@ -527,7 +527,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         int wx = (int) Math.floor(worldX(mouseX));
         int wz = (int) Math.floor(worldZ(mouseY));
-        // Le TP passe par /tp : réservé aux joueurs op (niveau 2, connu du client).
+        // TP goes through /tp: reserved to op players (level 2, known client-side).
         boolean canTeleport = mc.player.hasPermissions(2);
         int rows = canTeleport ? 3 : 2;
         int w = 140, h = 20;
@@ -538,7 +538,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             by += h + 1;
         }
 
-        // "Waypoints >" n'exécute pas d'action : il déplie le sous-menu.
+        // "Waypoints >" runs no action: it unfolds the submenu.
         int subY = by;
         Button waypoints = Button.builder(
                         Component.translatable("sharedjourney.context.waypoints"),
@@ -551,7 +551,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         addContextButton(bx, by + h + 1, w, h, "sharedjourney.context.chat", () -> logCoords(wx, wz));
     }
 
-    /** Sous-menu Waypoints, déplié à côté du menu principal. */
+    /** Waypoints submenu, unfolded next to the main menu. */
     private void openWaypointsSubmenu(int menuX, int menuY, int w, int h, int wx, int wz) {
         var mc = Minecraft.getInstance();
         if (mc.level == null) {
@@ -614,7 +614,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         contextButtons.clear();
     }
 
-    /** Y de surface si le chunk est chargé côté client, sinon -1. */
+    /** Surface Y if the chunk is loaded client-side, else -1. */
     private int surfaceYAt(int wx, int wz) {
         var mc = Minecraft.getInstance();
         LevelChunk chunk = mc.level == null ? null : mc.level.getChunkSource().getChunkNow(wx >> 4, wz >> 4);
@@ -631,14 +631,14 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             return;
         }
 
-        // Y d'arrivée calculé côté serveur (/sj tp) : le client n'a pas
-        // toujours le chunk cible en local, et un « ~ » conserverait
-        // l'altitude de vol (arrivée dans la roche ou en plein ciel).
+        // Arrival Y computed server-side (/sj tp): the client doesn't
+        // always have the target chunk locally, and a "~" would keep the
+        // flying altitude (arriving inside rock or mid-air).
         mc.player.connection.sendUnsignedCommand("sj tp " + wx + " " + wz);
         onClose();
     }
 
-    /** Ouvre la modal de création d'un waypoint du type demandé. */
+    /** Opens the creation modal for a waypoint of the requested type. */
     private void createWaypointAt(int wx, int wz, Waypoint.Type type) {
         var mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) {
@@ -655,7 +655,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         mc.setScreen(new WaypointEditScreen(this, wp, true));
     }
 
-    /** Crée directement un waypoint temporaire (sans modal, style JourneyMap). */
+    /** Directly creates a temporary waypoint (no modal, JourneyMap style). */
     private void createTempWaypointAt(int wx, int wz) {
         var mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) {
@@ -672,7 +672,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         WaypointStore.add(wp);
     }
 
-    /** Y de surface si connu localement, sinon le y du joueur. */
+    /** Surface Y if known locally, else the player's Y. */
     private int surfaceOrPlayerY(int wx, int wz) {
         var mc = Minecraft.getInstance();
         int y = surfaceYAt(wx, wz);
@@ -683,7 +683,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         return mc.player != null ? mc.player.blockPosition().getY() : 64;
     }
 
-    /** Écrit la position dans le chat (local) ; cliquer dessus rouvre la carte ici. */
+    /** Writes the position to (local) chat; clicking it reopens the map here. */
     private void logCoords(int wx, int wz) {
         var mc = Minecraft.getInstance();
         Component msg = Component.translatable("sharedjourney.coords.chat", wx, wz)
@@ -693,14 +693,14 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                         .withHoverEvent(new HoverEvent(
                                 HoverEvent.Action.SHOW_TEXT, Component.translatable("sharedjourney.coords.open"))));
         mc.gui.getChat().addMessage(msg);
-        onClose(); // referme la carte pour laisser voir le chat
+        onClose(); // close the map to reveal the chat
     }
 
     /**
-     * Infos de la colonne survolée : lues du chunk local s'il est chargé,
-     * sinon du cache des chunks d'infos reçus du serveur. Sur cache absent,
-     * le chunk survolé est demandé immédiatement et ses 8 voisins sont
-     * préchargés pour que le déplacement du curseur reste instantané.
+     * Info for the hovered column: read from the local chunk if loaded,
+     * otherwise from the cache of info chunks received from the server. On
+     * a cache miss, the hovered chunk is requested immediately and its 8
+     * neighbors are prefetched so cursor movement stays instant.
      */
     private ClientMapCache.HoverInfo hoverInfoAt(Minecraft mc, int wx, int wz) {
         if (mc.level == null) {
@@ -787,10 +787,10 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     }
 
     /**
-     * Raccourcis façon JourneyMap : flèches = pan de 16 blocs, B = waypoint
-     * au curseur, C = position du curseur dans le chat, F = suivre le joueur,
-     * J = fermer la carte, T = ouvrir le chat, =/- = zoom. Les touches
-     * configurées du mod (couche, carte) sont aussi honorées.
+     * JourneyMap-style shortcuts: arrows = pan 16 blocks, B = waypoint at
+     * cursor, C = cursor position in chat, F = follow player, J = close
+     * the map, T = open chat, =/- = zoom. The mod's configured keys
+     * (layer, map) are also honored.
      */
     private boolean handleShortcut(int keyCode, int scanCode) {
         var mc = Minecraft.getInstance();
@@ -831,8 +831,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 return true;
             }
             case GLFW.GLFW_KEY_T -> {
-                // Chat par-dessus la carte, ouvert au PROCHAIN tick : le
-                // caractère 't' de la même frame arrive sinon dans le chat.
+                // Chat over the map, opened on the NEXT tick: otherwise the
+                // same frame's 't' character would land in the chat.
                 mc.tell(() -> mc.setScreen(new MapChatScreen(this)));
                 return true;
             }
@@ -845,7 +845,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 return true;
             }
             default -> {
-                // Touches configurables du mod, testées ci-dessous.
+                // The mod's configurable keys, tested below.
             }
         }
 
@@ -862,7 +862,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         return false;
     }
 
-    /** Changement de couche au clavier, parmi les couches autorisées. */
+    /** Layer change from the keyboard, among the allowed layers. */
     private void cycleLayer() {
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
         if (allowed.isEmpty()) {
@@ -873,7 +873,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         selectLayer(allowed.get((idx + 1) % allowed.size()));
     }
 
-    /** Position x du curseur en coordonnées GUI (hors événement souris). */
+    /** Cursor x position in GUI coordinates (outside a mouse event). */
     private double cursorX() {
         var mc = Minecraft.getInstance();
         return mc.mouseHandler.xpos()
@@ -881,7 +881,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 / (double) mc.getWindow().getScreenWidth();
     }
 
-    /** Position y du curseur en coordonnées GUI (hors événement souris). */
+    /** Cursor y position in GUI coordinates (outside a mouse event). */
     private double cursorY() {
         var mc = Minecraft.getInstance();
         return mc.mouseHandler.ypos()
@@ -889,11 +889,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 / (double) mc.getWindow().getScreenHeight();
     }
 
-    // ------------------------------------------------------------------ rendu
+    // ------------------------------------------------------------------ rendering
 
     /**
-     * Overlays des plugins bridgés (trains Create, gisements RNS) actifs :
-     * seulement à partir du zoom 1024 et jamais sur la couche CAVE.
+     * Bridged plugin overlays (Create trains, RNS deposits) active: only
+     * from zoom 1024 onward and never on the CAVE layer.
      */
     private boolean pluginOverlaysActive() {
         return zoom >= 1024f / 2048f && layer != MapLayer.CAVE;
@@ -903,13 +903,13 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         var mc = Minecraft.getInstance();
         renderBackgroundLayers(gg);
-        // Overlays des plugins JourneyMap bridgés (trains Create, gisements
-        // RNS...) : au-dessus de la carte, sous les widgets.
+        // Bridged JourneyMap plugin overlays (Create trains, RNS
+        // deposits...): above the map, below the widgets.
         if (pluginOverlaysActive()) {
             JourneyMapFullscreenBridge.fireRender(this, gg, mouseX, mouseY, partialTick);
         }
 
-        // Flèche du joueur AU-DESSUS de la carte et des overlays des plugins.
+        // Player arrow ABOVE the map and the plugin overlays.
         if (mc.player != null) {
             EntityDots.drawPlayerArrow(
                     gg,
@@ -927,7 +927,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             renderLegend(gg);
         }
 
-        // Nom du waypoint survolé
+        // Name of the hovered waypoint
         Waypoint hovered = nearestWaypoint(mouseX, mouseY);
         if (hovered != null) {
             gg.renderTooltip(
@@ -939,7 +939,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         }
     }
 
-    /** Barre d'infos joueur sous la barre d'actions : pseudo ■ position ■ biome ■ zoom. */
+    /** Player info bar below the action bar: name ■ position ■ biome ■ zoom. */
     private void renderTopInfoBar(GuiGraphics gg, Minecraft mc) {
         if (mc.player == null || mc.level == null) {
             return;
@@ -958,7 +958,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         drawInfoBar(gg, text, 30);
     }
 
-    /** Barre en bas de l'écran : bloc survolé ■ position ■ biome. */
+    /** Bar at the bottom of the screen: hovered block ■ position ■ biome. */
     private void renderHoverBar(GuiGraphics gg, Minecraft mc, int mouseX, int mouseY) {
         int wx = (int) Math.floor(worldX(mouseX));
         int wz = (int) Math.floor(worldZ(mouseY));
@@ -980,14 +980,14 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         drawInfoBar(gg, sb.toString(), height - 24);
     }
 
-    /** Nom localisé d'un biome depuis son identifiant "namespace:path". */
+    /** Localized biome name from its "namespace:path" identifier. */
     private String biomeName(String biomeId) {
         var loc = ResourceLocation.parse(biomeId);
         return Component.translatable("biome." + loc.getNamespace() + "." + loc.getPath())
                 .getString();
     }
 
-    /** Ligne de texte centrée sur fond translucide (style JourneyMap). */
+    /** Centered text line over a translucent background (JourneyMap style). */
     private void drawInfoBar(GuiGraphics gg, String text, int y) {
         int w = font.width(text);
         int x = (width - w) / 2;
@@ -995,7 +995,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         gg.drawString(font, text, x, y, 0xE0E0E0);
     }
 
-    /** Légende des contrôles (Show Keys), en bas à droite. */
+    /** Controls legend (Show Keys), bottom right. */
     private void renderLegend(GuiGraphics gg) {
         List<String> lines = new ArrayList<>();
         for (KeyMapping key : List.of(
@@ -1023,13 +1023,13 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             maxW = Math.max(maxW, font.width(line));
         }
 
-        // Échelle réduite, calée en bas à droite de l'écran.
+        // Reduced scale, anchored bottom right of the screen.
         float scale = 0.75f;
         int lineH = 10;
         int boxW = (int) (maxW * scale) + 8;
         int boxH = (int) (lines.size() * lineH * scale) + 6;
         int x0 = width - boxW - 6;
-        // Marge basse plus grande : ne pas passer sous la zone du chat.
+        // Larger bottom margin: stay clear of the chat area.
         int y0 = height - boxH - 16;
         gg.fill(x0, y0, width - 6, y0 + boxH, 0xA0101010);
         gg.pose().pushPose();
@@ -1085,7 +1085,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                             RegionKey.REGION_BLOCKS,
                             RegionKey.REGION_BLOCKS);
                 }
-                // Demande si absente ou potentiellement périmée (throttlée)
+                // Request if missing or potentially stale (throttled)
                 long now = System.currentTimeMillis();
                 Long last = ClientMapCache.LAST_REQUESTED.get(key);
                 if ((last == null || now - last > REQUEST_COOLDOWN_MS) && missing.size() < 64) {
@@ -1098,8 +1098,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         pose.popPose();
 
-        // Grille de chunks en coordonnées écran (lignes fines de 1 px),
-        // seulement à partir du zoom 1024 (libellé = zoom * 2048).
+        // Chunk grid in screen coordinates (1 px thin lines), only from
+        // zoom 1024 onward (label = zoom * 2048).
         if (ClientConfig.SHOW_GRID.get() && zoom >= 1024f / 2048f) {
             int gridColor = 0x38000000;
             int firstCx = Math.floorDiv((int) Math.floor(worldX(0)), 16);
@@ -1116,7 +1116,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             }
         }
 
-        // Contour du bloc sélectionné (simple clic) ; double-clic = waypoint.
+        // Outline of the selected block (single click); double-click = waypoint.
         if (hasSelection) {
             int sx0 = (int) Math.round(screenX(selectedBlockX));
             int sy0 = (int) Math.round(screenY(selectedBlockZ));
@@ -1125,7 +1125,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             gg.renderOutline(sx0, sy0, Math.max(1, sx1 - sx0), Math.max(1, sy1 - sy0), 0xFFE0E0E0);
         }
 
-        // Waypoints par-dessus, en coordonnées écran (taille constante quel que soit le zoom)
+        // Waypoints on top, in screen coordinates (constant size regardless of zoom)
         for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
             if (!wp.visible()) {
                 continue;
@@ -1143,7 +1143,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             }
         }
 
-        // ---- Têtes des autres joueurs (positions serveur, sans limite de distance)
+        // ---- Other players' heads (server positions, no distance limit)
         if (ClientConfig.RADAR_PLAYERS.get()) {
             var selfId = mc.player.getUUID();
             for (var pos : ClientMapCache.playerPositions.values()) {
@@ -1169,7 +1169,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             }
         }
 
-        // Radar d'entités : mêmes filtres et plafond serveur que la minimap.
+        // Entity radar: same filters and server cap as the minimap.
         if (ClientConfig.RADAR_ENABLED.get() && ClientMapCache.radarMaxRadius > 0) {
             int radius = Math.min(ClientConfig.RADAR_RADIUS.get(), ClientMapCache.radarMaxRadius);
             AABB box = mc.player.getBoundingBox().inflate(radius, 32, radius);
@@ -1201,7 +1201,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
     @Override
     public void renderBackground(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
-        // Pas de flou vanilla : le fond est peint par renderBackgroundLayers().
+        // No vanilla blur: the background is painted by renderBackgroundLayers().
     }
 
     @Override
@@ -1210,9 +1210,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     }
 
     /**
-     * Chat ouvert PAR-DESSUS la carte : la carte reste rendue en arrière-plan
-     * et se rouvre quand le chat se ferme (Échap ou envoi du message), au
-     * lieu d'être perdue.
+     * Chat opened OVER the map: the map keeps rendering in the background
+     * and reopens when the chat closes (Escape or message sent), instead
+     * of being lost.
      */
     private static class MapChatScreen extends ChatScreen {
 
@@ -1225,7 +1225,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         @Override
         public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
-            // La carte derrière (sans interaction), puis le chat par-dessus.
+            // The map behind (non-interactive), then the chat on top.
             parent.render(gg, -1, -1, partialTick);
             super.render(gg, mouseX, mouseY, partialTick);
         }
@@ -1233,7 +1233,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         @Override
         public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
             boolean handled = super.keyPressed(keyCode, scanCode, modifiers);
-            // Le vanilla ferme le chat en posant screen=null : on rouvre la carte.
+            // Vanilla closes the chat by setting screen=null: reopen the map.
             if (minecraft != null && minecraft.screen == null) {
                 minecraft.setScreen(parent);
             }
@@ -1241,7 +1241,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         }
     }
 
-    /** Slider de sélection de la bande CAVE, visible seulement en couche CAVE. */
+    /** CAVE band selection slider, only visible on the CAVE layer. */
     private class BandSlider extends AbstractSliderButton {
 
         BandSlider(int x, int y, int w, int h) {
@@ -1249,7 +1249,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             syncFromIndex();
         }
 
-        /** Aligne le curseur sur la bande courante (ouverture, resize). */
+        /** Aligns the handle on the current band (opening, resize). */
         private void syncFromIndex() {
             int count = ClientMapCache.caveBands.size();
             if (count > 1) {

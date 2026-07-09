@@ -1,6 +1,6 @@
 package fr.cheesegrinder.sharedjourney.api;
 
-/** Constantes publiques du mod. */
+/** Public constants of the mod. */
 public final class SharedJourneyConstants {
     public static final String MOD_ID = "sharedjourney";
 

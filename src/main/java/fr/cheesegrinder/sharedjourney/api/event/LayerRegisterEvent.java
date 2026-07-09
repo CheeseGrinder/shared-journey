@@ -9,10 +9,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Posté sur le bus MOD au démarrage serveur pour permettre à d'autres mods
- * d'enregistrer des couches custom (en plus de DAY/NIGHT/TOPO/BIOME/CAVE).
- * Les couches custom sont stockées/synchronisées comme les autres, sous
- * l'identifiant fourni ("monmod_machin").
+ * Posted on the MOD bus at server startup so that other mods can register
+ * custom layers (in addition to DAY/NIGHT/TOPO/BIOME/CAVE). Custom layers are
+ * stored/synchronized like the built-in ones, under the provided identifier
+ * ("mymod_something").
  */
 public class LayerRegisterEvent extends Event implements IModBusEvent {
 
@@ -20,7 +20,7 @@ public class LayerRegisterEvent extends Event implements IModBusEvent {
 
     public void register(String layerId, ChunkLayerRenderer renderer) {
         if (!layerId.matches("[a-z0-9_]+")) {
-            throw new IllegalArgumentException("Identifiant de couche invalide: " + layerId);
+            throw new IllegalArgumentException("Invalid layer identifier: " + layerId);
         }
         customLayers.put(layerId, renderer);
     }

@@ -34,45 +34,44 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
- * Bridge de compatibilité JourneyMap (spec §9).
+ * JourneyMap compatibility bridge (spec §9).
  *
- * Objectif : que les mods tiers qui s'intègrent à JourneyMap via son API
- * (ex: Waystones) fonctionnent avec SharedJourney SANS modification.
+ * Goal: third-party mods that integrate with JourneyMap via its API
+ * (e.g. Waystones) work with SharedJourney WITHOUT modification.
  *
- * Fonctionnement :
- *  1. Si le vrai JourneyMap est présent, le bridge se désactive (JM gère).
- *  2. Sinon, on scanne les données d'annotations de tous les mods à la
- *     recherche de @JourneyMapPlugin (v2 puis v1), exactement comme le fait
- *     JourneyMap lui-même.
- *  3. Chaque plugin trouvé est instancié et initialisé avec un PROXY DYNAMIQUE
- *     de IClientAPI (java.lang.reflect.Proxy) : aucune dépendance de
- *     compilation vers l'API JourneyMap, et tolérance aux variations de
- *     signatures entre versions de l'API.
- *  4. Les appels de type "waypoint" sont traduits vers notre WaypointStore
- *     (source = modId du plugin) ; les overlays/événements sont journalisés
- *     et ignorés proprement (voir README §Bridge pour les limites).
+ * How it works:
+ *  1. If the real JourneyMap is present, the bridge disables itself (JM handles it).
+ *  2. Otherwise, scan every mod's annotation data looking for
+ *     @JourneyMapPlugin (v2 then v1), exactly like JourneyMap itself does.
+ *  3. Each plugin found is instantiated and initialized with a DYNAMIC
+ *     PROXY of IClientAPI (java.lang.reflect.Proxy): no compile-time
+ *     dependency on the JourneyMap API, and tolerance to signature
+ *     variations across API versions.
+ *  4. "Waypoint"-type calls are translated to our WaypointStore
+ *     (source = the plugin's modId); overlays/events are logged and
+ *     cleanly ignored (see README §Bridge for the limitations).
  *
- * IMPORTANT : les classes de l'API JourneyMap doivent être présentes au
- * runtime pour que les classes plugin des mods tiers puissent se charger
- * (elles y font référence). Voir README : jar de l'API dans mods/ ou jarJar.
+ * IMPORTANT: the JourneyMap API classes must be present at runtime for
+ * third-party mods' plugin classes to load (they reference them). See the
+ * README: API jar in mods/ or jarJar.
  */
 public final class JourneyMapBridge {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /** Annotations plugin connues (v2 : @JourneyMapPlugin ; v1/legacy : @ClientPlugin). */
+    /** Known plugin annotations (v2: @JourneyMapPlugin; v1/legacy: @ClientPlugin). */
     private static final String[] PLUGIN_ANNOTATIONS = {
         "Ljourneymap/api/v2/client/JourneyMapPlugin;", "Ljourneymap/client/api/ClientPlugin;"
     };
 
-    /** Interfaces IClientAPI correspondantes. */
+    /** Corresponding IClientAPI interfaces. */
     private static final String[] CLIENT_API_INTERFACES = {
         "journeymap.api.v2.client.IClientAPI", "journeymap.client.api.IClientAPI"
     };
 
     private static boolean initialized;
     private static final List<String> loadedPlugins = new ArrayList<>();
-    /** Handlers IClientAPI par modId : sert à resynchroniser les waypoints mutés. */
+    /** IClientAPI handlers by modId: used to resync mutated waypoints. */
     private static final Map<String, ClientApiHandler> HANDLERS = new ConcurrentHashMap<>();
 
     private JourneyMapBridge() {}
@@ -81,7 +80,7 @@ public final class JourneyMapBridge {
         return List.copyOf(loadedPlugins);
     }
 
-    /** À appeler après la construction de tous les mods (FMLLoadCompleteEvent, client). */
+    /** Call after every mod has been constructed (FMLLoadCompleteEvent, client). */
     public static void init() {
         if (initialized) {
             return;
@@ -90,17 +89,17 @@ public final class JourneyMapBridge {
         initialized = true;
 
         if (isRealJourneyMapPresent()) {
-            LOGGER.info("[Bridge JM] JourneyMap est installé : le bridge SharedJourney se désactive.");
+            LOGGER.info("[Bridge JM] JourneyMap is installed: the SharedJourney bridge disables itself.");
             return;
         }
 
-        // Avant d'initialiser les plugins : la WaypointFactory statique de
-        // l'API doit exister, sinon leurs créations de waypoints crashent.
+        // Before initializing the plugins: the API's static WaypointFactory
+        // must exist, otherwise their waypoint creations crash.
         installWaypointFactory();
 
         for (int i = 0; i < PLUGIN_ANNOTATIONS.length; i++) {
             Class<?> apiInterface = tryLoad(CLIENT_API_INTERFACES[i]);
-            // Cette version de l'API n'est pas sur le classpath.
+            // This API version is not on the classpath.
             if (apiInterface == null) {
                 continue;
             }
@@ -112,27 +111,28 @@ public final class JourneyMapBridge {
         }
 
         if (loadedPlugins.isEmpty()) {
-            LOGGER.info("[Bridge JM] Aucun plugin JourneyMap tiers détecté (ou API JourneyMap absente du classpath).");
+            LOGGER.info(
+                    "[Bridge JM] No third-party JourneyMap plugin detected (or JourneyMap API absent from the classpath).");
         } else {
             LOGGER.info(
-                    "[Bridge JM] {} plugin(s) JourneyMap initialisé(s) via SharedJourney : {}",
+                    "[Bridge JM] {} JourneyMap plugin(s) initialized via SharedJourney: {}",
                     loadedPlugins.size(),
                     loadedPlugins);
         }
     }
 
-    /** Le bridge est-il actif (pas de vrai JourneyMap, au moins un plugin) ? */
+    /** Is the bridge active (no real JourneyMap, at least one plugin)? */
     static boolean bridgeActive() {
         return initialized && !loadedPlugins.isEmpty();
     }
 
     /**
-     * Publie un MappingEvent (API v2) aux plugins abonnés via le registre
-     * STATIQUE de l'API (ClientEventRegistry.MAPPING_EVENT) — les abonnements
-     * ne passent pas par IClientAPI, donc pas par notre proxy. Le vrai
-     * JourneyMap publie MAPPING_STARTED/MAPPING_STOPPED à l'entrée/sortie
-     * d'un monde ; certains plugins (Waystones) attendent MAPPING_STARTED
-     * avant de créer le moindre waypoint.
+     * Publishes a MappingEvent (API v2) to plugins subscribed via the
+     * API's STATIC registry (ClientEventRegistry.MAPPING_EVENT) —
+     * subscriptions don't go through IClientAPI, so not through our proxy.
+     * The real JourneyMap publishes MAPPING_STARTED/MAPPING_STOPPED on
+     * world entry/exit; some plugins (Waystones) wait for MAPPING_STARTED
+     * before creating any waypoint at all.
      */
     public static void fireMappingEvent(boolean started, ResourceKey<Level> dimension) {
         if (!bridgeActive()) {
@@ -153,17 +153,17 @@ public final class JourneyMapBridge {
                     .newInstance(stage, dimension, null);
             dispatchToRegistry("journeymap.api.v2.common.event.ClientEventRegistry", "MAPPING_EVENT", event);
         } catch (Throwable t) {
-            LOGGER.warn("[Bridge JM] Impossible de publier MappingEvent : {}", t.toString());
+            LOGGER.warn("[Bridge JM] Unable to publish MappingEvent: {}", t.toString());
         }
     }
 
     /**
-     * L'API v2 expose une WaypointFactory STATIQUE dont l'instance est
-     * normalement injectée par le vrai JourneyMap au démarrage — sans elle,
-     * WaypointFactory.createClientWaypoint (utilisée par Waystones) lève une
-     * NullPointerException. Le bridge installe sa propre implémentation :
-     * des waypoints "en mémoire" (proxys dynamiques) que les mods remplissent
-     * puis nous repassent via IClientAPI.addWaypoint/show.
+     * The v2 API exposes a STATIC WaypointFactory whose instance is
+     * normally injected by the real JourneyMap at startup — without it,
+     * WaypointFactory.createClientWaypoint (used by Waystones) throws a
+     * NullPointerException. The bridge installs its own implementation:
+     * "in-memory" waypoints (dynamic proxies) that mods fill in and then
+     * hand back to us via IClientAPI.addWaypoint/show.
      */
     private static void installWaypointFactory() {
         try {
@@ -189,13 +189,13 @@ public final class JourneyMapBridge {
             Object store = Proxy.newProxyInstance(
                     storeInterface.getClassLoader(), new Class<?>[] {storeInterface}, storeHandler);
             instanceField.set(null, factoryClass.getConstructor(storeInterface).newInstance(store));
-            LOGGER.info("[Bridge JM] WaypointFactory de l'API fournie par le bridge.");
+            LOGGER.info("[Bridge JM] API WaypointFactory provided by the bridge.");
         } catch (Throwable t) {
-            LOGGER.warn("[Bridge JM] Impossible d'installer la WaypointFactory : {}", t.toString());
+            LOGGER.warn("[Bridge JM] Unable to install the WaypointFactory: {}", t.toString());
         }
     }
 
-    /** État mutable d'un waypoint API v2 créé par la factory du bridge. */
+    /** Mutable state of an API v2 waypoint created by the bridge's factory. */
     private static final class BridgeWaypointState {
         final String guid = UUID.randomUUID().toString();
         String modId;
@@ -210,7 +210,7 @@ public final class JourneyMapBridge {
         String customData = "";
     }
 
-    /** Proxy Waypoint v2. Arguments du store : (modId, pos, nom, dimension, persistant). */
+    /** Waypoint v2 proxy. Store arguments: (modId, pos, name, dimension, persistent). */
     private static Object newBridgeWaypoint(Class<?> waypointInterface, Object[] args) {
         BridgeWaypointState st = new BridgeWaypointState();
         st.modId = String.valueOf(args[0]);
@@ -219,18 +219,18 @@ public final class JourneyMapBridge {
         st.primaryDimension = String.valueOf(args[3]);
         st.dimensions.add(st.primaryDimension);
         st.persistent = Boolean.TRUE.equals(args[4]);
-        // Couleur STABLE dérivée de l'identité du waypoint (les mods comme
-        // Waystones ne fixent jamais la couleur) : identique entre sessions
-        // et entre joueurs, contrairement à un tirage aléatoire.
+        // STABLE color derived from the waypoint's identity (mods like
+        // Waystones never set the color): identical across sessions and
+        // players, unlike a random draw.
         st.color = stableColor(st.modId + "|" + st.primaryDimension + "|" + st.pos);
         InvocationHandler handler = (proxy, method, margs) -> waypointCall(proxy, st, method, margs);
         return Proxy.newProxyInstance(waypointInterface.getClassLoader(), new Class<?>[] {waypointInterface}, handler);
     }
 
     /**
-     * Couleur stable dérivée d'une graine textuelle : la teinte vient du hash,
-     * saturation et valeur sont fixes pour rester vif et lisible sur la carte.
-     * Même graine → même couleur, quelle que soit la session ou le joueur.
+     * Stable color derived from a text seed: hue comes from the hash,
+     * saturation and value are fixed to stay vivid and readable on the
+     * map. Same seed → same color, regardless of session or player.
      */
     private static int stableColor(String seed) {
         float hue = (seed.hashCode() & 0xFFFF) / (float) 0x10000;
@@ -239,10 +239,10 @@ public final class JourneyMapBridge {
 
     private static Object waypointCall(Object proxy, BridgeWaypointState st, Method method, Object[] args) {
         Object result = waypointCallInner(proxy, st, method, args);
-        // Dans le vrai JourneyMap les objets waypoint sont "vivants" : les
-        // mods les mutent (setName après renommage d'une waystone...) SANS
-        // rappeler addWaypoint. On répercute donc chaque mutation vers le
-        // store si ce waypoint a déjà été ajouté.
+        // In the real JourneyMap, waypoint objects are "live": mods mutate
+        // them (setName after renaming a waystone...) WITHOUT calling
+        // addWaypoint again. So we propagate every mutation to the store
+        // if this waypoint has already been added.
         if (method.getName().startsWith("set")) {
             ClientApiHandler handler = HANDLERS.get(st.modId);
             if (handler != null) {
@@ -355,7 +355,7 @@ public final class JourneyMapBridge {
         }
     }
 
-    /** Proxy WaypointGroup v2 minimal (Waystones range ses waypoints dedans). */
+    /** Minimal WaypointGroup v2 proxy (Waystones files its waypoints in there). */
     private static Object newBridgeGroup(Class<?> groupInterface, Object[] args) {
         if (groupInterface == null) {
             return null;
@@ -376,14 +376,14 @@ public final class JourneyMapBridge {
     }
 
     /**
-     * Distribue un événement aux abonnés d'un registre STATIQUE de l'API
-     * JourneyMap (EventImpl.getListeners), en réflexion pure.
+     * Dispatches an event to the subscribers of a STATIC JourneyMap API
+     * registry (EventImpl.getListeners), via pure reflection.
      */
     static void dispatchToRegistry(String registryClassName, String fieldName, Object event) {
         dispatchToRegistry(registryClassName, fieldName, event, modId -> true);
     }
 
-    /** Variante filtrée par modId d'abonné (toggles d'overlays de la config). */
+    /** Variant filtered by subscriber modId (config overlay toggles). */
     static void dispatchToRegistry(
             String registryClassName, String fieldName, Object event, Predicate<String> modIdFilter) {
         try {
@@ -412,13 +412,13 @@ public final class JourneyMapBridge {
                 }
             }
         } catch (Throwable t) {
-            LOGGER.warn("[Bridge JM] Impossible de publier {}.{} : {}", registryClassName, fieldName, t.toString());
+            LOGGER.warn("[Bridge JM] Unable to publish {}.{}: {}", registryClassName, fieldName, t.toString());
         }
     }
 
-    // ------------------------------------------------------------------ détection
+    // ------------------------------------------------------------------ detection
 
-    /** Le vrai JourneyMap (pas notre shim lowcode) expose ses classes principales. */
+    /** The real JourneyMap (not our low-code shim) exposes its main classes. */
     private static boolean isRealJourneyMapPresent() {
         if (!ModList.get().isLoaded("journeymap")) {
             return false;
@@ -435,7 +435,7 @@ public final class JourneyMapBridge {
         }
     }
 
-    /** Scan des annotations comme le fait JourneyMap (données de scan FML, sans charger les classes). */
+    /** Scans annotations the way JourneyMap does (FML scan data, without loading classes). */
     private static Set<String> scanPlugins(String annotationDescriptor) {
         Set<String> classes = new HashSet<>();
         Type annotationType = Type.getType(annotationDescriptor);
@@ -447,7 +447,7 @@ public final class JourneyMapBridge {
         return classes;
     }
 
-    // ------------------------------------------------------------------ initialisation des plugins
+    // ------------------------------------------------------------------ plugin initialization
 
     private static void initializePlugin(String className, Class<?> apiInterface) {
         try {
@@ -468,8 +468,8 @@ public final class JourneyMapBridge {
             Object apiProxy =
                     Proxy.newProxyInstance(apiInterface.getClassLoader(), new Class<?>[] {apiInterface}, handler);
 
-            // IClientPlugin.initialize(IClientAPI) — on cherche la méthode par nom
-            // et compatibilité de paramètre pour tolérer les variations d'API.
+            // IClientPlugin.initialize(IClientAPI) — look up the method by
+            // name and parameter compatibility to tolerate API variations.
             Method init = null;
             for (Method m : pluginClass.getMethods()) {
                 if (m.getName().equals("initialize")
@@ -480,34 +480,34 @@ public final class JourneyMapBridge {
                 }
             }
             if (init == null) {
-                LOGGER.warn("[Bridge JM] {} : pas de méthode initialize(IClientAPI) compatible, ignoré.", className);
+                LOGGER.warn("[Bridge JM] {}: no compatible initialize(IClientAPI) method, ignored.", className);
                 return;
             }
             init.invoke(plugin, apiProxy);
             loadedPlugins.add(modId + " (" + className + ")");
         } catch (Throwable t) {
-            LOGGER.warn("[Bridge JM] Impossible d'initialiser le plugin {} : {}", className, t.toString());
+            LOGGER.warn("[Bridge JM] Unable to initialize plugin {}: {}", className, t.toString());
         }
     }
 
-    // ------------------------------------------------------------------ proxy IClientAPI
+    // ------------------------------------------------------------------ IClientAPI proxy
 
     /**
-     * Traduit les appels IClientAPI vers SharedJourney. Couverture :
+     * Translates IClientAPI calls to SharedJourney. Coverage:
      *  - waypoints (show/addWaypoint/removeWaypoint/remove/exists/getAll...)
-     *  - playerAccepts -> true (on accepte tout)
-     *  - subscribe/toggleDisplay/overlays -> no-op journalisé une fois par méthode
+     *  - playerAccepts -> true (accept everything)
+     *  - subscribe/toggleDisplay/overlays -> no-op, logged once per method
      */
     private static final class ClientApiHandler implements InvocationHandler {
 
         private final String modId;
-        /** JM guid/objet -> notre UUID, pour retrouver les waypoints à supprimer. */
+        /** JM guid/object -> our UUID, to find waypoints to remove. */
         private final Map<String, UUID> knownWaypoints = new ConcurrentHashMap<>();
         /**
-         * Objets Waypoint (API) ajoutés, par guid : sert getWaypoint et
-         * getAllWaypoints. Indispensable pour que les mods (Waystones)
-         * retrouvent et METTENT À JOUR leurs waypoints au lieu d'en recréer
-         * un à chaque changement (doublons superposés sinon).
+         * Added (API) Waypoint objects, by guid: used by getWaypoint and
+         * getAllWaypoints. Essential so mods (Waystones) can find and
+         * UPDATE their waypoints instead of recreating one on every
+         * change (otherwise stacking duplicates).
          */
         private final Map<String, Object> apiWaypoints = new ConcurrentHashMap<>();
 
@@ -522,7 +522,7 @@ public final class JourneyMapBridge {
             String name = method.getName();
             try {
                 switch (name) {
-                    // ---- identité / capacités
+                    // ---- identity / capabilities
                     case "playerAccepts" -> {
                         return true;
                     }
@@ -544,7 +544,7 @@ public final class JourneyMapBridge {
                         return List.copyOf(apiWaypoints.values());
                     }
                     case "getWaypoint" -> {
-                        // (modId, guid/id) : retrouve l'objet ajouté précédemment.
+                        // (modId, guid/id): find the previously added object.
                         if (args == null || args.length == 0) {
                             return null;
                         }
@@ -552,7 +552,7 @@ public final class JourneyMapBridge {
                         return apiWaypoints.get(String.valueOf(args[args.length - 1]));
                     }
 
-                    // ---- Displayable générique (v1 et overlays v2)
+                    // ---- generic Displayable (v1 and v2 overlays)
                     case "show" -> {
                         Object displayable = args[0];
                         if (isWaypoint(displayable)) {
@@ -581,7 +581,7 @@ public final class JourneyMapBridge {
                         return isWaypoint(displayable) && knownWaypoints.containsKey(guidOf(displayable));
                     }
 
-                    // ---- événements / affichage : no-op tolérant
+                    // ---- events / display: tolerant no-op
                     case "subscribe",
                             "unsubscribe",
                             "toggleDisplay",
@@ -605,7 +605,7 @@ public final class JourneyMapBridge {
                     }
                 }
             } catch (Throwable t) {
-                LOGGER.warn("[Bridge JM] Erreur en traitant {}.{} : {}", modId, name, t.toString());
+                LOGGER.warn("[Bridge JM] Error handling {}.{}: {}", modId, name, t.toString());
                 return defaultValue(method.getReturnType());
             }
             warnOnce(name);
@@ -614,18 +614,18 @@ public final class JourneyMapBridge {
 
         private void warnOnce(String what) {
             if (warnedMethods.add(what)) {
-                LOGGER.info("[Bridge JM] {} a appelé '{}' — non supporté par le bridge, ignoré.", modId, what);
+                LOGGER.info("[Bridge JM] {} called '{}' — not supported by the bridge, ignored.", modId, what);
             }
         }
 
-        /** Répercute la mutation d'un waypoint déjà ajouté vers le store. */
+        /** Propagates the mutation of an already-added waypoint to the store. */
         void resyncIfKnown(String guid, Object jmWaypoint) {
             if (apiWaypoints.containsKey(guid)) {
                 addOrUpdate(jmWaypoint);
             }
         }
 
-        // -------------------------------------------------------------- traduction waypoint
+        // -------------------------------------------------------------- waypoint translation
 
         private boolean isWaypoint(Object o) {
             if (o == null) {
@@ -636,8 +636,8 @@ public final class JourneyMapBridge {
                 return true;
             }
 
-            // Les waypoints de notre WaypointFactory sont des proxys : leur
-            // nom de classe est "jdk.proxy...", il faut regarder les interfaces.
+            // Waypoints from our WaypointFactory are proxies: their class
+            // name is "jdk.proxy...", so check the interfaces instead.
             for (Class<?> iface : o.getClass().getInterfaces()) {
                 if (iface.getName().toLowerCase().contains("waypoint")) {
                     return true;
@@ -670,7 +670,7 @@ public final class JourneyMapBridge {
                     modId,
                     true,
                     Waypoint.Type.DIMENSION);
-            // add() poste WaypointEvent.Added (annulable) ; update si déjà présent.
+            // add() posts WaypointEvent.Added (cancellable); update if already present.
             if (WaypointStore.get(id) != null) {
                 WaypointStore.update(wp);
             } else {
@@ -720,7 +720,7 @@ public final class JourneyMapBridge {
         }
 
         private ResourceLocation dimOf(Object wp) {
-            // v2: getDimensions() -> Collection<String> ou String[] ; v1: getDimension()
+            // v2: getDimensions() -> Collection<String> or String[]; v1: getDimension()
             Object dims = call(wp, "getDimensions");
             String first = null;
             if (dims instanceof Collection<?> c && !c.isEmpty()) {
@@ -744,7 +744,7 @@ public final class JourneyMapBridge {
                     : ResourceLocation.withDefaultNamespace("overworld");
         }
 
-        // -------------------------------------------------------------- utilitaires réflexion
+        // -------------------------------------------------------------- reflection utilities
 
         private static Object call(Object target, String methodName) {
             try {

@@ -10,7 +10,7 @@ import java.nio.file.Path;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Utilitaires de disposition du stockage des régions sur disque. */
+/** Utilities for the on-disk layout of region storage. */
 public final class RegionStorage {
 
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -19,10 +19,10 @@ public final class RegionStorage {
     private RegionStorage() {}
 
     /**
-     * Migre l'ancienne disposition "cave_<bande>" (au même niveau que les
-     * autres couches) vers "cave/<bande>" (bandes regroupées dans un dossier
-     * parent). Sans effet s'il n'y a rien à migrer. Utilisé côté serveur
-     * (world/data/sharedjourney) et côté client (sharedjourney_cache).
+     * Migrates the legacy "cave_<band>" layout (same level as the other
+     * layers) to "cave/<band>" (bands grouped under a parent folder). No-op
+     * when there is nothing to migrate. Used server-side
+     * (world/data/sharedjourney) and client-side (sharedjourney_cache).
      */
     public static void migrateLegacyCaveFolders(Path storageRoot) {
         if (!Files.isDirectory(storageRoot)) {
@@ -38,7 +38,7 @@ public final class RegionStorage {
                 migrateDimension(dimDir);
             }
         } catch (IOException e) {
-            LOGGER.warn("SharedJourney : échec de migration des dossiers de grottes dans {}", storageRoot, e);
+            LOGGER.warn("SharedJourney: failed to migrate cave folders in {}", storageRoot, e);
         }
     }
 
@@ -57,7 +57,7 @@ public final class RegionStorage {
 
                 Files.createDirectories(target.getParent());
                 Files.move(layerDir, target);
-                LOGGER.info("SharedJourney : dossier de grottes migré : {} -> {}", layerDir, target);
+                LOGGER.info("SharedJourney: cave folder migrated: {} -> {}", layerDir, target);
             }
         }
     }

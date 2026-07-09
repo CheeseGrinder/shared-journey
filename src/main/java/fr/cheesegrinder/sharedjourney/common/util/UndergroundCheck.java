@@ -9,22 +9,21 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
- * Détection "sous terre" partagée client (bascule auto de la minimap) et
- * serveur (déverrouillage des bandes CAVE par le CaveTracker) : la règle doit
- * être identique des deux côtés pour que l'affichage suive le déverrouillage.
+ * "Underground" detection shared by the client (minimap auto-switch) and the
+ * server (CAVE band unlocking by the CaveTracker): the rule must be identical
+ * on both sides so that the display follows the unlocking.
  */
 public final class UndergroundCheck {
 
     private UndergroundCheck() {}
 
     /**
-     * Le joueur est-il sous terre ? Vrai s'il existe un bloc solide (qui
-     * bloque le mouvement) au-dessus de ses yeux dans sa colonne. Les fluides
-     * sont ignorés : nager ou plonger en mer ouverte n'est pas "sous terre",
-     * mais une grotte noyée ou une faille sous un surplomb l'est. Les
-     * feuilles sont ignorées aussi : marcher sous un arbre n'est pas une
-     * grotte. N'utilise que la heightmap WORLD_SURFACE, synchronisée au
-     * client (contrairement à OCEAN_FLOOR, serveur uniquement).
+     * Is the player underground? True when a motion-blocking block exists
+     * above their eyes in their column. Fluids are ignored: swimming or
+     * diving in open sea is not "underground", but a flooded cave or a rift
+     * under an overhang is. Leaves are ignored too: walking under a tree is
+     * not a cave. Only uses the WORLD_SURFACE heightmap, which is synced to
+     * the client (unlike OCEAN_FLOOR, server-only).
      */
     public static boolean isUnderground(Level level, Player player) {
         BlockPos base = player.blockPosition();

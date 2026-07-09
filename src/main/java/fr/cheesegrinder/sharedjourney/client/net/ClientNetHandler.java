@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/** Réception des paquets côté client (thread client via enqueueWork). */
+/** Client-side packet reception (client thread via enqueueWork). */
 public final class ClientNetHandler {
 
     private ClientNetHandler() {}

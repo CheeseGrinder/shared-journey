@@ -36,36 +36,35 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Régénération de la carte (/sj admin regen), à un rythme throttlé pour ne
- * pas étouffer le serveur. Progression affichée dans une boss bar temporaire.
+ * Map regeneration (/sj admin regen), throttled so it does not choke the
+ * server. Progress shown in a temporary boss bar.
  *
- * Deux modes :
- * - regen        : re-rend les chunks DÉJÀ PEINTS (depuis l'index des régions).
- * - regen full   : scanne les fichiers de région de Minecraft (region/r.X.Z.mca)
- *                  et rend TOUS les chunks générés sur disque — y compris ceux
- *                  jamais vus par la carte (mondes prégénérés avec Chunky, etc.).
+ * Two modes:
+ * - regen        : re-renders ALREADY PAINTED chunks (from the region index).
+ * - regen full   : scans Minecraft's region files (region/r.X.Z.mca) and
+ *                  renders ALL chunks generated on disk — including those the
+ *                  map has never seen (worlds pregenerated with Chunky, etc.).
  *
- * Garantie : aucune génération de terrain. Avant chargement, le statut NBT du
- * chunk est lu ; seuls les chunks "minecraft:full" sont chargés et rendus
- * (les proto-chunks en bordure de zone explorée sont ignorés).
+ * Guarantee: no terrain generation. Before loading, the chunk's NBT status
+ * is read; only "minecraft:full" chunks are loaded and rendered
+ * (proto-chunks at the edge of the explored area are skipped).
  */
 public final class RegenService {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /** Chunks (re)chargés par tick serveur : borne le coût du chargement disque. */
+    /** Chunks (re)loaded per server tick: bounds the disk loading cost. */
     private static final int CHUNKS_PER_TICK = 4;
-    /** Pause du chargement si la file de rendu prend trop de retard. */
+    /** Pauses loading when the render queue falls too far behind. */
     private static final int MAX_PENDING_RENDERS = 256;
-    /** Fichiers de région : r.<rx>.<rz>.mca */
+    /** Region files: r.<rx>.<rz>.mca */
     private static final Pattern MCA_NAME = Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca");
 
     /**
-     * Un fichier de région (32x32 chunks) et son masque de présence : bit
-     * (localZ*32 + localX) levé = chunk présent sur disque / à re-rendre.
-     * Compact : ~140 octets par région au lieu d'un objet par chunk, pour
-     * tenir en RAM même sur des mondes prégénérés de plusieurs millions de
-     * chunks.
+     * A region file (32x32 chunks) and its presence mask: bit
+     * (localZ*32 + localX) set = chunk present on disk / to re-render.
+     * Compact: ~140 bytes per region instead of one object per chunk, to
+     * fit in RAM even on pregenerated worlds with millions of chunks.
      */
     private record Batch(ResourceKey<Level> dim, int rx, int rz, long[] mask) {
         int count() {
@@ -78,16 +77,16 @@ public final class RegenService {
         }
     }
 
-    // Etat manipulé UNIQUEMENT sur le main thread (installé via server.execute).
+    // State touched ONLY on the main thread (installed via server.execute).
     private static ArrayDeque<Batch> queue;
     private static Batch current;
     private static int currentBit;
     private static ServerBossEvent bossBar;
     private static int total;
     private static int done;
-    /** Scan disque asynchrone en cours (mode full, avant installation de la file). */
+    /** Async disk scan in progress (full mode, before the queue is installed). */
     private static boolean scanning;
-    /** Incrémenté à chaque start/cancel : invalide les scans async périmés. */
+    /** Incremented on every start/cancel: invalidates stale async scans. */
     private static int epoch;
 
     private RegenService() {}
@@ -96,12 +95,12 @@ public final class RegenService {
         return queue != null || scanning;
     }
 
-    // ------------------------------------------------------------------ démarrage
+    // ------------------------------------------------------------------ start
 
     /**
-     * Mode "regen" : re-rend les chunks déjà peints (depuis l'index des
-     * régions). Retourne le nombre de chunks à traiter, ou -1 si le moteur
-     * n'est pas prêt ou une regen déjà en cours.
+     * "regen" mode: re-renders already painted chunks (from the region
+     * index). Returns the number of chunks to process, or -1 if the engine
+     * is not ready or a regen is already running.
      */
     public static int start(MinecraftServer server) {
         MapManager mgr = MapManager.get();
@@ -109,7 +108,7 @@ public final class RegenService {
             return -1;
         }
 
-        // Régions uniques, toutes couches/bandes confondues.
+        // Unique regions, across all layers/bands.
         record RegionPos(ResourceKey<Level> dim, int rx, int rz) {}
         Set<RegionPos> regions = new HashSet<>();
         for (RegionKey key : mgr.indexedRegions()) {
@@ -148,10 +147,10 @@ public final class RegenService {
     }
 
     /**
-     * Mode "regen full" : scanne les fichiers region/r.X.Z.mca de toutes les
-     * dimensions (asynchrone, la boss bar affiche "scan en cours") puis rend
-     * tous les chunks présents sur disque. Retourne false si le moteur n'est
-     * pas prêt ou une regen déjà en cours.
+     * "regen full" mode: scans the region/r.X.Z.mca files of every dimension
+     * (async, the boss bar shows "scanning") then renders every chunk
+     * present on disk. Returns false if the engine is not ready or a regen
+     * is already running.
      */
     public static boolean startFull(MinecraftServer server) {
         if (MapManager.get() == null || isRunning()) {
@@ -166,7 +165,7 @@ public final class RegenService {
                 BossEvent.BossBarOverlay.PROGRESS);
         bossBar.setProgress(0f);
 
-        // Chemins résolus sur le main thread ; lecture des fichiers en async.
+        // Paths resolved on the main thread; file reads happen async.
         record Target(ResourceKey<Level> dim, Path regionDir) {}
         var targets = new ArrayList<Target>();
         Path worldRoot = server.getWorldPath(LevelResource.ROOT);
@@ -214,12 +213,12 @@ public final class RegenService {
                                         }
                                     }
                                 } catch (IOException e) {
-                                    LOGGER.warn("SharedJourney : échec du scan de {}", target.regionDir(), e);
+                                    LOGGER.warn("SharedJourney: failed to scan {}", target.regionDir(), e);
                                 }
                             }
                             final int finalCount = count;
                             server.execute(() -> {
-                                // Annulée ou remplacée pendant le scan : on jette le résultat.
+                                // Cancelled or replaced during the scan: drop the result.
                                 if (epoch != myEpoch || !scanning) {
                                     return;
                                 }
@@ -227,14 +226,14 @@ public final class RegenService {
                                 scanning = false;
                                 install(q, finalCount);
                                 LOGGER.info(
-                                        "SharedJourney : scan terminé, {} chunk(s) à rendre dans {} région(s)",
+                                        "SharedJourney: scan complete, {} chunk(s) to render in {} region(s)",
                                         finalCount,
                                         q.size());
                             });
                         },
                         Util.backgroundExecutor())
                 .exceptionally(t -> {
-                    LOGGER.error("SharedJourney : échec du scan des fichiers de région", t);
+                    LOGGER.error("SharedJourney: failed to scan region files", t);
                     server.execute(() -> {
                         if (epoch == myEpoch && scanning) {
                             cancel();
@@ -245,7 +244,7 @@ public final class RegenService {
         return true;
     }
 
-    /** Installe la file et (ré)initialise la boss bar (main thread). */
+    /** Installs the queue and (re)initializes the boss bar (main thread). */
     private static void install(ArrayDeque<Batch> q, int count) {
         queue = q;
         current = null;
@@ -260,9 +259,9 @@ public final class RegenService {
     }
 
     /**
-     * Masque de présence des 1024 chunks d'un fichier .mca : l'en-tête est une
-     * table de 1024 offsets de 4 octets ; offset nul = chunk absent. Lecture
-     * de 4 Ko seulement, aucune désérialisation. Retourne null si illisible.
+     * Presence mask of the 1024 chunks of an .mca file: the header is a
+     * table of 1024 4-byte offsets; zero offset = absent chunk. Reads only
+     * 4 KB, no deserialization. Returns null when unreadable.
      */
     private static long[] readPresenceMask(Path mcaFile) {
         try (InputStream in = Files.newInputStream(mcaFile)) {
@@ -279,12 +278,12 @@ public final class RegenService {
             }
             return mask;
         } catch (IOException e) {
-            LOGGER.warn("SharedJourney : en-tête illisible : {}", mcaFile, e);
+            LOGGER.warn("SharedJourney: unreadable header: {}", mcaFile, e);
             return null;
         }
     }
 
-    // ------------------------------------------------------------------ cycle de vie
+    // ------------------------------------------------------------------ lifecycle
 
     public static void cancel() {
         epoch++;
@@ -298,7 +297,7 @@ public final class RegenService {
         bossBar = null;
     }
 
-    /** Appelé chaque tick serveur (main thread). */
+    /** Called every server tick (main thread). */
     public static void tick(MinecraftServer server) {
         if (!isRunning()) {
             return;
@@ -311,19 +310,19 @@ public final class RegenService {
         }
 
         if (bossBar != null) {
-            // Couvre aussi les joueurs connectés en cours de route (idempotent).
+            // Also covers players who joined along the way (idempotent).
             for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                 bossBar.addPlayer(p);
             }
         }
-        // Le scan async n'a pas encore livré la file.
+        // The async scan has not delivered the queue yet.
         if (scanning) {
             return;
         }
 
         if (mgr.queueSize() < MAX_PENDING_RENDERS) {
             for (int i = 0; i < CHUNKS_PER_TICK && advance(); i++) {
-                int bit = currentBit - 1; // positionné par advance()
+                int bit = currentBit - 1; // positioned by advance()
                 int cx = current.rx() * RegionKey.REGION_CHUNKS + (bit & 31);
                 int cz = current.rz() * RegionKey.REGION_CHUNKS + (bit >> 5);
                 ServerLevel level = server.getLevel(current.dim());
@@ -332,13 +331,13 @@ public final class RegenService {
                     continue;
                 }
 
-                // Jamais de génération de terrain : statut vérifié avant chargement.
+                // Never any terrain generation: status checked before loading.
                 if (!isChunkFull(level, cx, cz)) {
                     continue;
                 }
 
-                // Chargement bloquant mais throttlé ; le statut vient d'être
-                // vérifié, le chunk existe complet sur disque.
+                // Blocking but throttled load; the status was just checked,
+                // the chunk exists complete on disk.
                 level.getChunk(cx, cz);
                 mgr.enqueueChunk(level, cx, cz);
             }
@@ -349,16 +348,16 @@ public final class RegenService {
             bossBar.setName(barName());
         }
 
-        // Fin : attend que le pool de rendu ait terminé avant de retirer la bar.
+        // End: wait for the render pool to finish before removing the bar.
         if (queue != null && queue.isEmpty() && current == null && mgr.queueSize() == 0 && mgr.tasksInFlight() == 0) {
             cancel();
         }
     }
 
     /**
-     * Avance jusqu'au prochain bit levé du batch courant (ou du suivant).
-     * Retourne false quand la file est épuisée. Après un retour true,
-     * currentBit - 1 est l'index du chunk à traiter.
+     * Advances to the next set bit of the current batch (or the next one).
+     * Returns false when the queue is exhausted. After returning true,
+     * currentBit - 1 is the index of the chunk to process.
      */
     private static boolean advance() {
         while (true) {
@@ -374,21 +373,21 @@ public final class RegenService {
             while (currentBit < 1024) {
                 long word = mask[currentBit >> 6] >>> (currentBit & 63);
                 if (word == 0) {
-                    currentBit = ((currentBit >> 6) + 1) << 6; // saute le mot vide
+                    currentBit = ((currentBit >> 6) + 1) << 6; // skip the empty word
                     continue;
                 }
                 currentBit += Long.numberOfTrailingZeros(word);
-                currentBit++; // consomme le bit ; l'appelant lit currentBit - 1
+                currentBit++; // consumes the bit; the caller reads currentBit - 1
                 return true;
             }
-            current = null; // batch épuisé
+            current = null; // batch exhausted
         }
     }
 
     /**
-     * Le chunk est-il entièrement généré ("minecraft:full") sur disque ?
-     * Lecture NBT via le worker d'IO vanilla ; bloque le main thread le temps
-     * d'une lecture disque, throttlée par CHUNKS_PER_TICK.
+     * Is the chunk fully generated ("minecraft:full") on disk?
+     * NBT read through the vanilla IO worker; blocks the main thread for
+     * the duration of one disk read, throttled by CHUNKS_PER_TICK.
      */
     private static boolean isChunkFull(ServerLevel level, int cx, int cz) {
         try {
@@ -397,7 +396,7 @@ public final class RegenService {
             return tag.isPresent() && tag.get().getString("Status").endsWith("full");
         } catch (Exception e) {
             LOGGER.warn(
-                    "SharedJourney : statut illisible pour le chunk {},{} en {}",
+                    "SharedJourney: unreadable status for chunk {},{} in {}",
                     cx,
                     cz,
                     level.dimension().location(),

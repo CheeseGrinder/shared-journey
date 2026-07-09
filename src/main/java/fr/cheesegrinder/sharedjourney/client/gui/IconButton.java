@@ -9,9 +9,8 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Bouton carré à icône d'item (style barre d'actions JourneyMap) avec
- * tooltip et état "sélectionné" (contour surligné) pour les toggles et la
- * couche active.
+ * Square item-icon button (JourneyMap action bar style) with a tooltip and
+ * a "selected" state (highlighted outline) for toggles and the active layer.
  */
 public class IconButton extends Button {
 

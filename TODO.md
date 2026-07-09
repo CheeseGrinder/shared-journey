@@ -112,8 +112,17 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
   les hooks de draw atterrissent avec les chantiers rendu/UI._
 - [ ] **P2 · ★★★★☆ — Écran de gestion des waypoints** : groupes, ajout/édition/suppression,
   filtre par dimension, waypoints globaux, groupe « morts » (death waypoints), etc.
-- [ ] **P3 · ★★★☆☆ — Tête des mobs sur la carte** : afficher la tête/l'icône de l'entité
-  (comme les têtes de joueurs) à la place des points colorés du radar.
+- [ ] **P3 · ★★★☆☆ — Waypoints de bannière** : reprendre le comportement vanilla
+  bannière + carte — une bannière NOMMÉE (renommée à l'enclume) posée dans le monde devient un
+  marqueur partagé sur la carte (minimap + plein écran), affiché avec l'icône de bannière
+  vanilla (textures `map/decorations/banner_<couleur>.png`, la couleur suit la bannière),
+  retiré quand la bannière est cassée.
+  _Design : contrairement aux waypoints actuels (100 % client, `WaypointStore`), c'est du
+  SERVEUR-autoritaire, cohérent avec la philosophie du mod : détection pose/casse côté serveur
+  (`BlockEvent` + block entity `Nameable`), persistance dans le dossier monde, nouveau payload
+  S2C (liste complète au login + broadcast à chaque changement), côté client une source
+  volatile type `source = "banner"` resynchronisée à chaque session (le store ne persiste déjà
+  que la source "user"). Rendu : icône bannière au lieu du losange `drawWaypointDiamond`._
 - [ ] **P3 · ★★★☆☆ — Bouton boussole** sur l'interface : basculer l'orientation de la carte
   (nord fixe vs orientée joueur).
 - [ ] **P3 · ★★★☆☆ — Écran de config intégré** au plein écran (plutôt que l'écran NeoForge)
@@ -182,7 +191,9 @@ réécrire.
 5. **Chantier UI** : rework écran waypoint + écran de gestion des waypoints (P2 ★★★★☆), puis
    menu clic droit style JM (P3 ★★★☆☆) — les nouveaux écrans appliquent directement les
    conventions posées en 2, et remplacent l'ancien code UI non nettoyé.
-6. **Petites features indépendantes** : bouton boussole (P3), têtes des mobs (P3).
+6. **Petites features indépendantes** : bouton boussole (P3), têtes des mobs (P3),
+   waypoints de bannière (P3 — premier vrai cas de waypoints poussés par le serveur, peut
+   servir de brouillon à la sync waypoints).
 7. **Écran de config intégré** (P3 ★★★☆☆) — s'appuie sur le chantier UI ; inclut l'éditeur
    des couches par dimension et des bandes CAVE (P3 ★★★☆☆, config serveur → payload op).
 8. **Groupement des boutons d'overlay + passe textes + inventaires options/configs +

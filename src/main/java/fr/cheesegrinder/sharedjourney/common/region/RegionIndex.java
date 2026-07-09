@@ -17,9 +17,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Registre {RegionKey -> Timestamp} sérialisé en index.json (spec §3.1/§3.2).
- * Utilisé côté serveur (vérité) et côté client (ce qu'il possède en cache).
- * Le timestamp est la "version" d'une région : il augmente à chaque réécriture.
+ * {RegionKey -> Timestamp} registry serialized to index.json (spec §3.1/§3.2).
+ * Used server-side (source of truth) and client-side (what the local cache
+ * holds). The timestamp is a region's "version": it grows on every rewrite.
  */
 public final class RegionIndex {
 
@@ -48,7 +48,7 @@ public final class RegionIndex {
         return new HashMap<>(entries);
     }
 
-    /** Retire toutes les entrées d'une couche donnée (purge client). Retourne les clés retirées. */
+    /** Removes every entry of a given layer (client purge). Returns the removed keys. */
     public List<RegionKey> removeLayer(String layerFolderName) {
         List<RegionKey> removed = new ArrayList<>();
         entries.keySet().removeIf(k -> {
@@ -85,7 +85,7 @@ public final class RegionIndex {
                 }
             });
         } catch (Exception e) {
-            // Index corrompu : on repart de zéro, les PNG seront re-versionnés via mtime.
+            // Corrupted index: start from scratch, PNGs will be re-versioned via mtime.
         }
     }
 

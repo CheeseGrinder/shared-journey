@@ -3,13 +3,14 @@ package fr.cheesegrinder.sharedjourney.common.config;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
- * Config SERVEUR (façade) : assemble les sections par fonctionnalité —
- * {@link LayersServerConfig} (couches), {@link EngineServerConfig} (moteur de
- * rendu) et {@link SyncServerConfig} (synchronisation) — dans un spec unique
- * (un seul fichier TOML, sections "layers"/"engine"/"sync" inchangées).
- * NeoForge implémente déjà la hiérarchie de la spec §8 : `defaultconfigs/`
- * (globale) est copiée puis écrasée par `world/serverconfig/` (locale au
- * monde). Éditable en jeu par un OP via l'écran de config, ou /sj admin layer.
+ * SERVER config (facade): assembles the per-feature sections —
+ * {@link LayersServerConfig} (layers), {@link EngineServerConfig} (render
+ * engine) and {@link SyncServerConfig} (synchronization) — into a single spec
+ * (one TOML file, "layers"/"engine"/"sync" sections unchanged).
+ * NeoForge already implements the hierarchy required by spec §8:
+ * {@code defaultconfigs/} (global) is copied then overridden by
+ * {@code world/serverconfig/} (per-world). Editable in-game by an OP through
+ * the config screen, or via /sj admin layer.
  */
 public final class ServerConfig {
 
@@ -25,7 +26,7 @@ public final class ServerConfig {
 
     private ServerConfig() {}
 
-    /** Invalide les caches de parsing des sections (appelé au reload de config). */
+    /** Invalidates the sections' parsing caches (called on config reload). */
     public static void invalidateCache() {
         LayersServerConfig.invalidateCache();
         EngineServerConfig.invalidateCache();

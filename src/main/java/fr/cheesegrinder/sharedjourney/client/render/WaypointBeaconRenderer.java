@@ -26,15 +26,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Beacons de waypoints dans le monde : faisceau de beacon VANILLA (texture
- * animée, cœur opaque + halo) teinté de la couleur du waypoint, et étiquette
- * flottante (nom + distance) visible à travers les blocs.
- * Affichés entre les distances min et max de la config client.
+ * In-world waypoint beacons: VANILLA beacon beam (animated texture, opaque
+ * core + halo) tinted with the waypoint's color, and a floating label
+ * (name + distance) visible through blocks.
+ * Shown between the client config's min and max distances.
  */
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID, value = Dist.CLIENT)
 public final class WaypointBeaconRenderer {
 
-    /** Décalage latéral de l'étiquette (blocs) : hors du faisceau (rayon 0.25). */
+    /** Label's side offset (blocks): outside the beam (radius 0.25). */
     private static final float LABEL_SIDE_OFFSET_BLOCKS = 0.45f;
 
     private WaypointBeaconRenderer() {}
@@ -62,9 +62,9 @@ public final class WaypointBeaconRenderer {
         PoseStack pose = event.getPoseStack();
         MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
         float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(true);
-        // Deux passes : tous les faisceaux, flush, puis toutes les étiquettes.
-        // Dans un même batch le faisceau (translucide) serait dessiné après le
-        // texte et le masquerait.
+        // Two passes: all the beams, flush, then all the labels. In a
+        // single batch the (translucent) beam would be drawn after the
+        // text and mask it.
         List<Waypoint> shown = new ArrayList<>();
         for (Waypoint wp : waypoints) {
             if (!wp.visible()) {
@@ -94,9 +94,9 @@ public final class WaypointBeaconRenderer {
     }
 
     /**
-     * Faisceau de beacon vanilla (même rendu que le bloc beacon : texture
-     * animée, cœur opaque + halo translucide), teinté de la couleur du
-     * waypoint, sur toute la hauteur du monde.
+     * Vanilla beacon beam (same rendering as the beacon block: animated
+     * texture, opaque core + translucent halo), tinted with the waypoint's
+     * color, spanning the full world height.
      */
     private static void drawBeam(
             PoseStack pose,
@@ -124,11 +124,11 @@ public final class WaypointBeaconRenderer {
     }
 
     /**
-     * Étiquette flottante (nom + distance) : 1 bloc au-dessus du point,
-     * décalée SUR LE CÔTÉ du faisceau (en unités billboard, donc toujours
-     * visuellement hors du faisceau) pour rester lisible. Deux passes comme
-     * les nameplates vanilla : version assombrie visible à travers les blocs,
-     * puis version pleine testée en profondeur.
+     * Floating label (name + distance): 1 block above the point, offset
+     * to the SIDE of the beam (in billboard units, so always visually
+     * outside the beam) to stay readable. Two passes like vanilla
+     * nameplates: dimmed version visible through blocks, then full
+     * version depth-tested.
      */
     private static void drawLabel(
             PoseStack pose, Camera camera, MultiBufferSource buffers, Font font, Vec3 cam, Waypoint wp, double dist) {
@@ -139,9 +139,9 @@ public final class WaypointBeaconRenderer {
         float scale = 0.025f * (float) Math.max(1.0, dist / 12.0);
         pose.scale(scale, -scale, scale);
         Matrix4f mat = pose.last().pose();
-        // Bord gauche du texte à ~0.45 bloc du centre : hors du faisceau
-        // (rayon 0.25). SEE_THROUGH pleine intensité : l'étiquette reste
-        // lisible en toute circonstance, même un bloc devant.
+        // Text's left edge ~0.45 block from center: outside the beam
+        // (radius 0.25). Full-intensity SEE_THROUGH: the label stays
+        // readable in any circumstance, even with a block in front.
         float xStart = LABEL_SIDE_OFFSET_BLOCKS / scale;
         font.drawInBatch(
                 text,

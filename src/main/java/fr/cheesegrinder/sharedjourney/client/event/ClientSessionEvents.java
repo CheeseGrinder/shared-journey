@@ -16,35 +16,35 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-/** Cycle de session client : ouverture/fermeture du cache local + handshake. */
+/** Client session lifecycle: local cache open/close + handshake. */
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID, value = Dist.CLIENT)
 public final class ClientSessionEvents {
 
     private ClientSessionEvents() {}
 
-    /** Connexion : ouvre le cache local + handshake (spec §5.1). */
+    /** Login: opens the local cache + handshake (spec §5.1). */
     @SubscribeEvent
     public static void onLogin(ClientPlayerNetworkEvent.LoggingIn event) {
         ClientMapCache.clear();
         DiskCache.openSession();
         WaypointStore.openSession();
-        // Handshake : envoi du résumé de l'index local. Le serveur ne
-        // renverra que les régions manquantes ou plus récentes.
+        // Handshake: send the local index summary. The server will only
+        // send back missing or newer regions.
         byte[] encoded =
                 Payloads.ClientIndexPayload.encodeIndex(DiskCache.index().snapshot());
         PacketDistributor.sendToServer(new Payloads.ClientIndexPayload(encoded));
 
-        // Signale "mapping démarré" aux plugins JourneyMap bridgés (Waystones
-        // attend cet événement avant de créer ses waypoints).
+        // Signal "mapping started" to the bridged JourneyMap plugins
+        // (Waystones waits for this event before creating its waypoints).
         JourneyMapBridge.fireMappingEvent(true, event.getPlayer().level().dimension());
 
-        // Préférence de visibilité sur la carte des autres joueurs.
+        // Visibility preference on the other players' map.
         PacketDistributor.sendToServer(new Payloads.MapVisibilityPayload(ClientConfig.HIDE_FROM_MAP.get()));
     }
 
     @SubscribeEvent
     public static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
-        // Avant la fermeture du store : les plugins peuvent encore nettoyer.
+        // Before closing the store: plugins can still clean up.
         var player = event.getPlayer();
         JourneyMapBridge.fireMappingEvent(false, player != null ? player.level().dimension() : Level.OVERWORLD);
         DiskCache.closeSession();

@@ -26,13 +26,13 @@ import java.util.Map;
 import java.util.function.Predicate;
 
 /**
- * Volet "fullscreen" du bridge JourneyMap : publie, depuis NOTRE carte plein
- * écran, les événements que le vrai JourneyMap émet depuis la sienne —
- * FULLSCREEN_RENDER_EVENT à chaque frame et FULLSCREEN_MAP_CLICK_EVENT
- * (PRE annulable / POST) aux clics. C'est par ce canal que Create (carte des
- * trains) et Create: Rock & Stone (gisements découverts) dessinent leurs
- * overlays. L'IFullscreen fourni aux plugins est un proxy dynamique adossé à
- * notre FullMapScreen (centre, zoom, UIState).
+ * "Fullscreen" part of the JourneyMap bridge: publishes, from OUR
+ * fullscreen map, the events the real JourneyMap emits from its own —
+ * FULLSCREEN_RENDER_EVENT every frame and FULLSCREEN_MAP_CLICK_EVENT
+ * (cancellable PRE / POST) on clicks. This is the channel Create (train
+ * map) and Create: Rock & Stone (discovered deposits) use to draw their
+ * overlays. The IFullscreen handed to plugins is a dynamic proxy backed
+ * by our FullMapScreen (center, zoom, UIState).
  */
 public final class JourneyMapFullscreenBridge {
 
@@ -54,8 +54,9 @@ public final class JourneyMapFullscreenBridge {
     private JourneyMapFullscreenBridge() {}
 
     /**
-     * Vue de carte exposée aux plugins via le proxy IFullscreen : la carte
-     * plein écran l'implémente directement, la minimap fournit une vue ad hoc.
+     * Map view exposed to plugins via the IFullscreen proxy: the
+     * fullscreen map implements it directly, the minimap provides an ad
+     * hoc view.
      */
     public interface BridgedMapView {
 
@@ -69,7 +70,7 @@ public final class JourneyMapFullscreenBridge {
 
         double centerZ();
 
-        /** Zoom en pixels GUI par bloc. */
+        /** Zoom in GUI pixels per block. */
         float zoomScale();
 
         MapLayer currentLayer();
@@ -87,7 +88,7 @@ public final class JourneyMapFullscreenBridge {
         default void close() {}
     }
 
-    /** Publie l'événement de rendu fullscreen (une fois par frame). */
+    /** Publishes the fullscreen render event (once per frame). */
     public static void fireRender(BridgedMapView map, GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         if (!JourneyMapBridge.bridgeActive() || !resolve()) {
             return;
@@ -102,11 +103,11 @@ public final class JourneyMapFullscreenBridge {
                     event,
                     overlayFilter());
         } catch (Throwable t) {
-            LOGGER.warn("[Bridge JM] Échec du FullscreenRenderEvent : {}", t.toString());
+            LOGGER.warn("[Bridge JM] FullscreenRenderEvent failed: {}", t.toString());
         }
     }
 
-    /** Toggles d'overlays de la config client, par modId de plugin. */
+    /** Client config overlay toggles, by plugin modId. */
     private static Predicate<String> overlayFilter() {
         return modId -> switch (modId) {
             case "create" -> ClientConfig.SHOW_TRAIN_OVERLAY.get();
@@ -116,8 +117,8 @@ public final class JourneyMapFullscreenBridge {
     }
 
     /**
-     * Publie l'événement de clic fullscreen. Retourne true si un plugin a
-     * annulé le clic (stage PRE) : l'écran ne doit alors pas le traiter.
+     * Publishes the fullscreen click event. Returns true if a plugin
+     * cancelled the click (PRE stage): the screen must then not handle it.
      */
     public static boolean fireClick(BridgedMapView map, boolean pre, double mouseX, double mouseY, int button) {
         if (!JourneyMapBridge.bridgeActive() || !resolve()) {
@@ -140,12 +141,12 @@ public final class JourneyMapFullscreenBridge {
                     overlayFilter());
             return Boolean.TRUE.equals(isCancelledMethod.invoke(event));
         } catch (Throwable t) {
-            LOGGER.warn("[Bridge JM] Échec du FullscreenMapEvent.ClickEvent : {}", t.toString());
+            LOGGER.warn("[Bridge JM] FullscreenMapEvent.ClickEvent failed: {}", t.toString());
             return false;
         }
     }
 
-    // ------------------------------------------------------------------ résolution réflexive
+    // ------------------------------------------------------------------ reflective resolution
 
     private static synchronized boolean resolve() {
         if (resolved) {
@@ -187,7 +188,7 @@ public final class JourneyMapFullscreenBridge {
             MAP_TYPES.put(MapLayer.CAVE, enumConstant(mapTypeClass, "Underground"));
             available = true;
         } catch (Throwable t) {
-            LOGGER.info("[Bridge JM] API fullscreen JourneyMap indisponible : {}", t.toString());
+            LOGGER.info("[Bridge JM] JourneyMap fullscreen API unavailable: {}", t.toString());
             available = false;
         }
         return available;
@@ -199,12 +200,12 @@ public final class JourneyMapFullscreenBridge {
     }
 
     /**
-     * Publie le FullscreenRenderEvent pour la MINIMAP : les plugins (rails et
-     * trains Create, gisements RNS) ne dessinent que sur l'UI "Fullscreen" ;
-     * on leur présente donc la minimap comme un fullscreen dont le centre
-     * écran est ramené, par translation de pose, sur le centre de la minimap.
-     * Le scissor de la minimap (actif à l'appel) borne le dessin. En mode
-     * rotation, les icônes tournent avec la carte (limitation assumée).
+     * Publishes the FullscreenRenderEvent for the MINIMAP: plugins (Create
+     * rails and trains, RNS deposits) only draw on the "Fullscreen" UI; so
+     * we present the minimap to them as a fullscreen whose screen center
+     * is mapped, via a pose translation, onto the minimap's center. The
+     * minimap's scissor (active at call time) bounds the drawing. In
+     * rotation mode, the icons turn with the map (accepted limitation).
      */
     public static void fireMinimapRender(
             GuiGraphics gg, int cx, int cy, double px, double pz, float zoom, MapLayer layer, float rotationDeg) {
@@ -231,7 +232,7 @@ public final class JourneyMapFullscreenBridge {
         pose.popPose();
     }
 
-    /** Vue minimap : centre = joueur, dimensions = écran (pose translatée). */
+    /** Minimap view: center = player, dimensions = screen (translated pose). */
     private record MinimapView(
             Screen screen,
             int viewWidth,
@@ -253,7 +254,7 @@ public final class JourneyMapFullscreenBridge {
         }
     }
 
-    // ------------------------------------------------------------------ proxy IFullscreen
+    // ------------------------------------------------------------------ IFullscreen proxy
 
     private static Object proxyFor(BridgedMapView map) {
         return Proxy.newProxyInstance(
@@ -261,10 +262,11 @@ public final class JourneyMapFullscreenBridge {
     }
 
     /**
-     * UIState (API v2) décrivant notre écran. Le paramètre int "zoom" du
-     * constructeur vaut blockSize * 512, et blockSize est en PIXELS PHYSIQUES
-     * par bloc : le fullscreen de JourneyMap ignore le gui scale, et ses
-     * consommateurs (RNS, Create) redivisent par le gui scale au dessin.
+     * UIState (API v2) describing our screen. The constructor's int
+     * "zoom" parameter equals blockSize * 512, and blockSize is in
+     * PHYSICAL PIXELS per block: JourneyMap's fullscreen ignores the GUI
+     * scale, and its consumers (RNS, Create) divide back by the GUI scale
+     * when drawing.
      */
     private static Object buildUiState(BridgedMapView map) throws ReflectiveOperationException {
         var mc = Minecraft.getInstance();
@@ -333,7 +335,7 @@ public final class JourneyMapFullscreenBridge {
                     return proxy == args[0];
                 }
                 default -> {
-                    // updateMapType / toggleMapType : no-op tolérant.
+                    // updateMapType / toggleMapType: tolerant no-op.
                     return null;
                 }
             }

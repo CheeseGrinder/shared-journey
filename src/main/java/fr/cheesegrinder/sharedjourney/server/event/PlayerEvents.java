@@ -9,7 +9,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 
-/** Événements joueurs : cycle de session de synchronisation par joueur. */
+/** Player events: per-player synchronization session lifecycle. */
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID)
 public final class PlayerEvents {
 

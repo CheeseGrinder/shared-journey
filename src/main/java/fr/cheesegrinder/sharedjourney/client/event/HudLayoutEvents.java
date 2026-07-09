@@ -12,14 +12,14 @@ import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 
 /**
- * Cohabitation du HUD vanilla avec la minimap : quand elle occupe le coin
- * haut droit, la couche des icônes d'effets de potion est translatée à sa
- * gauche au lieu d'être recouverte.
+ * Vanilla HUD coexistence with the minimap: when it occupies the top-right
+ * corner, the potion effect icons layer is translated to its left instead
+ * of being covered.
  */
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID, value = Dist.CLIENT)
 public final class HudLayoutEvents {
 
-    /** Garde d'équilibrage push/pop (le Post ne se déclenche pas si un mod annule le Pre). */
+    /** Push/pop balancing guard (Post does not fire if a mod cancels Pre). */
     private static boolean shifted;
 
     private HudLayoutEvents() {}

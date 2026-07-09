@@ -33,10 +33,10 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Minimap HUD (spec §6.1) : tuiles serveur, rotation dynamique optionnelle
- * (rendu via matrices de pose), zoom clavier, forme ronde ou carrée, radar
- * d'entités filtrable dont le rayon est plafonné par le serveur (anti-triche),
- * et waypoints.
+ * Minimap HUD (spec §6.1): server tiles, optional dynamic rotation
+ * (rendered via pose matrices), keyboard zoom, round or square shape,
+ * filterable entity radar whose radius is capped by the server
+ * (anti-cheat), and waypoints.
  */
 public final class MinimapRenderer {
 
@@ -45,13 +45,13 @@ public final class MinimapRenderer {
     private static final float ZOOM_MIN = 0.25f;
     private static final float ZOOM_MAX = 4.0f;
     private static final int CIRCLE_SEGMENTS = 64;
-    /** Gris sombre (style Discord) visible sous les chunks pas encore reçus. */
+    /** Dark gray (Discord-style) visible under chunks not yet received. */
     public static final int BACKGROUND = 0xFF36393F;
 
-    private static MapLayer currentLayer = null; // null = pas encore initialisée depuis la config
-    private static Boolean autoMode = null; // null = pas encore initialisé depuis la config
+    private static MapLayer currentLayer = null; // null = not yet initialized from config
+    private static Boolean autoMode = null; // null = not yet initialized from config
     private static int caveBandIndex = 0;
-    private static float zoom = 1.0f; // pixels écran par bloc
+    private static float zoom = 1.0f; // screen pixels per block
 
     public static MapLayer currentLayer() {
         if (currentLayer == null) {
@@ -65,7 +65,7 @@ public final class MinimapRenderer {
         return currentLayer;
     }
 
-    /** Le mode auto suit jour/nuit et le passage sous terre. */
+    /** Auto mode follows day/night and going underground. */
     public static boolean autoMode() {
         if (autoMode == null) {
             autoMode = ClientConfig.AUTO_LAYER.get();
@@ -74,9 +74,9 @@ public final class MinimapRenderer {
     }
 
     /**
-     * Couche réellement affichée. En mode auto : CAVE si le joueur est sous
-     * terre, sinon NIGHT la nuit, sinon DAY — parmi les couches autorisées
-     * par le serveur pour la dimension courante.
+     * Actually displayed layer. In auto mode: CAVE if the player is
+     * underground, else NIGHT at night, else DAY — among the layers
+     * allowed by the server for the current dimension.
      */
     public static MapLayer displayedLayer() {
         Minecraft mc = Minecraft.getInstance();
@@ -103,9 +103,10 @@ public final class MinimapRenderer {
     }
 
     /**
-     * Nuit selon l'heure du monde (13000-23000, bornes de /time set night/day).
-     * Level.isNight() est inutilisable ici : il dépend de skyDarken, qui n'est
-     * mis à jour que côté serveur — côté client il vaut toujours 0.
+     * Night based on world time (13000-23000, the bounds of /time set
+     * night/day). Level.isNight() can't be used here: it depends on
+     * skyDarken, which is only updated server-side — client-side it's
+     * always 0.
      */
     private static boolean isNightTime(Level level) {
         long time = Math.floorMod(level.getDayTime(), 24000L);
@@ -113,8 +114,8 @@ public final class MinimapRenderer {
     }
 
     /**
-     * Cycle de couche : Auto -> couche 1 -> ... -> couche N -> Auto.
-     * Choisir une couche à la main suspend le mode auto jusqu'au retour à Auto.
+     * Layer cycle: Auto -> layer 1 -> ... -> layer N -> Auto.
+     * Picking a layer by hand suspends auto mode until it cycles back to Auto.
      */
     public static void cycleLayer() {
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
@@ -156,7 +157,7 @@ public final class MinimapRenderer {
             return 0;
         }
 
-        // Suit automatiquement la bande où se trouve le joueur si elle est disponible.
+        // Automatically follows the band the player is in, if available.
         Player p = Minecraft.getInstance().player;
         if (p != null) {
             int band = Math.floorDiv(p.blockPosition().getY(), 16);
@@ -209,25 +210,25 @@ public final class MinimapRenderer {
                     case BOTTOM_LEFT, BOTTOM_RIGHT -> sh - size - margin;
                 };
         if (topAnchored) {
-            // Réserve la ligne d'heure au-dessus de la carte.
+            // Reserve the time line above the map.
             y += 11;
         }
 
         boolean rotate = ClientConfig.MINIMAP_ROTATE.get();
         boolean circle = ClientConfig.MINIMAP_SHAPE.get() == ClientConfig.Shape.CIRCLE;
-        // En mode rotation, la carte tourne autour du joueur pour que "devant" soit en haut.
+        // In rotation mode, the map turns around the player so "forward" stays up.
         float yaw = player.getYRot();
 
         int half = size / 2;
         int cx = x + half, cy = y + half;
 
-        // Fond gris (zones pas encore reçues) ; la bordure ronde est dessinée
-        // en dernier, par-dessus le contenu.
+        // Gray background (not-yet-received areas); the round border is
+        // drawn last, on top of the content.
         if (circle) {
             gg.flush();
             fillCircle(gg, cx, cy, half + 1, BACKGROUND);
-            // Masque de profondeur : les coins du carré (hors cercle) deviennent
-            // "devant" le contenu, qui y échoue donc au test de profondeur.
+            // Depth mask: the square's corners (outside the circle) become
+            // "in front of" the content, which then fails the depth test there.
             maskCorners(gg, cx, cy, half, half + 2);
         } else {
             gg.fill(x - 1, y - 1, x + size + 1, y + size + 1, 0xFF202020);
@@ -243,20 +244,20 @@ public final class MinimapRenderer {
 
         gg.pose().pushPose();
         if (rotate) {
-            // Rotation dynamique (spec §6.1) autour du centre de la minimap.
+            // Dynamic rotation (spec §6.1) around the minimap's center.
             gg.pose().translate(cx, cy, 0);
             gg.pose().mulPose(Axis.ZP.rotationDegrees(-yaw - 180f));
             gg.pose().translate(-cx, -cy, 0);
         }
         if (zoom != 1.0f) {
-            // Zoom clavier : échelle autour du centre (1 px écran = zoom blocs).
+            // Keyboard zoom: scale around the center (1 screen px = zoom blocks).
             gg.pose().translate(cx, cy, 0);
             gg.pose().scale(zoom, zoom, 1f);
             gg.pose().translate(-cx, -cy, 0);
         }
 
-        // Fenêtre de blocs à couvrir. Un cercle est invariant par rotation ;
-        // pour un carré en rotation, la diagonale dépasse (half * sqrt(2)).
+        // Window of blocks to cover. A circle is rotation-invariant; for a
+        // rotating square, the diagonal overshoots (half * sqrt(2)).
         double factor = (rotate && !circle) ? 1.4143 : 1.0;
         int reach = (int) Math.ceil(half * factor / zoom) + 1;
         int minRx = Math.floorDiv((int) px - reach, RegionKey.REGION_BLOCKS);
@@ -264,10 +265,10 @@ public final class MinimapRenderer {
         int minRz = Math.floorDiv((int) pz - reach, RegionKey.REGION_BLOCKS);
         int maxRz = Math.floorDiv((int) pz + reach, RegionKey.REGION_BLOCKS);
 
-        // Ancre le contenu sur la position exacte (double) du joueur : tout
-        // est ensuite dessiné en coordonnées monde. L'ancien arrondi entier
-        // par tuile/ligne faisait scintiller des traits aux jointures de
-        // régions quand le joueur bougeait.
+        // Anchors the content on the player's exact (double) position:
+        // everything is then drawn in world coordinates. The old per-tile/
+        // line integer rounding made seams flicker at region boundaries
+        // when the player moved.
         gg.pose().translate((float) (cx - px), (float) (cy - pz), 0f);
 
         for (int rx = minRx; rx <= maxRx; rx++) {
@@ -291,9 +292,9 @@ public final class MinimapRenderer {
             }
         }
 
-        // ---- Grille de chunks (frontières tous les 16 blocs), dans la pose
-        // du contenu : suit rotation et zoom. Affichée seulement à partir du
-        // zoom 1.0 (équivalent du libellé 2048 de la carte plein écran).
+        // ---- Chunk grid (boundaries every 16 blocks), in the content's
+        // pose: follows rotation and zoom. Only shown from zoom 1.0 onward
+        // (equivalent of the fullscreen map's 2048 label).
         if (ClientConfig.SHOW_GRID.get() && zoom >= 1.0f) {
             int gridColor = 0x38000000;
             int gxStart = Math.floorDiv((int) px - reach, 16) * 16;
@@ -306,7 +307,7 @@ public final class MinimapRenderer {
             }
         }
 
-        // ---- Radar d'entités (spec §6.1) : rayon plafonné par le serveur
+        // ---- Entity radar (spec §6.1): radius capped by the server
         if (ClientConfig.RADAR_ENABLED.get() && ClientMapCache.radarMaxRadius > 0) {
             int radius = Math.min(ClientConfig.RADAR_RADIUS.get(), ClientMapCache.radarMaxRadius);
             AABB box = player.getBoundingBox().inflate(radius, 32, radius);
@@ -327,10 +328,10 @@ public final class MinimapRenderer {
 
         gg.pose().popPose();
 
-        // Overlays des plugins JourneyMap bridgés (rails/trains Create,
-        // gisements RNS...) : dessinés dans le scissor de la minimap, via un
-        // pose qui ramène le "centre écran" attendu par les plugins sur le
-        // centre de la minimap. Pas d'overlays sur la couche CAVE.
+        // Bridged JourneyMap plugin overlays (Create rails/trains, RNS
+        // deposits...): drawn within the minimap's scissor, via a pose that
+        // maps the "screen center" expected by plugins onto the minimap's
+        // center. No overlays on the CAVE layer.
         if (layer != MapLayer.CAVE) {
             JourneyMapFullscreenBridge.fireMinimapRender(gg, cx, cy, px, pz, zoom, layer, rotate ? -yaw - 180f : 0f);
         }
@@ -338,15 +339,15 @@ public final class MinimapRenderer {
         gg.disableScissor();
 
         if (circle) {
-            // Vide le contenu batché (clippé par le masque) puis restaure la
-            // profondeur des coins pour ne pas gêner les couches suivantes.
+            // Flush the batched content (clipped by the mask) then restore
+            // the corners' depth so it doesn't interfere with later layers.
             gg.flush();
             resetDepth(gg, x - 2, y - 2, x + size + 2, y + size + 2);
             drawRing(gg, cx, cy, half, half + 1.5f, 0xFF202020);
         }
 
-        // ---- Waypoints en espace écran : taille constante, et épinglés SUR
-        // la bordure de la minimap quand ils sont hors de vue (direction).
+        // ---- Waypoints in screen space: constant size, and pinned ON the
+        // minimap's border when out of view (direction indicator).
         double theta = rotate ? Math.toRadians(-yaw - 180f) : 0;
         double cosT = Math.cos(theta);
         double sinT = Math.sin(theta);
@@ -373,8 +374,8 @@ public final class MinimapRenderer {
             EntityDots.drawWaypointDiamond(gg, cx + (float) sx, cy + (float) sy, wp.colorRgb(), 0.9f);
         }
 
-        // ---- Têtes des autres joueurs (positions serveur, sans limite de
-        // distance), épinglées sur la bordure comme les waypoints.
+        // ---- Other players' heads (server positions, no distance limit),
+        // pinned to the border like the waypoints.
         if (ClientConfig.RADAR_PLAYERS.get()) {
             var selfId = player.getUUID();
             for (var pos : ClientMapCache.playerPositions.values()) {
@@ -384,7 +385,7 @@ public final class MinimapRenderer {
 
                 double wx = pos.x();
                 double wz = pos.z();
-                // Position vivante si le joueur est suivi localement (fluide).
+                // Live position if the player is tracked locally (smoother).
                 Player live = mc.level == null ? null : mc.level.getPlayerByUUID(pos.id());
                 if (live != null) {
                     wx = live.getX();
@@ -409,17 +410,16 @@ public final class MinimapRenderer {
             }
         }
 
-        // Flèche du joueur au centre. En rotation, le joueur "regarde vers le
-        // haut" (flèche fixe) ; sinon flèche orientée selon le yaw.
+        // Player arrow at the center. When rotating, the player "looks up"
+        // (fixed arrow); otherwise the arrow follows the yaw.
         EntityDots.drawPlayerArrow(gg, cx, cy, rotate ? 0f : yaw + 180f, 0.85f);
 
-        // Points cardinaux en retrait du bord (à l'intérieur de la carte,
-        // pas sur la bordure), suivant la rotation de la carte.
+        // Cardinal points set inward from the edge (inside the map, not on
+        // the border), following the map's rotation.
         drawCardinals(gg, mc, cx, cy, half - 8, rotate ? -yaw - 180f : 0f);
 
-        // Libellés (échelle réduite) : heure + période au-dessus de la carte,
-        // biome et coordonnées en dessous (ou empilés au-dessus si la carte
-        // est ancrée en bas).
+        // Labels (reduced scale): time + period above the map, biome and
+        // coordinates below (or stacked above if the map is bottom-anchored).
         drawSmallCentered(gg, mc, timeText(mc.level), cx, y - 9, 0xFFFFFF);
         String biome = mc.level == null
                 ? ""
@@ -448,8 +448,8 @@ public final class MinimapRenderer {
     }
 
     /**
-     * Texte centré à échelle réduite (les libellés pleine taille mangent
-     * l'écran), sur fond translucide pour rester lisible quel que soit le décor.
+     * Centered text at reduced scale (full-size labels eat up the screen),
+     * on a translucent background to stay readable regardless of the backdrop.
      */
     private static void drawSmallCentered(GuiGraphics gg, Minecraft mc, String text, int cx, int y, int color) {
         if (text.isEmpty()) {
@@ -465,7 +465,7 @@ public final class MinimapRenderer {
         gg.pose().popPose();
     }
 
-    /** Heure du monde formatée (sans secondes) + période (journée, coucher, nuit, lever). */
+    /** Formatted world time (no seconds) + period (day, sunset, night, sunrise). */
     private static String timeText(Level level) {
         if (level == null) {
             return "";
@@ -492,9 +492,9 @@ public final class MinimapRenderer {
     }
 
     /**
-     * Décalage horizontal à appliquer aux icônes d'effets de potion vanilla :
-     * quand la minimap occupe le coin haut droit, les icônes glissent à sa
-     * gauche (HudLayoutEvents translate la couche EFFECTS d'autant).
+     * Horizontal shift to apply to vanilla potion effect icons: when the
+     * minimap occupies the top-right corner, the icons slide to its left
+     * (HudLayoutEvents translates the EFFECTS layer by that amount).
      */
     public static int effectIconsShift(Minecraft mc) {
         if (mc.player == null || mc.options.hideGui || !ClientInputEvents.minimapVisible) {
@@ -513,18 +513,18 @@ public final class MinimapRenderer {
     }
 
     /**
-     * Lettres N/E/S/W à l'intérieur de la minimap, sur pastille ronde.
-     * thetaDeg = rotation du contenu de la carte (0 = nord en haut) ;
-     * les lettres suivent.
+     * N/E/S/W letters inside the minimap, on a round badge.
+     * thetaDeg = rotation of the map content (0 = north up);
+     * the letters follow along.
      */
     private static void drawCardinals(GuiGraphics gg, Minecraft mc, int cx, int cy, float radius, float thetaDeg) {
-        // Les pastilles sont dessinées en mode immédiat : on vide d'abord le
-        // batch GUI en attente pour préserver l'ordre de superposition.
+        // The badges are drawn in immediate mode: flush the pending GUI
+        // batch first to preserve the stacking order.
         gg.flush();
         double theta = Math.toRadians(thetaDeg);
         float cos = (float) Math.cos(theta);
         float sin = (float) Math.sin(theta);
-        // Nord = (0,-1) et Est = (1,0) à l'écran, tournés par la pose du contenu.
+        // North = (0,-1) and East = (1,0) on screen, rotated by the content's pose.
         drawCardinal(gg, mc, "N", cx + sin * radius, cy - cos * radius);
         drawCardinal(gg, mc, "E", cx + cos * radius, cy + sin * radius);
         drawCardinal(gg, mc, "S", cx - sin * radius, cy + cos * radius);
@@ -535,7 +535,7 @@ public final class MinimapRenderer {
         int ix = Math.round(x);
         int iy = Math.round(y);
         fillCircle(gg, ix, iy, 5f, 0xB0101010);
-        // Lettre à échelle réduite pour tenir dans la pastille.
+        // Letter at reduced scale to fit inside the badge.
         gg.pose().pushPose();
         gg.pose().translate(ix, iy, 0);
         gg.pose().scale(0.75f, 0.75f, 1f);
@@ -543,14 +543,14 @@ public final class MinimapRenderer {
         gg.pose().popPose();
     }
 
-    // ------------------------------------------------------------------ formes (mode rond)
+    // ------------------------------------------------------------------ shapes (round mode)
 
-    /** Disque plein (triangle fan), dessiné immédiatement. */
+    /** Solid disc (triangle fan), drawn immediately. */
     private static void fillCircle(GuiGraphics gg, float cx, float cy, float radius, int argb) {
         Matrix4f mat = gg.pose().last().pose();
         RenderSystem.enableBlend();
-        // Le blend func global peut avoir été altéré par un rendu précédent
-        // (l'alpha des pastilles disparaissait) : on le restaure.
+        // The global blend func may have been altered by a previous render
+        // (the badges' alpha was vanishing): restore it.
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferBuilder buf =
@@ -564,7 +564,7 @@ public final class MinimapRenderer {
         BufferUploader.drawWithShader(buf.buildOrThrow());
     }
 
-    /** Anneau (bordure du cercle), dessiné immédiatement. */
+    /** Ring (circle border), drawn immediately. */
     private static void drawRing(GuiGraphics gg, float cx, float cy, float rIn, float rOut, int argb) {
         Matrix4f mat = gg.pose().last().pose();
         RenderSystem.enableBlend();
@@ -582,10 +582,10 @@ public final class MinimapRenderer {
     }
 
     /**
-     * Écrit dans le tampon de profondeur l'anneau "carré moins cercle" à une
-     * profondeur PLUS PROCHE que le contenu : les pixels des coins échouent
-     * ensuite au test LEQUAL, ce qui découpe la carte en disque sans stencil.
-     * Couleur non écrite (colorMask off).
+     * Writes the "square minus circle" ring into the depth buffer at a
+     * depth CLOSER than the content: the corner pixels then fail the
+     * LEQUAL test, which clips the map into a disc without a stencil
+     * buffer. Color not written (colorMask off).
      */
     private static void maskCorners(GuiGraphics gg, float cx, float cy, float radius, float halfExt) {
         Matrix4f mat = gg.pose().last().pose();
@@ -595,11 +595,11 @@ public final class MinimapRenderer {
         RenderSystem.setShader(GameRenderer::getPositionShader);
         BufferBuilder buf =
                 Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION);
-        float z = 100f; // devant le contenu (z = 0)
+        float z = 100f; // in front of the content (z = 0)
         for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
             double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
             float c = (float) Math.cos(a), s = (float) Math.sin(a);
-            // Point sur le bord du carré englobant, dans la même direction.
+            // Point on the bounding square's edge, in the same direction.
             float scale = halfExt / Math.max(Math.abs(c), Math.abs(s));
             buf.addVertex(mat, cx + c * scale, cy + s * scale, z);
             buf.addVertex(mat, cx + c * radius, cy + s * radius, z);
@@ -608,7 +608,7 @@ public final class MinimapRenderer {
         RenderSystem.colorMask(true, true, true, true);
     }
 
-    /** Restaure une profondeur "lointaine" sur toute la zone (annule le masque). */
+    /** Restores a "far" depth over the whole area (undoes the mask). */
     private static void resetDepth(GuiGraphics gg, float x0, float y0, float x1, float y1) {
         Matrix4f mat = gg.pose().last().pose();
         RenderSystem.colorMask(false, false, false, false);
@@ -616,7 +616,7 @@ public final class MinimapRenderer {
         RenderSystem.depthMask(true);
         RenderSystem.setShader(GameRenderer::getPositionShader);
         BufferBuilder buf = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
-        float z = -9000f; // très loin derrière tout le rendu GUI
+        float z = -9000f; // far behind all GUI rendering
         buf.addVertex(mat, x0, y0, z);
         buf.addVertex(mat, x0, y1, z);
         buf.addVertex(mat, x1, y1, z);

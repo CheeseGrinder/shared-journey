@@ -5,10 +5,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
 
 /**
- * Couche CAVE : rendu d'une bande verticale de 16 blocs (band = floorDiv(y,16)).
- * Pour chaque colonne, on cherche depuis le haut de la bande la première
- * poche d'air, puis le sol de cette poche : c'est lui qu'on colorie,
- * assombri selon sa profondeur dans la bande. Colonne pleine = noir.
+ * CAVE layer: renders a vertical band of 16 blocks (band = floorDiv(y,16)).
+ * For each column, scan from the top of the band for the first air pocket,
+ * then for that pocket's floor: that is what gets colored, darkened by its
+ * depth within the band. Solid column = black.
  */
 final class CaveRenderer {
 
@@ -27,10 +27,10 @@ final class CaveRenderer {
             if (open && airStart == -1) {
                 airStart = y;
             } else if (!open && airStart != -1) {
-                // s est le sol de la poche d'air
+                // s is the floor of the air pocket
                 MapColor mc = s.getMapColor(ctx.level, ctx.pos);
                 int base = (mc == MapColor.NONE ? MapColor.STONE : mc).col;
-                // Lave visible en orange
+                // Lava shown in orange
                 BlockState above = ctx.chunk.getBlockState(ctx.pos.set(wx, y + 1, wz));
                 if (above.getFluidState().is(FluidTags.LAVA)) {
                     base = 0xD45A12;
@@ -41,9 +41,9 @@ final class CaveRenderer {
             }
         }
         if (airStart != -1) {
-            // Poche d'air ouverte jusqu'en bas de la bande : gris sombre
+            // Air pocket open down to the bottom of the band: dark gray
             return 0xFF000000 | 0x1A1A1A;
         }
-        return 0xFF000000; // roche pleine
+        return 0xFF000000; // solid rock
     }
 }

@@ -6,9 +6,9 @@ import net.minecraft.resources.ResourceLocation;
 import java.util.UUID;
 
 /**
- * Waypoint immuable. `source` identifie l'origine : "user" pour les points
- * créés à la main, ou le modId du mod tiers qui l'a créé via le bridge
- * JourneyMap (ex: "waystones").
+ * Immutable waypoint. {@code source} identifies the origin: "user" for
+ * hand-created points, or the modId of the third-party mod that created it
+ * through the JourneyMap bridge (ex: "waystones").
  */
 public record Waypoint(
         UUID id,
@@ -23,11 +23,11 @@ public record Waypoint(
         Type type) {
 
     /**
-     * Portée du waypoint :
-     * - DIMENSION : visible uniquement dans sa dimension d'origine ;
-     * - GLOBAL : visible dans toutes les dimensions ;
-     * - TEMP : comme DIMENSION, mais supprimé automatiquement quand le
-     *   joueur arrive à proximité (rayon configurable côté client).
+     * Waypoint scope:
+     * - DIMENSION: visible only in its home dimension;
+     * - GLOBAL: visible in every dimension;
+     * - TEMP: like DIMENSION, but automatically removed when the player
+     *   gets close (client-configurable radius).
      */
     public enum Type {
         DIMENSION,

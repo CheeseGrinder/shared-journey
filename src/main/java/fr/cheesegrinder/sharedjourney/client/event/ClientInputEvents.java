@@ -13,23 +13,23 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 /**
- * Entrées clavier et actions différées : consommation des raccourcis
- * (déclarés dans {@link ClientSetupEvents}) et ouverture différée de la carte.
+ * Keyboard input and deferred actions: consumes the shortcuts (declared in
+ * {@link ClientSetupEvents}) and handles the deferred map opening.
  */
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID, value = Dist.CLIENT)
 public final class ClientInputEvents {
 
     public static boolean minimapVisible = true;
 
-    /** Cadence (ticks) de la vérification des waypoints temporaires atteints. */
+    /** Check cadence (ticks) for reached temp waypoints. */
     private static final int TEMP_WAYPOINT_CHECK_TICKS = 20;
 
     private static int tickCounter;
 
     /**
-     * Cible d'ouverture différée de la carte (/sj goto, clic sur un message
-     * de position) : appliquée au tick suivant pour que la fermeture du chat
-     * n'écrase pas l'écran qu'on vient d'ouvrir.
+     * Deferred map opening target (/sj goto, click on a position message):
+     * applied on the next tick so that the chat closing does not clobber
+     * the screen we just opened.
      */
     private static volatile double[] pendingMapOpen = null;
 

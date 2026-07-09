@@ -8,9 +8,9 @@ import io.netty.buffer.ByteBuf;
 import java.util.Locale;
 
 /**
- * Couches de rendu de la carte.
- * CAVE est déclinée en "bandes" verticales de 16 blocs (bande = floorDiv(y,16)),
- * chaque bande étant stockée et synchronisée séparément.
+ * Map render layers.
+ * CAVE comes in vertical "bands" of 16 blocks (band = floorDiv(y,16)), each
+ * band being stored and synchronized separately.
  */
 public enum MapLayer {
     DAY,
@@ -27,8 +27,8 @@ public enum MapLayer {
     }
 
     /**
-     * Chemin de dossier sur disque (relatif à la dimension). Les bandes CAVE
-     * sont regroupées dans un dossier parent : "cave/<bande>".
+     * On-disk folder path (relative to the dimension). CAVE bands are grouped
+     * under a parent folder: "cave/<band>".
      */
     public String folderName(int caveBand) {
         return this == CAVE ? "cave/" + caveBand : name().toLowerCase(Locale.ROOT);

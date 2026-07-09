@@ -10,8 +10,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 
 /**
- * Identifie une tuile de carte : dimension + couche (+ bande CAVE) + région.
- * Une région couvre 32x32 chunks = 512x512 blocs (1 pixel / bloc).
+ * Identifies a map tile: dimension + layer (+ CAVE band) + region.
+ * A region covers 32x32 chunks = 512x512 blocks (1 pixel / block).
  */
 public record RegionKey(ResourceKey<Level> dimension, MapLayer layer, int caveBand, int rx, int rz) {
 
@@ -27,12 +27,12 @@ public record RegionKey(ResourceKey<Level> dimension, MapLayer layer, int caveBa
                 Math.floorDiv(chunkZ, REGION_CHUNKS));
     }
 
-    /** Nom de fichier conforme à la spec : region_X_Z.png */
+    /** Spec-compliant file name: region_X_Z.png */
     public String fileName() {
         return "region_" + rx + "_" + rz + ".png";
     }
 
-    /** Clé texte stable pour l'index.json : "dim|layer|band|rx|rz". */
+    /** Stable text key for index.json: "dim|layer|band|rx|rz". */
     public String indexKey() {
         return dimension.location() + "|" + layer.name() + "|" + caveBand + "|" + rx + "|" + rz;
     }

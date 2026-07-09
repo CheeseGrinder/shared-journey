@@ -16,13 +16,13 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Section "layers" de la config serveur : couches actives par dimension et
- * bandes verticales de la couche CAVE. Porte aussi le cache de parsing des
- * mappings dimension -> couches.
+ * "layers" section of the server config: active layers per dimension and
+ * vertical bands of the CAVE layer. Also owns the parsing cache of the
+ * dimension -> layers mappings.
  */
 public final class LayersServerConfig {
 
-    /** Couches partagées par dimension : "namespace:dim=DAY,NIGHT,TOPO,BIOME,CAVE". */
+    /** Shared layers per dimension: "namespace:dim=DAY,NIGHT,TOPO,BIOME,CAVE". */
     public static ModConfigSpec.ConfigValue<List<? extends String>> SHARED_LAYERS;
 
     public static ModConfigSpec.ConfigValue<List<? extends String>> DEFAULT_LAYERS;
@@ -34,15 +34,15 @@ public final class LayersServerConfig {
 
     static void define(ModConfigSpec.Builder b) {
         b.push("layers");
-        DEFAULT_LAYERS = b.comment("Couches actives par défaut pour les dimensions non listées.")
+        DEFAULT_LAYERS = b.comment("Layers active by default for dimensions not listed in sharedLayers.")
                 .defineListAllowEmpty(
                         "defaultLayers",
                         List.of("DAY", "NIGHT", "TOPO", "BIOME"),
                         () -> "DAY",
                         LayersServerConfig::isValidLayer);
         SHARED_LAYERS = b.comment(
-                        "Couches partagées par dimension, format 'namespace:dimension=LAYER1,LAYER2'.",
-                        "Exemple: 'minecraft:overworld=DAY,NIGHT,TOPO,BIOME,CAVE', 'minecraft:the_nether=CAVE'.")
+                        "Shared layers per dimension, format 'namespace:dimension=LAYER1,LAYER2'.",
+                        "Example: 'minecraft:overworld=DAY,NIGHT,TOPO,BIOME,CAVE', 'minecraft:the_nether=CAVE'.")
                 .defineListAllowEmpty(
                         "sharedLayers",
                         List.of(
@@ -52,8 +52,8 @@ public final class LayersServerConfig {
                         () -> "minecraft:overworld=DAY",
                         LayersServerConfig::isValidMapping);
         CAVE_BANDS = b.comment(
-                        "Bandes Y rendues pour CAVE (bande = floor(y/16)). Ex: -1 => y=-16..-1.",
-                        "Doit couvrir la hauteur du monde : overworld -64..127 => bandes -4..7.")
+                        "Y bands rendered for CAVE (band = floor(y/16)). Ex: -1 => y=-16..-1.",
+                        "Must cover the world height: overworld -64..127 => bands -4..7.")
                 .defineListAllowEmpty(
                         "caveBands",
                         List.of(-4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7),
@@ -81,7 +81,7 @@ public final class LayersServerConfig {
         });
     }
 
-    /** Active/désactive une couche pour une dimension et persiste (commande admin). */
+    /** Enables/disables a layer for a dimension and persists it (admin command). */
     public static void setLayer(ResourceKey<Level> dim, MapLayer layer, boolean enabled) {
         String id = dim.location().toString();
         EnumSet<MapLayer> current = EnumSet.copyOf(layersFor(dim));
