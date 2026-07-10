@@ -47,9 +47,16 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
   1024 bits par région touchée (`RegenChunksPayload`) + un état start/stop
   (`RegenStatePayload`, envoyé aussi aux joueurs qui rejoignent en cours) ; le client dessine
   les chunks manquants en runs horizontaux fusionnés (`MinimapRenderer.drawRegenVeil`).
-- [ ] **P2 · ★★★☆☆ — Labels de waypoints : lisibilité** : partiellement grisés selon l'angle de
-  regard (malgré la passe SEE_THROUGH unique) et illisibles de loin — traiter les deux dans la
-  même passe sur le rendu des étiquettes.
+- [x] **P2 · ★★★☆☆ — Labels de waypoints : lisibilité** — **corrigé**. Cause racine du
+  grisage partiel (diagnostiquée sur les sources vanilla) : le fond de `drawInBatch` est un
+  quad « white glyph » émis dans le MÊME buffer trié par distance que les glyphes
+  (`sortOnUpload`) ; son centroïde étant au milieu du label, la moitié des glyphes légèrement
+  plus « loin » de la caméra était triée SOUS le fond translucide → grisée (coupure nette au
+  milieu, côté dépendant de l'angle). Fix : fond émis manuellement dans
+  `RenderType.textBackgroundSeeThrough` AVANT le texte (buffers séparés → flush dans l'ordre
+  d'insertion, glyphes toujours au-dessus). Au passage, comportement JourneyMap adopté :
+  label centré au-dessus du point (plus d'offset latéral) et affiché seulement quand le
+  viseur pointe près du waypoint (cône ~12°).
 - [ ] **P2 · ★★★☆☆ — Noms des gares et des trains toujours absents** sur la carte (le tooltip
   au survol via `renderAndPick` de Create ne s'affiche pas — instrumenter le `Rect2i` de bornes
   et le pick).
