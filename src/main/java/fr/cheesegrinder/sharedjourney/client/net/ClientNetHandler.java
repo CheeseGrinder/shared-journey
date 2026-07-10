@@ -45,16 +45,4 @@ public final class ClientNetHandler {
         ClientMapCache.regenDoneMasks.put(
                 new ClientMapCache.RegionPos(payload.dimension(), payload.rx(), payload.rz()), payload.mask());
     }
-
-    public static void handleMapInfoChunk(Payloads.MapInfoChunkPayload payload) {
-        ClientMapCache.putHoverChunk(
-                payload.chunkX(),
-                payload.chunkZ(),
-                new ClientMapCache.HoverChunk(
-                        payload.heights(),
-                        payload.blockIdx(),
-                        payload.blockPalette(),
-                        payload.biomeIdx(),
-                        payload.biomePalette()));
-    }
 }

@@ -44,14 +44,12 @@ public final class Payloads {
     public static final class Hooks {
         public static Consumer<LayerSettingsPayload> clientLayerSettings = p -> {};
         public static Consumer<RegionDataPayload> clientRegionData = p -> {};
-        public static Consumer<MapInfoChunkPayload> clientMapInfoChunk = p -> {};
         public static Consumer<HiddenPlayersPayload> clientHiddenPlayers = p -> {};
         public static Consumer<PlayerPositionsPayload> clientPlayerPositions = p -> {};
         public static Consumer<RegenStatePayload> clientRegenState = p -> {};
         public static Consumer<RegenChunksPayload> clientRegenChunks = p -> {};
         public static BiConsumer<Player, RegionRequestPayload> serverRegionRequest = (pl, p) -> {};
         public static BiConsumer<Player, ClientIndexPayload> serverClientIndex = (pl, p) -> {};
-        public static BiConsumer<Player, MapInfoRequestPayload> serverMapInfoRequest = (pl, p) -> {};
         public static BiConsumer<Player, MapVisibilityPayload> serverMapVisibility = (pl, p) -> {};
     }
 
@@ -232,100 +230,6 @@ public final class Payloads {
         }
     }
 
-    // ---------------------------------------------------------------- C2S/S2C: hover info
-
-    /** Client requests the info (biome, block, Y) of a column hovered on the map. */
-    public record MapInfoRequestPayload(int x, int z) implements CustomPacketPayload {
-        public static final Type<MapInfoRequestPayload> TYPE = new Type<>(id("map_info_request"));
-
-        public static final StreamCodec<FriendlyByteBuf, MapInfoRequestPayload> CODEC = StreamCodec.of(
-                (buf, p) -> {
-                    buf.writeInt(p.x);
-                    buf.writeInt(p.z);
-                },
-                buf -> new MapInfoRequestPayload(buf.readInt(), buf.readInt()));
-
-        @Override
-        public @NotNull Type<? extends CustomPacketPayload> type() {
-            return TYPE;
-        }
-    }
-
-    /**
-     * Hover info for a WHOLE chunk (256 columns): heights, surface block per
-     * column and biome per 4x4 cell, palettized (~1 KB). A single response
-     * makes hovering instantaneous over the whole chunk.
-     */
-    public record MapInfoChunkPayload(
-            int chunkX,
-            int chunkZ,
-            short[] heights,
-            byte[] blockIdx,
-            List<String> blockPalette,
-            byte[] biomeIdx,
-            List<String> biomePalette)
-            implements CustomPacketPayload {
-
-        public static final int COLUMNS = 256;
-        public static final int BIOME_CELLS = 16;
-
-        public static final Type<MapInfoChunkPayload> TYPE = new Type<>(id("map_info_chunk"));
-
-        public static final StreamCodec<FriendlyByteBuf, MapInfoChunkPayload> CODEC =
-                StreamCodec.of(MapInfoChunkPayload::write, MapInfoChunkPayload::read);
-
-        private static void write(FriendlyByteBuf buf, MapInfoChunkPayload p) {
-            buf.writeVarInt(p.chunkX);
-            buf.writeVarInt(p.chunkZ);
-            for (short h : p.heights) {
-                buf.writeShort(h);
-            }
-
-            buf.writeBytes(p.blockIdx);
-            writePalette(buf, p.blockPalette);
-            buf.writeBytes(p.biomeIdx);
-            writePalette(buf, p.biomePalette);
-        }
-
-        private static MapInfoChunkPayload read(FriendlyByteBuf buf) {
-            int cx = buf.readVarInt();
-            int cz = buf.readVarInt();
-            short[] heights = new short[COLUMNS];
-            for (int i = 0; i < COLUMNS; i++) {
-                heights[i] = buf.readShort();
-            }
-
-            byte[] blockIdx = new byte[COLUMNS];
-            buf.readBytes(blockIdx);
-            List<String> blockPalette = readPalette(buf);
-            byte[] biomeIdx = new byte[BIOME_CELLS];
-            buf.readBytes(biomeIdx);
-            List<String> biomePalette = readPalette(buf);
-            return new MapInfoChunkPayload(cx, cz, heights, blockIdx, blockPalette, biomeIdx, biomePalette);
-        }
-
-        private static void writePalette(FriendlyByteBuf buf, List<String> palette) {
-            buf.writeVarInt(palette.size());
-            for (String s : palette) {
-                buf.writeUtf(s);
-            }
-        }
-
-        private static List<String> readPalette(FriendlyByteBuf buf) {
-            int size = buf.readVarInt();
-            List<String> palette = new ArrayList<>(size);
-            for (int i = 0; i < size; i++) {
-                palette.add(buf.readUtf());
-            }
-            return palette;
-        }
-
-        @Override
-        public @NotNull Type<? extends CustomPacketPayload> type() {
-            return TYPE;
-        }
-    }
-
     // ---------------------------------------------------------------- C2S/S2C: player visibility
 
     /** Player preference: be hidden from the other players' map. */
@@ -468,7 +372,7 @@ public final class Payloads {
 
     public static void register(final RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar =
-                event.registrar(SharedJourneyConstants.MOD_ID).versioned("1");
+                event.registrar(SharedJourneyConstants.MOD_ID).versioned("2");
 
         registrar.playToClient(
                 LayerSettingsPayload.TYPE,
@@ -489,16 +393,6 @@ public final class Payloads {
                 ClientIndexPayload.TYPE,
                 ClientIndexPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.serverClientIndex.accept(ctx.player(), payload)));
-
-        registrar.playToClient(
-                MapInfoChunkPayload.TYPE,
-                MapInfoChunkPayload.CODEC,
-                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientMapInfoChunk.accept(payload)));
-
-        registrar.playToServer(
-                MapInfoRequestPayload.TYPE,
-                MapInfoRequestPayload.CODEC,
-                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.serverMapInfoRequest.accept(ctx.player(), payload)));
 
         registrar.playToServer(
                 MapVisibilityPayload.TYPE,

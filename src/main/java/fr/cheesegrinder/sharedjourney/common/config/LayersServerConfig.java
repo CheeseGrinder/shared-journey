@@ -117,6 +117,10 @@ public final class LayersServerConfig {
                 set.add(MapLayer.valueOf(t.toUpperCase(Locale.ROOT)));
             }
         }
+
+        // The INFO data layer rides the region pipeline but is not a
+        // render layer: never enabled through the config.
+        set.remove(MapLayer.INFO);
         return set;
     }
 
@@ -126,8 +130,7 @@ public final class LayersServerConfig {
         }
 
         try {
-            MapLayer.valueOf(s.trim().toUpperCase(Locale.ROOT));
-            return true;
+            return MapLayer.valueOf(s.trim().toUpperCase(Locale.ROOT)) != MapLayer.INFO;
         } catch (IllegalArgumentException e) {
             return false;
         }

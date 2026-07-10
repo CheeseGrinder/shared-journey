@@ -38,7 +38,6 @@ public class SharedJourney {
         // Server-side handler wiring (classes present on both sides).
         Payloads.Hooks.serverRegionRequest = SyncService::handleRegionRequest;
         Payloads.Hooks.serverClientIndex = SyncService::handleClientIndex;
-        Payloads.Hooks.serverMapInfoRequest = SyncService::handleMapInfoRequest;
         Payloads.Hooks.serverMapVisibility = SyncService::handleMapVisibility;
 
         LOGGER.info("SharedJourney initialized");

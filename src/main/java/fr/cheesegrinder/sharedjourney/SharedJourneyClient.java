@@ -33,7 +33,6 @@ public class SharedJourneyClient {
         // Client-side handler wiring.
         Payloads.Hooks.clientLayerSettings = ClientNetHandler::handleLayerSettings;
         Payloads.Hooks.clientRegionData = ClientNetHandler::handleRegionData;
-        Payloads.Hooks.clientMapInfoChunk = ClientNetHandler::handleMapInfoChunk;
         Payloads.Hooks.clientHiddenPlayers = ClientNetHandler::handleHiddenPlayers;
         Payloads.Hooks.clientPlayerPositions = ClientNetHandler::handlePlayerPositions;
         Payloads.Hooks.clientRegenState = ClientNetHandler::handleRegenState;

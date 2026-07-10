@@ -27,9 +27,10 @@ public record RegionKey(ResourceKey<Level> dimension, MapLayer layer, int caveBa
                 Math.floorDiv(chunkZ, REGION_CHUNKS));
     }
 
-    /** Spec-compliant file name: region_X_Z.png */
+    /** Spec-compliant file name: region_X_Z.png (.bin for the INFO data layer). */
     public String fileName() {
-        return "region_" + rx + "_" + rz + ".png";
+        String extension = layer == MapLayer.INFO ? ".bin" : ".png";
+        return "region_" + rx + "_" + rz + extension;
     }
 
     /** Stable text key for index.json: "dim|layer|band|rx|rz". */

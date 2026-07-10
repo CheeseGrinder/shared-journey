@@ -146,6 +146,10 @@ public final class MapCommands {
         // layer <dim> <layer> <true|false>
         var layerCmd = Commands.literal("layer");
         for (MapLayer layer : MapLayer.values()) {
+            // The INFO data layer is not a display layer: never toggleable.
+            if (layer == MapLayer.INFO) {
+                continue;
+            }
             layerCmd.then(Commands.argument("dimension", DimensionArgument.dimension())
                     .then(Commands.literal(layer.name().toLowerCase(Locale.ROOT))
                             .then(Commands.argument("enabled", BoolArgumentType.bool())

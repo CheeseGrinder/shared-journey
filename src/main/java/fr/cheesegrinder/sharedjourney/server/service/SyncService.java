@@ -7,17 +7,11 @@ import fr.cheesegrinder.sharedjourney.common.config.SyncServerConfig;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.levelgen.Heightmap;
 
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -43,13 +37,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  *    fragments.
  */
 public final class SyncService {
-
-    /**
-     * Minimum interval between two hover info requests per player (IO
-     * anti-spam). Short: the client prefetches the chunks around the cursor
-     * (spaced 60 ms apart on its side).
-     */
-    private static final long INFO_REQUEST_MIN_INTERVAL_MS = 40;
 
     private static final Map<UUID, PlayerState> STATES = new ConcurrentHashMap<>();
 
@@ -168,6 +155,8 @@ public final class SyncService {
                         maybeQueue(st, mgr, new RegionKey(dim, layer, 0, rx, rz), force);
                     }
                 }
+                // Hover sidecar (INFO): synced like any region.
+                maybeQueue(st, mgr, new RegionKey(dim, MapLayer.INFO, 0, rx, rz), force);
             }
         }
     }
@@ -235,13 +224,13 @@ public final class SyncService {
                     return;
                 }
 
-                byte[] png = mgr.pngOf(next);
-                if (png == null) {
+                byte[] data = mgr.dataOf(next);
+                if (data == null) {
                     continue;
                 }
 
                 st.currentKey = next;
-                st.currentData = png;
+                st.currentData = data;
                 st.currentVersion = mgr.versionOf(next);
                 st.currentOffset = 0;
             }
@@ -293,7 +282,10 @@ public final class SyncService {
                 continue;
             }
 
-            if (!LayersServerConfig.layersFor(key.dimension()).contains(key.layer())) {
+            // INFO (hover sidecar) is always requestable; display layers
+            // must be active for the dimension.
+            if (key.layer() != MapLayer.INFO
+                    && !LayersServerConfig.layersFor(key.dimension()).contains(key.layer())) {
                 continue;
             }
 
@@ -303,106 +295,6 @@ public final class SyncService {
             }
         }
         st.requestsReceived += max;
-    }
-
-    /**
-     * Hover info request from the fullscreen map: returns the column's
-     * biome, surface block and Y. If the chunk is not loaded, it is read
-     * from disk (NBT status checked: never any terrain generation).
-     * Throttled per player to bound the IO.
-     */
-    public static void handleMapInfoRequest(Player playerRaw, Payloads.MapInfoRequestPayload payload) {
-        if (!(playerRaw instanceof ServerPlayer player)) {
-            return;
-        }
-
-        if (!SyncServerConfig.ALLOW_ON_DEMAND_REQUESTS.get()) {
-            return;
-        }
-
-        PlayerState st = STATES.get(player.getUUID());
-        if (st == null) {
-            return;
-        }
-
-        long now = System.currentTimeMillis();
-        if (now - st.lastInfoRequestMillis < INFO_REQUEST_MIN_INTERVAL_MS) {
-            return;
-        }
-
-        st.lastInfoRequestMillis = now;
-        ServerLevel level = player.serverLevel();
-        int cx = payload.x() >> 4;
-        int cz = payload.z() >> 4;
-        ChunkAccess chunk = level.getChunkSource().getChunkNow(cx, cz);
-        if (chunk != null) {
-            sendMapInfo(player, chunk);
-            return;
-        }
-
-        // Chunk not loaded: status checked on disk before loading (no
-        // terrain generation), then load and reply on the main thread.
-        level.getChunkSource().chunkMap.read(new ChunkPos(cx, cz)).thenAccept(tag -> {
-            if (tag.isEmpty() || !tag.get().getString("Status").endsWith("full")) {
-                return;
-            }
-
-            level.getServer().execute(() -> {
-                if (player.hasDisconnected()) {
-                    return;
-                }
-
-                sendMapInfo(player, level.getChunk(cx, cz));
-            });
-        });
-    }
-
-    /**
-     * Sends the hover info of the WHOLE chunk (heights, surface blocks,
-     * biomes per 4x4 cell, palettized): one response covers 256 columns,
-     * hovering becomes instantaneous client-side.
-     */
-    private static void sendMapInfo(ServerPlayer player, ChunkAccess chunk) {
-        int baseX = chunk.getPos().getMinBlockX();
-        int baseZ = chunk.getPos().getMinBlockZ();
-        short[] heights = new short[Payloads.MapInfoChunkPayload.COLUMNS];
-        byte[] blockIdx = new byte[Payloads.MapInfoChunkPayload.COLUMNS];
-        List<String> blockPalette = new ArrayList<>();
-        Map<String, Integer> blockLookup = new HashMap<>();
-        for (int dz = 0; dz < 16; dz++) {
-            for (int dx = 0; dx < 16; dx++) {
-                int i = dz * 16 + dx;
-                int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, dx, dz);
-                heights[i] = (short) y;
-                BlockState state = chunk.getBlockState(new BlockPos(baseX + dx, y, baseZ + dz));
-                String blockId = state.isAir()
-                        ? ""
-                        : BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-                blockIdx[i] = (byte) paletteIndex(blockPalette, blockLookup, blockId);
-            }
-        }
-
-        byte[] biomeIdx = new byte[Payloads.MapInfoChunkPayload.BIOME_CELLS];
-        List<String> biomePalette = new ArrayList<>();
-        Map<String, Integer> biomeLookup = new HashMap<>();
-        for (int bz = 0; bz < 4; bz++) {
-            for (int bx = 0; bx < 4; bx++) {
-                // Center of the 4x4 cell, at its column's surface Y.
-                int dx = bx * 4 + 2;
-                int dz = bz * 4 + 2;
-                int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, dx, dz);
-                String biomeId = chunk.getNoiseBiome((baseX + dx) >> 2, y >> 2, (baseZ + dz) >> 2)
-                        .unwrapKey()
-                        .map(k -> k.location().toString())
-                        .orElse("");
-                biomeIdx[bz * 4 + bx] = (byte) paletteIndex(biomePalette, biomeLookup, biomeId);
-            }
-        }
-
-        PacketDistributor.sendToPlayer(
-                player,
-                new Payloads.MapInfoChunkPayload(
-                        chunk.getPos().x, chunk.getPos().z, heights, blockIdx, blockPalette, biomeIdx, biomePalette));
     }
 
     // ------------------------------------------------------------------ player visibility on the map
@@ -461,22 +353,6 @@ public final class SyncService {
         PacketDistributor.sendToAllPlayers(new Payloads.HiddenPlayersPayload(List.copyOf(HIDDEN_PLAYERS)));
     }
 
-    /** Index of the identifier in the palette (added if absent, capped at 255). */
-    private static int paletteIndex(List<String> palette, Map<String, Integer> lookup, String id) {
-        Integer existing = lookup.get(id);
-        if (existing != null) {
-            return existing;
-        }
-
-        if (palette.size() >= 255) {
-            return 0;
-        }
-
-        palette.add(id);
-        lookup.put(id, palette.size() - 1);
-        return palette.size() - 1;
-    }
-
     // ------------------------------------------------------------------ administration / stats
 
     /**
@@ -506,6 +382,9 @@ public final class SyncService {
                     maybeQueue(st, mgr, key, true);
                 }
             }
+            RegionKey infoKey = new RegionKey(dim, MapLayer.INFO, 0, regionFilter[0], regionFilter[1]);
+            st.sentVersions.remove(infoKey);
+            maybeQueue(st, mgr, infoKey, true);
         } else {
             if (full) {
                 st.sentVersions.clear();
@@ -556,7 +435,6 @@ public final class SyncService {
         int forcedCount;
         int handshakeEntries;
         long lastSyncMillis;
-        long lastInfoRequestMillis;
 
         void enqueue(RegionKey key) {
             if (queuedSet.add(key)) {

@@ -11,13 +11,20 @@ import java.util.Locale;
  * Map render layers.
  * CAVE comes in vertical "bands" of 16 blocks (band = floorDiv(y,16)), each
  * band being stored and synchronized separately.
+ *
+ * <p>{@link #INFO} is NOT a displayable layer: it is the hover-data sidecar
+ * (surface heights, blocks, biomes per region), which rides the same
+ * region pipeline (index, delta sync, disk cache) as the image layers. It
+ * never appears in the server's layer settings, the layer cycling UI or
+ * the admin layer command.
  */
 public enum MapLayer {
     DAY,
     NIGHT,
     TOPO,
     BIOME,
-    CAVE;
+    CAVE,
+    INFO;
 
     public static final StreamCodec<ByteBuf, MapLayer> STREAM_CODEC =
             ByteBufCodecs.VAR_INT.map(i -> MapLayer.values()[i], MapLayer::ordinal);

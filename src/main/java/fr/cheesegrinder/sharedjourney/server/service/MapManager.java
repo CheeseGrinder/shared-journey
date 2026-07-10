@@ -4,18 +4,23 @@ import fr.cheesegrinder.sharedjourney.api.ChunkLayerRenderer;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.common.config.EngineServerConfig;
 import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
+import fr.cheesegrinder.sharedjourney.common.region.HoverRegionData;
 import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
 import fr.cheesegrinder.sharedjourney.server.render.ChunkColorizer;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.storage.LevelResource;
 
 import com.mojang.logging.LogUtils;
@@ -75,6 +80,9 @@ public final class MapManager {
     private final Path root;
     private final RegionIndex index = new RegionIndex();
     private final Map<RegionKey, RegionImage> regions = new ConcurrentHashMap<>();
+    /** Hover sidecars (INFO pseudo-layer), keyed like the image regions. */
+    private final Map<RegionKey, HoverRegion> hoverRegions = new ConcurrentHashMap<>();
+
     private final Map<String, ChunkLayerRenderer> customLayers;
 
     private final ExecutorService workers;
@@ -269,6 +277,12 @@ public final class MapManager {
                 touched.add(key);
             }
         }
+        // Hover sidecar (INFO pseudo-layer): produced here, while the chunk
+        // is in hand — the fullscreen hover info then works fully
+        // client-side, with no on-demand chunk loading (anti timing-attack).
+        if (!layers.isEmpty()) {
+            touched.add(writeHoverChunk(level, chunk));
+        }
         // Immediate push to affected players (without waiting for the periodic delta).
         SyncService.pushRegionUpdates(server, touched);
         // NB: custom layers (LayerRegisterEvent) are collected but their
@@ -352,6 +366,93 @@ public final class MapManager {
         index.put(key, version); // RAM registry; serialized by saveAll()
     }
 
+    /**
+     * Extracts and stores the chunk's hover data (surface heights, blocks,
+     * biomes) into its region sidecar. Runs on a worker, read-only chunk
+     * access like the layer renderers. Returns the touched INFO region key.
+     */
+    private RegionKey writeHoverChunk(ServerLevel level, ChunkAccess chunk) {
+        ChunkPos cp = chunk.getPos();
+        short[] heights = new short[HoverRegionData.COLUMNS];
+        String[] blockIds = new String[HoverRegionData.COLUMNS];
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        for (int dz = 0; dz < 16; dz++) {
+            for (int dx = 0; dx < 16; dx++) {
+                int i = dz * 16 + dx;
+                int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, dx, dz);
+                heights[i] = (short) y;
+                BlockState state = chunk.getBlockState(pos.set(cp.getMinBlockX() + dx, y, cp.getMinBlockZ() + dz));
+                blockIds[i] = state.isAir()
+                        ? ""
+                        : BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+            }
+        }
+
+        String[] biomeIds = new String[HoverRegionData.BIOME_CELLS];
+        for (int bz = 0; bz < 4; bz++) {
+            for (int bx = 0; bx < 4; bx++) {
+                // Center of the 4x4 cell, at its column's surface Y.
+                int dx = bx * 4 + 2;
+                int dz = bz * 4 + 2;
+                int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, dx, dz);
+                biomeIds[bz * 4 + bx] = chunk.getNoiseBiome(
+                                (cp.getMinBlockX() + dx) >> 2, y >> 2, (cp.getMinBlockZ() + dz) >> 2)
+                        .unwrapKey()
+                        .map(k -> k.location().toString())
+                        .orElse("");
+            }
+        }
+
+        RegionKey key = RegionKey.of(level.dimension(), MapLayer.INFO, 0, cp.x, cp.z);
+        HoverRegion region = hoverRegion(key, true);
+        long version;
+        synchronized (Objects.requireNonNull(region)) {
+            region.data.putChunk(
+                    Math.floorMod(cp.x, RegionKey.REGION_CHUNKS),
+                    Math.floorMod(cp.z, RegionKey.REGION_CHUNKS),
+                    heights,
+                    blockIds,
+                    biomeIds);
+            region.version = Math.max(region.version + 1, System.currentTimeMillis());
+            region.dirty = true;
+            region.cachedBlob = null;
+            version = region.version;
+        }
+        index.put(key, version);
+        return key;
+    }
+
+    private HoverRegion hoverRegion(RegionKey key, boolean createIfMissing) {
+        HoverRegion region = hoverRegions.get(key);
+        if (region != null) {
+            return region;
+        }
+
+        Path file = pathOf(key);
+        if (Files.exists(file)) {
+            try {
+                HoverRegionData data = HoverRegionData.deserialize(Files.readAllBytes(file));
+                if (data != null) {
+                    HoverRegion loaded = new HoverRegion(data);
+                    long v = index.get(key);
+                    loaded.version =
+                            v >= 0 ? v : Files.getLastModifiedTime(file).toMillis();
+                    HoverRegion prev = hoverRegions.putIfAbsent(key, loaded);
+                    return prev != null ? prev : loaded;
+                }
+            } catch (IOException e) {
+                LOGGER.error("Failed to read {}", file, e);
+            }
+        }
+        if (!createIfMissing) {
+            return null;
+        }
+
+        HoverRegion fresh = new HoverRegion(new HoverRegionData());
+        HoverRegion prev = hoverRegions.putIfAbsent(key, fresh);
+        return prev != null ? prev : fresh;
+    }
+
     // ------------------------------------------------------------------ reads / versions
 
     /** Version of a region: index (truth) > file (mtime) > -1. */
@@ -359,6 +460,13 @@ public final class MapManager {
         long fromIndex = index.get(key);
         if (fromIndex >= 0) {
             return fromIndex;
+        }
+
+        if (key.layer() == MapLayer.INFO) {
+            HoverRegion hover = hoverRegions.get(key);
+            if (hover != null) {
+                return hover.version;
+            }
         }
 
         RegionImage img = regions.get(key);
@@ -379,8 +487,15 @@ public final class MapManager {
         return -1;
     }
 
-    /** Encoded PNG of the region (cached until the region is rewritten). */
-    public byte[] pngOf(RegionKey key) {
+    /**
+     * Serialized bytes of a region for the sync: PNG for the image layers,
+     * hover blob for the INFO data layer (both cached until rewritten).
+     */
+    public byte[] dataOf(RegionKey key) {
+        if (key.layer() == MapLayer.INFO) {
+            return hoverBlobOf(key);
+        }
+
         RegionImage img = getOrLoad(key, false);
         if (img == null) {
             return null;
@@ -394,6 +509,23 @@ public final class MapManager {
             byte[] png = encodePng(img.pixels);
             img.cachedPng = png;
             return png;
+        }
+    }
+
+    private byte[] hoverBlobOf(RegionKey key) {
+        HoverRegion region = hoverRegion(key, false);
+        if (region == null) {
+            return null;
+        }
+
+        synchronized (region) {
+            if (region.cachedBlob != null) {
+                return region.cachedBlob;
+            }
+
+            byte[] blob = region.data.serialize();
+            region.cachedBlob = blob;
+            return blob;
         }
     }
 
@@ -495,6 +627,33 @@ public final class MapManager {
                 }
             }
         }
+        for (Map.Entry<RegionKey, HoverRegion> e : hoverRegions.entrySet()) {
+            HoverRegion region = e.getValue();
+            byte[] blob;
+            long version;
+            synchronized (region) {
+                if (!region.dirty) {
+                    continue;
+                }
+
+                blob = region.cachedBlob != null ? region.cachedBlob : region.data.serialize();
+                region.cachedBlob = blob;
+                version = region.version;
+                region.dirty = false;
+            }
+            Path file = pathOf(e.getKey());
+            try {
+                Files.createDirectories(file.getParent());
+                Files.write(file, blob);
+                Files.setLastModifiedTime(file, FileTime.fromMillis(version));
+                saved++;
+            } catch (IOException ex) {
+                LOGGER.error("Failed to save {}", file, ex);
+                synchronized (region) {
+                    region.dirty = true;
+                }
+            }
+        }
         try {
             index.save(root.resolve(RegionIndex.FILE_NAME));
         } catch (IOException ex) {
@@ -521,5 +680,17 @@ public final class MapManager {
         long version = System.currentTimeMillis();
         boolean dirty = false;
         byte[] cachedPng = null;
+    }
+
+    /** Hover sidecar of a region, with the same lifecycle as RegionImage. */
+    private static final class HoverRegion {
+        final HoverRegionData data;
+        long version = System.currentTimeMillis();
+        boolean dirty = false;
+        byte[] cachedBlob = null;
+
+        HoverRegion(HoverRegionData data) {
+            this.data = data;
+        }
     }
 }

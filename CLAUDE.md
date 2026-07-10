@@ -37,7 +37,7 @@ Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
 | `api.client.event` | Client-only events: `MapRenderEvent` (overlay draw hook, minimap + fullscreen), `FullMapScreenEvent`, `MapLayerChangedEvent`                                   |
 | `common.config`  | `CommonConfig`, `ServerConfig` (facade) + per-section `LayersServerConfig`, `EngineServerConfig`, `SyncServerConfig`                                             |
 | `common.network` | `Payloads` (network packets + `Hooks` indirection)                                                                                                               |
-| `common.region`  | `RegionKey`, `RegionIndex`, `RegionStorage` (disk layout + legacy migration)                                                                                     |
+| `common.region`  | `RegionKey`, `RegionIndex`, `RegionStorage` (disk layout + legacy migration), `HoverRegionData` (hover sidecar format)                                           |
 | `common.util`    | `UndergroundCheck` (shared client/server "is underground" rule)                                                                                                  |
 | `server.command` | `MapCommands` (`/sj`, `/sharedjourney`)                                                                                                                          |
 | `server.event`   | `ServerLifecycleEvents`, `PlayerEvents`, `ChunkEvents`, `ConfigEvents`                                                                                           |
@@ -62,7 +62,7 @@ The packages keep the layering discipline of the former multi-module split: `api
 
 **Network delta sync**: Each player has a `sentVersions: Map<RegionKey, Long>`. The handshake seeds this from the client's local disk index. Periodic pushes only send regions whose server version exceeds the player's known version. Per-player `ConcurrentLinkedQueue` drains at a configurable bandwidth cap (KB/s → bytes/tick).
 
-**`Payloads.Hooks` indirection**: `common` defines the 4 network packets but cannot reference `server` or `client` (circular deps). Instead, `Payloads` exposes static function-fields (`Hooks`) that `SharedJourney` and `SharedJourneyClient` wire at startup. This is a deliberate design choice — do not refactor it away.
+**`Payloads.Hooks` indirection**: `common` defines the network packets but cannot reference `server` or `client` (circular deps). Instead, `Payloads` exposes static function-fields (`Hooks`) that `SharedJourney` and `SharedJourneyClient` wire at startup. This is a deliberate design choice — do not refactor it away.
 
 **JourneyMap bridge via reflection proxy**: Zero compile-time dependency on JourneyMap. `JourneyMapBridge` uses `java.lang.reflect.Proxy` to implement `IClientAPI` at runtime, translating waypoint calls to `WaypointStore`. Detection checks for JourneyMap's main classes, not just modId, because `jmshim` also declares the `journeymap` modId.
 
@@ -71,7 +71,7 @@ The packages keep the layering discipline of the former multi-module split: `api
 ## Region and Layer Model
 
 - A **region** = 512×512 blocks = 32×32 chunks, addressed by `RegionKey` (dimension + layer + caveBand + rx + rz).
-- **Layers**: `DAY`, `NIGHT`, `TOPO`, `BIOME`, `CAVE`. `CAVE` has vertical bands (floor(y/16)).
+- **Layers**: `DAY`, `NIGHT`, `TOPO`, `BIOME`, `CAVE`. `CAVE` has vertical bands (floor(y/16)). `INFO` is NOT a display layer: it is the hover-data sidecar (per-region heights/surface blocks/biomes, `HoverRegionData` .bin blobs) riding the same region pipeline (index, delta sync, disk cache); it is produced by the render engine, excluded from layer settings/UI/commands, and makes fullscreen hover info fully client-local (no on-demand chunk loading — anti timing-attack).
 - On-disk layout: `<dim>/<layer>/region_X_Z.png`, with CAVE bands grouped under a parent folder: `<dim>/cave/<band>/` (`RegionStorage.migrateLegacyCaveFolders` migrates the old `cave_<band>` layout on startup, server and client).
 - **Cave anti-exploit**: CAVE bands are only painted where a player actually went underground (`CaveTracker` scans players each second and unlocks a radius around them via `MapManager.unlockCave`; `renderChunk` skips un-unlocked, never-painted cave chunks — including during `regen full`).
 - `RegionIndex` is a `ConcurrentHashMap<RegionKey, Long>` (timestamp registry) serialized to `index.json`.

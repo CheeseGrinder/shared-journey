@@ -56,23 +56,22 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
 - [x] **P2 · ★★☆☆☆ — Téléportation en vol** — **corrigé** : le Y d'arrivée est maintenant
   calculé côté serveur via la nouvelle commande `/sj tp <x> <z>` (heightmap MOTION_BLOCKING+1,
   scan sous le plafond dans le Nether) au lieu du `/tp` vanilla avec Y client ou `~`.
-- [ ] **P2 · ★★★★☆ — Infos de survol (bloc/biome) : perf et tenue en charge** : plus la zone
-  survolée est loin, plus la réponse est lente — déjà sensible à 1 serveur / 2 joueurs. Doit
-  être « charge-proof ». Investiguer l'approche JourneyMap (instantané car 100 % local).
-  _Goulot identifié : pour un chunk non chargé, le serveur fait un `level.getChunk()` SYNCHRONE
-  sur le main thread (chargement complet du chunk). Pistes, par ordre de préférence :_
-  1. _sidecar de survol par région : quand le moteur rend un chunk (il l'a déjà en main),
-     produire aussi les données de survol (hauteurs/bloc/biome palettisés) et les stocker à
-     côté du PNG ; les pousser avec la sync de région → le client a tout en local, zéro
-     requête, instantané comme JM ;_
-  2. _à défaut : parser le NBT du chunk directement depuis `chunkMap.read()` (heightmaps,
-     palettes de sections, biomes) sur un thread IO, sans jamais charger le chunk ;_
-  3. _cache LRU serveur des réponses + budget global (pas seulement par joueur)._
-  _**Contrainte anti-exploit** : la latence de réponse ne doit PAS révéler si un chunk est
-  chargé — un chunk chargé loin de tout = un joueur à proximité, même caché de la carte
-  (attaque par timing). La piste 1 la satisfait par construction (même chemin de réponse
-  partout) ; toute solution à la demande doit uniformiser le chemin (ex. toujours passer par
-  les données rendues sur disque, jamais par le chunk vivant)._
+- [x] **P2 · ★★★★☆ — Infos de survol (bloc/biome) : perf et tenue en charge** — **fait**
+  (piste 1, le sidecar) : le moteur produit au rendu de chaque chunk (il l'a déjà en main,
+  sur un worker) les données de survol — hauteurs, bloc de surface par colonne, biome par
+  cellule 4×4, palettisés région-wide (`HoverRegionData`, blob .bin gzippé, ~440 o/chunk en
+  pire cas aléatoire). Le sidecar est une **pseudo-couche `MapLayer.INFO`** : il réutilise
+  TOUT le pipeline région existant (index.json, handshake, delta sync avec budget, push
+  immédiat au re-rendu, cache disque client, purge) au lieu d'un canal parallèle. Le survol
+  plein écran est maintenant 100 % local (chunk chargé → lecture directe, sinon sidecar) :
+  zéro requête, instantané comme JourneyMap, tenue en charge par construction.
+  L'ancien chemin à la demande (`MapInfoRequest`/`MapInfoChunk`, `level.getChunk()` synchrone
+  sur le main thread) est SUPPRIMÉ — protocole réseau passé en version « 2 ».
+  _**Anti-exploit satisfait par construction** : plus aucune réponse serveur dépendante de
+  l'état de chargement d'un chunk (l'attaque par timing n'a plus de canal)._
+  _INFO est verrouillé hors affichage : exclu de layersFor/config (validators), de
+  `/sj admin layer`, du cycle de couches client (listes serveur), et `ChunkColorizer` le
+  rejette. Les données apparaissent au fur et à mesure des re-rendus (ou `regen full`)._
 - [ ] **P3 · ★★★☆☆ — Fuites d'information malgré « me cacher de la carte »** : au-delà du
   timing des infos de survol (voir ci-dessus), un joueur caché « dessine » sa position sur la
   carte partagée par trois vecteurs :
@@ -226,8 +225,9 @@ réécrire.
    les renderers fraîchement nettoyés.~~ ✔ **fait** (`BlockPalette` + palette vanilla embarquée
    + `engine.blockColorOverrides` ; regénérer la palette via le générateur offline à chaque
    montée de version Minecraft).
-4. **Infos de survol charge-proof** (P2 ★★★★☆) — le sidecar par région s'appuie sur le moteur
-   nettoyé en 2 ; **lisibilité des labels de waypoints** (P2 ★★★☆☆) + **noms des gares/trains**
+4. ~~**Infos de survol charge-proof** (P2 ★★★★☆) — le sidecar par région s'appuie sur le moteur
+   nettoyé en 2.~~ ✔ **fait** (sidecar `MapLayer.INFO` sur le pipeline région existant).
+   Restent : **lisibilité des labels de waypoints** (P2 ★★★☆☆) + **noms des gares/trains**
    (P2 ★★★☆☆).
 5. **Chantier UI** : rework écran waypoint + écran de gestion des waypoints (P2 ★★★★☆), puis
    menu clic droit style JM (P3 ★★★☆☆) — les nouveaux écrans appliquent directement les

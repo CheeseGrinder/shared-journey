@@ -42,6 +42,8 @@ public final class ChunkColorizer {
                             case TOPO -> TopoRenderer.render(ctx, wx, wz);
                             case BIOME -> BiomeRenderer.render(ctx, wx, wz);
                             case CAVE -> CaveRenderer.render(ctx, wx, wz, caveBand);
+                            // INFO is the hover-data sidecar, not a render layer.
+                            case INFO -> throw new IllegalArgumentException("INFO is not a renderable layer");
                         };
                 out[lx + lz * 16] = argb;
             }

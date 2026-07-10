@@ -3,13 +3,12 @@ package fr.cheesegrinder.sharedjourney.client.service;
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.region.HoverRegionData;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
-
-import net.neoforged.neoforge.network.PacketDistributor;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.logging.LogUtils;
@@ -17,6 +16,7 @@ import org.slf4j.Logger;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,97 +62,61 @@ public final class ClientMapCache {
     /** On-demand request anti-spam. */
     public static final Map<RegionKey, Long> LAST_REQUESTED = new ConcurrentHashMap<>();
 
-    /** Hover info cache cap (whole chunks of 256 columns). */
-    private static final int HOVER_CHUNK_CAP = 512;
-
-    /** Retry delay for a chunk already requested without a response (ms). */
-    private static final long HOVER_RETRY_MS = 3_000;
-
-    /** Spacing of neighbor chunk prefetches (ms, server anti-spam). */
-    private static final long HOVER_PREFETCH_SPACING_MS = 60;
+    /** Parsed hover sidecar cache cap (whole regions, ~800 KB each). */
+    private static final int HOVER_REGION_CAP = 8;
 
     /**
-     * Hover info (biome/block/Y) received from the server for chunks outside
-     * the locally loaded area. Bounded LRU; key = packed chunk (cx, cz).
+     * Hover sidecars (INFO pseudo-layer) parsed from the local disk cache.
+     * Bounded LRU; entries are invalidated when a newer sidecar arrives.
      * Accessed only from the client thread (reception via enqueueWork).
      */
-    private static final Map<Long, HoverChunk> HOVER_CHUNKS = new LinkedHashMap<>(64, 0.75f, true) {
+    private static final Map<RegionKey, HoverRegionData> HOVER_REGIONS = new LinkedHashMap<>(8, 0.75f, true) {
         @Override
-        protected boolean removeEldestEntry(Map.Entry<Long, HoverChunk> eldest) {
-            return size() > HOVER_CHUNK_CAP;
+        protected boolean removeEldestEntry(Map.Entry<RegionKey, HoverRegionData> eldest) {
+            return size() > HOVER_REGION_CAP;
         }
     };
 
-    /** Hover request anti-spam: last send per chunk. */
-    private static final Map<Long, Long> HOVER_REQUESTED = new ConcurrentHashMap<>();
-
-    private static long lastHoverRequestAt;
+    /** Sidecars absent from disk: avoids retrying the read every frame. */
+    private static final Set<RegionKey> HOVER_MISSES = new HashSet<>();
 
     public record HoverInfo(int y, String biomeId, String blockId) {}
 
-    /** Palettized hover info chunk, as received from the server. */
-    public record HoverChunk(
-            short[] heights, byte[] blockIdx, List<String> blockPalette, byte[] biomeIdx, List<String> biomePalette) {
-
-        HoverInfo at(int wx, int wz) {
-            int i = (wz & 15) * 16 + (wx & 15);
-            String block = palette(blockPalette, blockIdx[i]);
-            String biome = palette(biomePalette, biomeIdx[((wz & 15) >> 2) * 4 + ((wx & 15) >> 2)]);
-            return new HoverInfo(heights[i], biome, block);
-        }
-
-        private static String palette(List<String> palette, byte idx) {
-            int i = idx & 0xFF;
-            if (i < palette.size()) {
-                return palette.get(i);
-            }
-
-            return "";
-        }
-    }
-
-    /** Chunk key for the hover info cache. */
-    public static long chunkKey(int cx, int cz) {
-        return ((long) cx << 32) | (cz & 0xFFFFFFFFL);
-    }
-
+    /**
+     * Hover info (biome/block/Y) of a column, read from the local hover
+     * sidecars pushed by the server with the region sync. Null while the
+     * column's chunk has no synced data yet.
+     */
     public static HoverInfo hoverInfo(int wx, int wz) {
-        HoverChunk chunk = HOVER_CHUNKS.get(chunkKey(wx >> 4, wz >> 4));
-        if (chunk == null) {
+        var mc = Minecraft.getInstance();
+        if (mc.level == null) {
             return null;
         }
 
-        return chunk.at(wx, wz);
-    }
+        RegionKey key = RegionKey.of(mc.level.dimension(), MapLayer.INFO, 0, wx >> 4, wz >> 4);
+        HoverRegionData data = HOVER_REGIONS.get(key);
+        if (data == null) {
+            if (HOVER_MISSES.contains(key)) {
+                return null;
+            }
 
-    public static void putHoverChunk(int cx, int cz, HoverChunk chunk) {
-        HOVER_CHUNKS.put(chunkKey(cx, cz), chunk);
-    }
+            byte[] blob = DiskCache.read(key);
+            data = blob == null ? null : HoverRegionData.deserialize(blob);
+            if (data == null) {
+                HOVER_MISSES.add(key);
+                return null;
+            }
 
-    /**
-     * Requests (throttled) a chunk's hover info. The chunk under the cursor
-     * goes out immediately (immediate=true); neighbor prefetches are spaced
-     * out to respect the server's anti-spam.
-     */
-    public static void requestHoverChunk(int cx, int cz, boolean immediate) {
-        long key = chunkKey(cx, cz);
-        if (HOVER_CHUNKS.containsKey(key)) {
-            return;
+            HOVER_REGIONS.put(key, data);
         }
 
-        long now = System.currentTimeMillis();
-        Long last = HOVER_REQUESTED.get(key);
-        if (last != null && now - last < HOVER_RETRY_MS) {
-            return;
+        HoverRegionData.HoverColumn column =
+                data.at(Math.floorMod(wx, RegionKey.REGION_BLOCKS), Math.floorMod(wz, RegionKey.REGION_BLOCKS));
+        if (column == null) {
+            return null;
         }
 
-        if (!immediate && now - lastHoverRequestAt < HOVER_PREFETCH_SPACING_MS) {
-            return;
-        }
-
-        lastHoverRequestAt = now;
-        HOVER_REQUESTED.put(key, now);
-        PacketDistributor.sendToServer(new Payloads.MapInfoRequestPayload(cx << 4, cz << 4));
+        return new HoverInfo(column.y(), column.biomeId(), column.blockId());
     }
 
     public record Region(long version, ResourceLocation texture) {}
@@ -214,6 +178,8 @@ public final class ClientMapCache {
         }
 
         DISK_MISSES.remove(key);
+        HOVER_REGIONS.remove(key);
+        HOVER_MISSES.remove(key);
     }
 
     public static void clear() {
@@ -227,8 +193,8 @@ public final class ClientMapCache {
         PENDING.clear();
         DISK_MISSES.clear();
         LAST_REQUESTED.clear();
-        HOVER_CHUNKS.clear();
-        HOVER_REQUESTED.clear();
+        HOVER_REGIONS.clear();
+        HOVER_MISSES.clear();
         regenActive = false;
         regenDoneMasks.clear();
     }
@@ -244,7 +210,7 @@ public final class ClientMapCache {
     // ------------------------------------------------------------------ assembly
 
     public static void acceptFragment(RegionKey key, long version, int part, int totalParts, byte[] data) {
-        if (versionOf(key) >= version && REGIONS.containsKey(key)) {
+        if (versionOf(key) >= version && (REGIONS.containsKey(key) || key.layer() == MapLayer.INFO)) {
             return;
         }
 
@@ -268,15 +234,23 @@ public final class ClientMapCache {
                 size += p.length;
             }
 
-            byte[] png = new byte[size];
+            byte[] blob = new byte[size];
             int off = 0;
             for (byte[] p : asm.parts) {
-                System.arraycopy(p, 0, png, off, p.length);
+                System.arraycopy(p, 0, blob, off, p.length);
                 off += p.length;
             }
 
-            uploadTexture(key, version, png);
-            DiskCache.store(key, version, png); // local persistence (spec §3.2)
+            // Hover sidecar: no texture, just persisted and re-parsed lazily.
+            if (key.layer() == MapLayer.INFO) {
+                DiskCache.store(key, version, blob);
+                HOVER_REGIONS.remove(key);
+                HOVER_MISSES.remove(key);
+                return;
+            }
+
+            uploadTexture(key, version, blob);
+            DiskCache.store(key, version, blob); // local persistence (spec §3.2)
         }
     }
 

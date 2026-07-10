@@ -748,10 +748,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     }
 
     /**
-     * Info for the hovered column: read from the local chunk if loaded,
-     * otherwise from the cache of info chunks received from the server. On
-     * a cache miss, the hovered chunk is requested immediately and its 8
-     * neighbors are prefetched so cursor movement stays instant.
+     * Info for the hovered column: read from the local chunk if loaded
+     * (perfectly fresh), otherwise from the hover sidecars pushed by the
+     * server with the region sync — fully local, zero request.
      */
     private ClientMapCache.HoverInfo hoverInfoAt(Minecraft mc, int wx, int wz) {
         if (mc.level == null) {
@@ -774,21 +773,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             return new ClientMapCache.HoverInfo(top, biomeId, blockId);
         }
 
-        ClientMapCache.HoverInfo cached = ClientMapCache.hoverInfo(wx, wz);
-        int cx = wx >> 4;
-        int cz = wz >> 4;
-        if (cached == null) {
-            ClientMapCache.requestHoverChunk(cx, cz, true);
-        }
-
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                if (dx != 0 || dz != 0) {
-                    ClientMapCache.requestHoverChunk(cx + dx, cz + dz, false);
-                }
-            }
-        }
-        return cached;
+        return ClientMapCache.hoverInfo(wx, wz);
     }
 
     private Waypoint nearestWaypoint(double mouseX, double mouseY) {
@@ -1143,13 +1128,17 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                         MinimapRenderer.drawRegenVeil(gg, dim.location(), rx, rz);
                     }
                 }
-                // Request if missing or potentially stale (throttled)
+                // Request if missing or potentially stale (throttled); the
+                // hover sidecar (INFO) rides along with the displayed layer.
                 long now = System.currentTimeMillis();
-                Long last = ClientMapCache.LAST_REQUESTED.get(key);
-                if ((last == null || now - last > REQUEST_COOLDOWN_MS) && missing.size() < 64) {
-                    missing.add(key);
-                    knownVersions.add(ClientMapCache.versionOf(key));
-                    ClientMapCache.LAST_REQUESTED.put(key, now);
+                RegionKey infoKey = new RegionKey(dim, MapLayer.INFO, 0, rx, rz);
+                for (RegionKey wanted : List.of(key, infoKey)) {
+                    Long last = ClientMapCache.LAST_REQUESTED.get(wanted);
+                    if ((last == null || now - last > REQUEST_COOLDOWN_MS) && missing.size() < 64) {
+                        missing.add(wanted);
+                        knownVersions.add(ClientMapCache.versionOf(wanted));
+                        ClientMapCache.LAST_REQUESTED.put(wanted, now);
+                    }
                 }
             }
         }
