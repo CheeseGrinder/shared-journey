@@ -41,7 +41,7 @@ Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
 | `common.util`    | `UndergroundCheck` (shared client/server "is underground" rule)                                                                                                  |
 | `server.command` | `MapCommands` (`/sj`, `/sharedjourney`)                                                                                                                          |
 | `server.event`   | `ServerLifecycleEvents`, `PlayerEvents`, `ChunkEvents`, `ConfigEvents`                                                                                           |
-| `server.render`  | `ChunkColorizer` (facade) + per-layer renderers (`SurfaceRenderer`, `TopoRenderer`, `BiomeRenderer`, `CaveRenderer`), `BiomeTints`, `RenderContext`, `ColorUtil` |
+| `server.render`  | `ChunkColorizer` (facade) + per-layer renderers (`SurfaceRenderer`, `TopoRenderer`, `BiomeRenderer`, `CaveRenderer`), `BlockPalette`, `TextureColorExtractor`, `BiomeTints`, `RenderContext`, `ColorUtil` |
 | `server.service` | `MapManager` (async engine), `SyncService` (delta sync), `RegenService` (full regen), `CaveTracker` (cave anti-exploit)                                          |
 | `client.command` | `ClientCommands` (`/sj purge`, `/sj cache`, `/sj goto`)                                                                                                          |
 | `client.config`  | `ClientConfig`                                                                                                                                                   |
@@ -56,7 +56,7 @@ The packages keep the layering discipline of the former multi-module split: `api
 
 ## Key Architectural Patterns
 
-**Server-authoritative rendering**: `ChunkColorizer` runs server-side using `MapColor`-based rendering (same palette as vanilla maps). Clients receive pre-rendered PNGs and never compute pixels themselves.
+**Server-authoritative rendering**: `ChunkColorizer` runs server-side. Block colors come from `BlockPalette` (texture-derived, JourneyMap-like), resolved in order: config overrides (`engine.blockColorOverrides`) → bundled vanilla palette (`assets/sharedjourney/palette/vanilla.json`, generated offline by `tools/PaletteGenerator.java` — regenerate on Minecraft version bumps) → runtime texture extraction from mod jars (`TextureColorExtractor`, pure Java+Gson) → `MapColor` fallback. Clients receive pre-rendered PNGs and never compute pixels themselves.
 
 **Async engine with main-thread constraint**: Chunk access (`getChunkNow`) must happen on the server main thread. Only chunk resolution happens on tick; all pixel computation, PNG encoding, and disk I/O are offloaded to worker threads. A `tasksInFlight` cap (`workerCount * 8`) prevents flooding the pool. The dirty chunk queue uses both `ArrayDeque` and `LinkedHashSet` for deduplication.
 

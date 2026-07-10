@@ -2,6 +2,7 @@ package fr.cheesegrinder.sharedjourney.server.event;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
+import fr.cheesegrinder.sharedjourney.server.render.BlockPalette;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
 
 import net.neoforged.bus.api.SubscribeEvent;
@@ -19,6 +20,7 @@ public final class ConfigEvents {
     public static void onConfigReload(ModConfigEvent.Reloading event) {
         if (event.getConfig().getSpec() == ServerConfig.SPEC) {
             ServerConfig.invalidateCache();
+            BlockPalette.invalidateOverrides();
             var server = ServerLifecycleHooks.getCurrentServer();
             if (server != null) {
                 server.execute(() -> SyncService.broadcastLayerSettings(server));

@@ -2,7 +2,6 @@ package fr.cheesegrinder.sharedjourney.server.render;
 
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.material.MapColor;
 
 /**
  * CAVE layer: renders a vertical band of 16 blocks (band = floorDiv(y,16)).
@@ -28,8 +27,7 @@ final class CaveRenderer {
                 airStart = y;
             } else if (!open && airStart != -1) {
                 // s is the floor of the air pocket
-                MapColor mc = s.getMapColor(ctx.level, ctx.pos);
-                int base = (mc == MapColor.NONE ? MapColor.STONE : mc).col;
+                int base = BlockPalette.color(s, ctx.level, ctx.pos);
                 // Lava shown in orange
                 BlockState above = ctx.chunk.getBlockState(ctx.pos.set(wx, y + 1, wz));
                 if (above.getFluidState().is(FluidTags.LAVA)) {

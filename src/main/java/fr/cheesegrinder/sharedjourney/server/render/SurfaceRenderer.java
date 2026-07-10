@@ -4,16 +4,14 @@ import fr.cheesegrinder.sharedjourney.common.config.EngineServerConfig;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
-import net.minecraft.world.level.FoliageColor;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.material.MapColor;
 
 /**
- * DAY and NIGHT layers: surface block colored by MapColor, biome-tinted when
- * the block is tinted in-game (grass, foliage, water), slope shading, and
- * night darkening lit by block light.
+ * DAY and NIGHT layers: surface block colored by its texture palette color
+ * (see BlockPalette), biome-tinted when the block is tinted in-game (grass,
+ * foliage, water), slope shading, and night darkening lit by block light.
  */
 final class SurfaceRenderer {
 
@@ -29,10 +27,12 @@ final class SurfaceRenderer {
         pos.set(wx, y, wz);
         BlockState state = ctx.chunk.getBlockState(pos);
         // Decorative vegetation (flowers, grasses, saplings...) must not
-        // show on the map: paint the block below instead.
+        // show on the map: paint the block below instead. Air is skipped
+        // too: a hidden block hanging above a gap (propagule under a
+        // mangrove...) must not paint the air below it (gray).
         while (y > ctx.chunk.getMinBuildHeight()
-                && isMapHidden(state)
-                && state.getFluidState().isEmpty()) {
+                && (state.isAir()
+                        || (isMapHidden(state) && state.getFluidState().isEmpty()))) {
             y--;
             pos.set(wx, y, wz);
             state = ctx.chunk.getBlockState(pos);
@@ -78,29 +78,21 @@ final class SurfaceRenderer {
             return BiomeTints.blended(ctx.zoom, wx, y, wz, BiomeTints::grassColor);
         }
         if (state.is(BlockTags.LEAVES) || state.is(Blocks.VINE)) {
-            // Fixed-tint species (like vanilla), otherwise biome foliage.
-            int tint;
-            if (state.is(Blocks.BIRCH_LEAVES)) {
-                tint = FoliageColor.getBirchColor();
-            } else if (state.is(Blocks.SPRUCE_LEAVES)) {
-                tint = FoliageColor.getEvergreenColor();
-            } else if (state.is(Blocks.MANGROVE_LEAVES)) {
-                tint = FoliageColor.getMangroveColor();
-            } else if (state.is(Blocks.CHERRY_LEAVES)
-                    || state.is(Blocks.AZALEA_LEAVES)
-                    || state.is(Blocks.FLOWERING_AZALEA_LEAVES)) {
-                tint = -1; // untinted texture
-            } else {
-                tint = BiomeTints.blended(ctx.zoom, wx, y, wz, (b, x, z) -> BiomeTints.foliageColor(b));
+            // Colored textures (cherry, azalea, mod autumn leaves...) speak
+            // for themselves; grayscale ones are tinted at runtime in-game,
+            // approximated here by the biome foliage color. Fixed-tint
+            // vanilla species (birch, spruce, mangrove) are baked into the
+            // bundled palette; mod blocks wanting an exact tint can use
+            // engine.blockColorOverrides.
+            int base = BlockPalette.color(state, ctx.level, ctx.pos);
+            if (ColorUtil.isGrayscale(base)) {
+                base = BiomeTints.blended(ctx.zoom, wx, y, wz, (b, x, z) -> BiomeTints.foliageColor(b));
             }
 
-            // Dark leaf textures: dampened tint.
-            if (tint >= 0) {
-                return ColorUtil.scaleRgb(tint & 0xFFFFFF, 0.85f);
-            }
+            // Dark leaf textures: dampened color.
+            return ColorUtil.scaleRgb(base, 0.85f);
         }
-        MapColor mc = state.getMapColor(ctx.level, ctx.pos);
-        return (mc == MapColor.NONE ? MapColor.STONE : mc).col;
+        return BlockPalette.color(state, ctx.level, ctx.pos);
     }
 
     /** Decorative blocks invisible on the map (hiddenBlocks server config). */

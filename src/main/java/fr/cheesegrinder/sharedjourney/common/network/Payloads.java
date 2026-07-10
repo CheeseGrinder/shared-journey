@@ -47,6 +47,8 @@ public final class Payloads {
         public static Consumer<MapInfoChunkPayload> clientMapInfoChunk = p -> {};
         public static Consumer<HiddenPlayersPayload> clientHiddenPlayers = p -> {};
         public static Consumer<PlayerPositionsPayload> clientPlayerPositions = p -> {};
+        public static Consumer<RegenStatePayload> clientRegenState = p -> {};
+        public static Consumer<RegenChunksPayload> clientRegenChunks = p -> {};
         public static BiConsumer<Player, RegionRequestPayload> serverRegionRequest = (pl, p) -> {};
         public static BiConsumer<Player, ClientIndexPayload> serverClientIndex = (pl, p) -> {};
         public static BiConsumer<Player, MapInfoRequestPayload> serverMapInfoRequest = (pl, p) -> {};
@@ -402,6 +404,66 @@ public final class Payloads {
         }
     }
 
+    // ---------------------------------------------------------------- S2C: regen state
+
+    /**
+     * Map regeneration state (/sj admin regen). While active, clients veil
+     * the chunks not yet re-rendered (see {@link RegenChunksPayload}) so
+     * regenerated and stale areas can be told apart. Sent on start/end and
+     * to players joining mid-regen.
+     */
+    public record RegenStatePayload(boolean active) implements CustomPacketPayload {
+        public static final Type<RegenStatePayload> TYPE = new Type<>(id("regen_state"));
+
+        public static final StreamCodec<FriendlyByteBuf, RegenStatePayload> CODEC =
+                StreamCodec.of((buf, p) -> buf.writeBoolean(p.active), buf -> new RegenStatePayload(buf.readBoolean()));
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Per-chunk regen progress of one map region (32x32 chunks): bit
+     * (localZ*32 + localX) set = chunk re-rendered. Pushed ~1x/s for the
+     * regions the running regen touched since the last push; the veil is
+     * lifted chunk by chunk on the clients' map.
+     */
+    public record RegenChunksPayload(ResourceLocation dimension, int rx, int rz, long[] mask)
+            implements CustomPacketPayload {
+
+        /** 1024 chunk bits = 16 longs. */
+        public static final int MASK_WORDS = 16;
+
+        public static final Type<RegenChunksPayload> TYPE = new Type<>(id("regen_chunks"));
+
+        public static final StreamCodec<FriendlyByteBuf, RegenChunksPayload> CODEC = StreamCodec.of(
+                (buf, p) -> {
+                    buf.writeResourceLocation(p.dimension);
+                    buf.writeVarInt(p.rx);
+                    buf.writeVarInt(p.rz);
+                    for (int i = 0; i < MASK_WORDS; i++) {
+                        buf.writeLong(p.mask[i]);
+                    }
+                },
+                buf -> {
+                    ResourceLocation dimension = buf.readResourceLocation();
+                    int rx = buf.readVarInt();
+                    int rz = buf.readVarInt();
+                    long[] mask = new long[MASK_WORDS];
+                    for (int i = 0; i < MASK_WORDS; i++) {
+                        mask[i] = buf.readLong();
+                    }
+                    return new RegenChunksPayload(dimension, rx, rz, mask);
+                });
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     // ---------------------------------------------------------------- registration
 
     public static void register(final RegisterPayloadHandlersEvent event) {
@@ -452,5 +514,15 @@ public final class Payloads {
                 PlayerPositionsPayload.TYPE,
                 PlayerPositionsPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientPlayerPositions.accept(payload)));
+
+        registrar.playToClient(
+                RegenStatePayload.TYPE,
+                RegenStatePayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientRegenState.accept(payload)));
+
+        registrar.playToClient(
+                RegenChunksPayload.TYPE,
+                RegenChunksPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientRegenChunks.accept(payload)));
     }
 }

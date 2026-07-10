@@ -1139,6 +1139,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                             RegionKey.REGION_BLOCKS,
                             RegionKey.REGION_BLOCKS,
                             RegionKey.REGION_BLOCKS);
+                    if (ClientMapCache.regenActive) {
+                        MinimapRenderer.drawRegenVeil(gg, dim.location(), rx, rz);
+                    }
                 }
                 // Request if missing or potentially stale (throttled)
                 long now = System.currentTimeMillis();

@@ -56,6 +56,8 @@ public final class MinimapRenderer {
     private static final int CIRCLE_SEGMENTS = 64;
     /** Dark gray (Discord-style) visible under chunks not yet received. */
     public static final int BACKGROUND = 0xFF36393F;
+    /** Violet veil over chunks not yet re-rendered by a running server regen. */
+    public static final int STALE_OVERLAY = 0x66C05AE0;
 
     private static MapLayer currentLayer = null; // null = not yet initialized from config
     private static Boolean autoMode = null; // null = not yet initialized from config
@@ -299,6 +301,9 @@ public final class MinimapRenderer {
                         RegionKey.REGION_BLOCKS,
                         RegionKey.REGION_BLOCKS,
                         RegionKey.REGION_BLOCKS);
+                if (ClientMapCache.regenActive) {
+                    drawRegenVeil(gg, dim.location(), rx, rz);
+                }
             }
         }
 
@@ -470,6 +475,43 @@ public final class MinimapRenderer {
             drawSmallCentered(gg, mc, biome, cx, y - 18, 0xC0C0FF);
             if (MinimapClientConfig.SHOW_COORDS.get()) {
                 drawSmallCentered(gg, mc, coords, cx, y - 27, 0xAAAAAA);
+            }
+        }
+    }
+
+    /**
+     * Violet veil over the chunks of a region the running server regen has
+     * not re-rendered yet (world-coordinate pose, shared with the
+     * fullscreen map). Horizontal runs of stale chunks are merged into
+     * single quads. No progress mask received for the region = nothing
+     * done: the whole region is veiled.
+     */
+    public static void drawRegenVeil(GuiGraphics gg, ResourceLocation dimension, int rx, int rz) {
+        int x0 = rx * RegionKey.REGION_BLOCKS;
+        int z0 = rz * RegionKey.REGION_BLOCKS;
+        long[] mask = ClientMapCache.regenDoneMasks.get(new ClientMapCache.RegionPos(dimension, rx, rz));
+        if (mask == null) {
+            gg.fill(x0, z0, x0 + RegionKey.REGION_BLOCKS, z0 + RegionKey.REGION_BLOCKS, STALE_OVERLAY);
+            return;
+        }
+
+        int chunkPx = RegionKey.REGION_BLOCKS / RegionKey.REGION_CHUNKS;
+        for (int cz = 0; cz < RegionKey.REGION_CHUNKS; cz++) {
+            int runStart = -1;
+            for (int cx = 0; cx <= RegionKey.REGION_CHUNKS; cx++) {
+                int bit = cz * RegionKey.REGION_CHUNKS + cx;
+                boolean stale = cx < RegionKey.REGION_CHUNKS && (mask[bit >> 6] & (1L << (bit & 63))) == 0;
+                if (stale && runStart < 0) {
+                    runStart = cx;
+                } else if (!stale && runStart >= 0) {
+                    gg.fill(
+                            x0 + runStart * chunkPx,
+                            z0 + cz * chunkPx,
+                            x0 + cx * chunkPx,
+                            z0 + (cz + 1) * chunkPx,
+                            STALE_OVERLAY);
+                    runStart = -1;
+                }
             }
         }
     }

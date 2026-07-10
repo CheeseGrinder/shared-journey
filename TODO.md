@@ -16,9 +16,37 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
   dérivée de l'identité stable du waypoint (modId + dimension + position) via une teinte HSV
   (`stableColor`) — identique entre sessions et entre joueurs ; `setColor` d'un mod garde la
   priorité.
-- [ ] **P1 · ★★★★★ — Couleurs de blocs incomplètes** : les feuilles de cerisier sont grises ;
-  pas compatible vanilla ni mods (Biomes O' Plenty...). Faire comme JourneyMap : extraire une
-  palette de couleurs depuis les textures des blocs plutôt que se limiter aux `MapColor`.
+- [x] **P1 · ★★★★★ — Couleurs de blocs incomplètes** — **corrigé** : rendu par palette de
+  textures à la JourneyMap, côté serveur. `TextureColorExtractor` (Java pur + Gson : blockstate
+  → modèle (chaîne de parents) → texture → moyenne des pixels opaques, lecture raster directe
+  pour les PNG grayscale que `getRGB` éclaircissait) ; palette vanilla embarquée
+  (`assets/sharedjourney/palette/vanilla.json`, 1059 blocs, générée offline depuis le jar
+  client — les serveurs dédiés n'ont pas les textures client, et le rendu solo/dédié reste
+  identique) ; `BlockPalette` chaîne overrides config (`engine.blockColorOverrides`, couture
+  API) → palette embarquée → extraction runtime (jars de mods) → fallback `MapColor`.
+  Les feuilles de cerisier sont roses (#E5ACC2). Notes d'implémentation :
+  - accès ressources : les mods étant des modules Java nommés, `ClassLoader.getResourceAsStream`
+    est bloqué par l'encapsulation de modules → lookup même-module via `Class#getResourceAsStream`
+    + jars des autres mods via `ModList.getModFileById(namespace).getFile().findResource(...)` ;
+  - feuilles/vignes : règle générique, AUCUNE espèce hardcodée — texture colorée (cherry,
+    azalea, mods) = sa couleur ; texture grayscale (`ColorUtil.isGrayscale`) = teintée au
+    runtime en jeu → teinte foliage du biome. Les teintes fixes vanilla (birch, spruce,
+    mangrove, lily_pad — constantes client inaccessibles côté serveur) sont cuites en DONNÉES
+    dans la palette générée (`BAKED_TINTS` du générateur) ; pour un mod, l'échappatoire est
+    `engine.blockColorOverrides` ;
+  - VRAIE cause racine du gris cherry : `#minecraft:flowers` (défaut de `hiddenBlocks`)
+    contient `cherry_leaves`/`flowering_azalea_leaves` depuis la 1.20 (pollinisation des
+    abeilles) → feuilles « cachées », la descente s'arrêtait sur l'AIR sous la canopée →
+    `MapColor.NONE` → STONE gris. Double fix : un match par TAG ne cache jamais des feuilles
+    (les entrées explicites restent honorées — pas de migration de config nécessaire), et la
+    descente traverse l'air (un bloc caché au-dessus du vide, ex. propagule de mangrove, ne
+    peint plus de gris).
+- [x] **Overlay de progression du regen** — **fait** : pendant un `/sj admin regen [full]`,
+  les chunks pas encore re-rendus sont voilés en violet (`STALE_OVERLAY`) sur la minimap et
+  la carte plein écran, à la granularité CHUNK. Le serveur pousse ~1×/s des masques de
+  1024 bits par région touchée (`RegenChunksPayload`) + un état start/stop
+  (`RegenStatePayload`, envoyé aussi aux joueurs qui rejoignent en cours) ; le client dessine
+  les chunks manquants en runs horizontaux fusionnés (`MinimapRenderer.drawRegenVeil`).
 - [ ] **P2 · ★★★☆☆ — Labels de waypoints : lisibilité** : partiellement grisés selon l'angle de
   regard (malgré la passe SEE_THROUGH unique) et illisibles de loin — traiter les deux dans la
   même passe sur le rendu des étiquettes.
@@ -107,8 +135,10 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
     **Consommateur de validation prévu : les waypoints de bannière** (icônes sur la carte).
     Suite v2 : enregistrement d'icônes/marqueurs de haut niveau (clamping bordure fourni).
   - [ ] **rendu serveur (image de région)** : surcharge de couleur par bloc, post-traitement
-    de région, blocs masqués — **à designer PENDANT le chantier palette** (étape 3), pas
-    avant ;
+    de région, blocs masqués — **couture posée pendant le chantier palette** :
+    `engine.blockColorOverrides` (config serveur, prioritaire sur toute la chaîne) et
+    `BlockPalette` comme point d'entrée unique de résolution ; reste à publier (événement ou
+    registre `api`) quand un consommateur concret existe ;
   - [ ] **UI fullscreen** (boutons, menu contextuel, barre d'infos) — **après le rework UI**
     (étape 5), les écrans actuels vont être réécrits ;
   - [ ] **waypoints** : façade CRUD — **après stabilisation du modèle** (groupes, death
@@ -192,8 +222,10 @@ réécrire.
    passe (voir 5). C'est aussi ici qu'on **cadre l'API publique** (P3 ★★★★☆) : frontière
    api/interne, façade waypoints, événements — les hooks de draw suivront avec les chantiers
    rendu/UI.
-3. **Couleurs de blocs (palette textures)** (P1 ★★★★★) — premier gros chantier feature, sur
-   les renderers fraîchement nettoyés.
+3. ~~**Couleurs de blocs (palette textures)** (P1 ★★★★★) — premier gros chantier feature, sur
+   les renderers fraîchement nettoyés.~~ ✔ **fait** (`BlockPalette` + palette vanilla embarquée
+   + `engine.blockColorOverrides` ; regénérer la palette via le générateur offline à chaque
+   montée de version Minecraft).
 4. **Infos de survol charge-proof** (P2 ★★★★☆) — le sidecar par région s'appuie sur le moteur
    nettoyé en 2 ; **lisibilité des labels de waypoints** (P2 ★★★☆☆) + **noms des gares/trains**
    (P2 ★★★☆☆).

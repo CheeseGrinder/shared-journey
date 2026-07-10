@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.event;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
+import fr.cheesegrinder.sharedjourney.server.service.RegenService;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
 
 import net.minecraft.server.level.ServerPlayer;
@@ -20,6 +21,7 @@ public final class PlayerEvents {
         if (event.getEntity() instanceof ServerPlayer sp) {
             SyncService.onPlayerJoin(sp);
             SyncService.sendHiddenPlayers(sp);
+            RegenService.sendStateTo(sp);
         }
     }
 

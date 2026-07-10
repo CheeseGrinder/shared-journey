@@ -13,6 +13,19 @@ final class ColorUtil {
         return (r << 16) | (g << 8) | b;
     }
 
+    /**
+     * (Nearly) equal channels: the mark of a texture left grayscale on
+     * purpose because the game tints it at runtime (foliage, grass...).
+     */
+    static boolean isGrayscale(int rgb) {
+        int r = (rgb >> 16) & 0xFF;
+        int g = (rgb >> 8) & 0xFF;
+        int b = rgb & 0xFF;
+        int max = Math.max(r, Math.max(g, b));
+        int min = Math.min(r, Math.min(g, b));
+        return max - min <= 16;
+    }
+
     /** Per-channel linear interpolation between two colors. */
     static int lerpRgb(int a, int b, float t) {
         t = Math.clamp(t, 0f, 1f);

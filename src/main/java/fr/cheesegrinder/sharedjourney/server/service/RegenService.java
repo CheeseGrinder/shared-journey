@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
 import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
+import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 
 import net.minecraft.Util;
@@ -17,6 +18,9 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.storage.LevelResource;
 
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
+
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
@@ -27,7 +31,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -89,6 +95,16 @@ public final class RegenService {
     /** Incremented on every start/cancel: invalidates stale async scans. */
     private static int epoch;
 
+    /** A map region position, dimension included (chunk progress masks). */
+    private record MaskKey(ResourceKey<Level> dim, int rx, int rz) {}
+
+    // Per-chunk progress, pushed to clients so their map veils the chunks
+    // not yet re-rendered. Main thread only, like the rest of the state.
+    private static final Map<MaskKey, long[]> doneMasks = new HashMap<>();
+    private static final Set<MaskKey> dirtyMasks = new HashSet<>();
+    /** Ticks until the next dirty-mask push (~1x/s). */
+    private static int maskBroadcastIn;
+
     private RegenService() {}
 
     public static boolean isRunning() {
@@ -107,6 +123,8 @@ public final class RegenService {
         if (mgr == null || isRunning()) {
             return -1;
         }
+
+        announceStart();
 
         // Unique regions, across all layers/bands.
         record RegionPos(ResourceKey<Level> dim, int rx, int rz) {}
@@ -158,6 +176,7 @@ public final class RegenService {
         }
 
         scanning = true;
+        announceStart();
         final int myEpoch = ++epoch;
         bossBar = new ServerBossEvent(
                 Component.translatable("sharedjourney.regen.scan"),
@@ -244,6 +263,50 @@ public final class RegenService {
         return true;
     }
 
+    /** Marks the regen as started and announces it to every client. */
+    private static void announceStart() {
+        doneMasks.clear();
+        dirtyMasks.clear();
+        maskBroadcastIn = 0;
+        PacketDistributor.sendToAllPlayers(new Payloads.RegenStatePayload(true));
+    }
+
+    /** Sends the current regen state and progress to a player joining mid-regen. */
+    public static void sendStateTo(ServerPlayer player) {
+        if (!isRunning()) {
+            return;
+        }
+
+        PacketDistributor.sendToPlayer(player, new Payloads.RegenStatePayload(true));
+        doneMasks.forEach((key, mask) -> PacketDistributor.sendToPlayer(
+                player, new Payloads.RegenChunksPayload(key.dim().location(), key.rx(), key.rz(), mask)));
+    }
+
+    /** Records a re-rendered chunk in its region's progress mask. */
+    private static void markDone(ResourceKey<Level> dim, int cx, int cz) {
+        MaskKey key = new MaskKey(
+                dim, Math.floorDiv(cx, RegionKey.REGION_CHUNKS), Math.floorDiv(cz, RegionKey.REGION_CHUNKS));
+        int bit = Math.floorMod(cz, RegionKey.REGION_CHUNKS) * RegionKey.REGION_CHUNKS
+                + Math.floorMod(cx, RegionKey.REGION_CHUNKS);
+        long[] mask = doneMasks.computeIfAbsent(key, k -> new long[Payloads.RegenChunksPayload.MASK_WORDS]);
+        mask[bit >> 6] |= 1L << (bit & 63);
+        dirtyMasks.add(key);
+    }
+
+    /** Pushes the progress masks touched since the last push (~1x/s). */
+    private static void broadcastDirtyMasks() {
+        if (--maskBroadcastIn > 0 || dirtyMasks.isEmpty()) {
+            return;
+        }
+
+        maskBroadcastIn = 20;
+        for (MaskKey key : dirtyMasks) {
+            PacketDistributor.sendToAllPlayers(
+                    new Payloads.RegenChunksPayload(key.dim().location(), key.rx(), key.rz(), doneMasks.get(key)));
+        }
+        dirtyMasks.clear();
+    }
+
     /** Installs the queue and (re)initializes the boss bar (main thread). */
     private static void install(ArrayDeque<Batch> q, int count) {
         queue = q;
@@ -295,6 +358,13 @@ public final class RegenService {
         queue = null;
         current = null;
         bossBar = null;
+        doneMasks.clear();
+        dirtyMasks.clear();
+        // Lift the clients' stale-chunk veil (guarded: cancel can run
+        // during server shutdown, when broadcasting is no longer possible).
+        if (ServerLifecycleHooks.getCurrentServer() != null) {
+            PacketDistributor.sendToAllPlayers(new Payloads.RegenStatePayload(false));
+        }
     }
 
     /** Called every server tick (main thread). */
@@ -331,6 +401,10 @@ public final class RegenService {
                     continue;
                 }
 
+                // Processed either way: the client veil must lift even on
+                // chunks that turn out not to be renderable.
+                markDone(current.dim(), cx, cz);
+
                 // Never any terrain generation: status checked before loading.
                 if (!isChunkFull(level, cx, cz)) {
                     continue;
@@ -347,6 +421,8 @@ public final class RegenService {
             bossBar.setProgress(total == 0 ? 1f : (float) done / total);
             bossBar.setName(barName());
         }
+
+        broadcastDirtyMasks();
 
         // End: wait for the render pool to finish before removing the bar.
         if (queue != null && queue.isEmpty() && current == null && mgr.queueSize() == 0 && mgr.tasksInFlight() == 0) {

@@ -3,6 +3,7 @@ package fr.cheesegrinder.sharedjourney.common.config;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -10,8 +11,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -29,11 +32,16 @@ public final class EngineServerConfig {
     public static ModConfigSpec.IntValue BIOME_BLEND_RADIUS;
     /** Blocks excluded from map rendering: "namespace:block" or "#namespace:tag". */
     public static ModConfigSpec.ConfigValue<List<? extends String>> HIDDEN_BLOCKS;
+    /** Forced block colors, bypassing the texture palette: "namespace:block=#RRGGBB". */
+    public static ModConfigSpec.ConfigValue<List<? extends String>> BLOCK_COLOR_OVERRIDES;
 
     // hiddenBlocks parsing cache (read by the render threads).
     // hiddenBlockSet acts as the guard: assigned last, reset to null on reload.
     private static volatile List<TagKey<Block>> hiddenBlockTags;
     private static volatile Set<Block> hiddenBlockSet;
+
+    // blockColorOverrides parsing cache (read by the render threads).
+    private static volatile Map<Block, Integer> blockColorOverrideMap;
 
     private EngineServerConfig() {}
 
@@ -68,11 +76,20 @@ public final class EngineServerConfig {
                                 "minecraft:cobweb"),
                         () -> "minecraft:short_grass",
                         EngineServerConfig::isValidBlockEntry);
+        BLOCK_COLOR_OVERRIDES = b.comment(
+                        "Forces a block's map color, bypassing the texture palette.",
+                        "Format: 'namespace:block=#RRGGBB'. Ex: 'minecraft:stone=#7D7D7D'.")
+                .defineListAllowEmpty(
+                        "blockColorOverrides",
+                        List.of(),
+                        () -> "minecraft:stone=#7D7D7D",
+                        EngineServerConfig::isValidColorOverride);
         b.pop();
     }
 
     static void invalidateCache() {
         hiddenBlockSet = null;
+        blockColorOverrideMap = null;
     }
 
     /** Is the block excluded from map rendering (hiddenBlocks config)? */
@@ -84,6 +101,14 @@ public final class EngineServerConfig {
 
         if (blocks.contains(state.getBlock())) {
             return true;
+        }
+
+        // Tags are gameplay-driven and drag in tree canopies (bees'
+        // #minecraft:flowers contains cherry and flowering azalea LEAVES):
+        // a tag match never hides leaves. Listing a leaves block explicitly
+        // (above) is always honored.
+        if (state.is(BlockTags.LEAVES)) {
+            return false;
         }
 
         for (TagKey<Block> tag : hiddenBlockTags) {
@@ -136,5 +161,68 @@ public final class EngineServerConfig {
 
         String id = s.startsWith("#") ? s.substring(1) : s;
         return ResourceLocation.tryParse(id.trim()) != null;
+    }
+
+    /** Configured color override of a block (0xRRGGBB), or null. */
+    public static Integer blockColorOverride(Block block) {
+        Map<Block, Integer> overrides = blockColorOverrideMap;
+        if (overrides == null) {
+            overrides = parseColorOverrides();
+        }
+
+        return overrides.get(block);
+    }
+
+    /**
+     * Parses blockColorOverrides into a block → color map. Benign race
+     * between render threads: each computes the same result.
+     */
+    private static Map<Block, Integer> parseColorOverrides() {
+        Map<Block, Integer> overrides = new HashMap<>();
+
+        for (String entry : BLOCK_COLOR_OVERRIDES.get()) {
+            int eq = entry.indexOf('=');
+            if (eq < 0) {
+                continue;
+            }
+
+            ResourceLocation rl =
+                    ResourceLocation.tryParse(entry.substring(0, eq).trim());
+            Integer color = parseHexColor(entry.substring(eq + 1).trim());
+            if (rl != null && color != null && BuiltInRegistries.BLOCK.containsKey(rl)) {
+                overrides.put(BuiltInRegistries.BLOCK.get(rl), color);
+            }
+        }
+
+        blockColorOverrideMap = overrides;
+        return overrides;
+    }
+
+    /** Parses "#RRGGBB" into 0xRRGGBB, or null if malformed. */
+    private static Integer parseHexColor(String s) {
+        if (!s.startsWith("#") || s.length() != 7) {
+            return null;
+        }
+
+        try {
+            return Integer.parseInt(s.substring(1), 16);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** Valid entry: "namespace:block=#RRGGBB". */
+    private static boolean isValidColorOverride(Object o) {
+        if (!(o instanceof String s)) {
+            return false;
+        }
+
+        int eq = s.indexOf('=');
+        if (eq < 0) {
+            return false;
+        }
+
+        return ResourceLocation.tryParse(s.substring(0, eq).trim()) != null
+                && parseHexColor(s.substring(eq + 1).trim()) != null;
     }
 }

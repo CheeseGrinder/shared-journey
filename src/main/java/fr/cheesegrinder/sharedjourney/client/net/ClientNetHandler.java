@@ -36,6 +36,16 @@ public final class ClientNetHandler {
         ClientMapCache.playerPositions = Map.copyOf(positions);
     }
 
+    public static void handleRegenState(Payloads.RegenStatePayload payload) {
+        ClientMapCache.regenActive = payload.active();
+        ClientMapCache.regenDoneMasks.clear();
+    }
+
+    public static void handleRegenChunks(Payloads.RegenChunksPayload payload) {
+        ClientMapCache.regenDoneMasks.put(
+                new ClientMapCache.RegionPos(payload.dimension(), payload.rx(), payload.rz()), payload.mask());
+    }
+
     public static void handleMapInfoChunk(Payloads.MapInfoChunkPayload payload) {
         ClientMapCache.putHoverChunk(
                 payload.chunkX(),

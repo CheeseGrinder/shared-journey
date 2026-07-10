@@ -43,6 +43,17 @@ public final class ClientMapCache {
     public static volatile Set<UUID> hiddenPlayers = Set.of();
     /** Positions of (non-hidden) players broadcast by the server (~1x/s). */
     public static volatile Map<UUID, Payloads.PlayerPositionsPayload.PlayerPos> playerPositions = Map.of();
+    /** Server regen running: the map veils chunks absent from regenDoneMasks. */
+    public static volatile boolean regenActive;
+
+    /** A map region position (chunk progress masks are layer-agnostic). */
+    public record RegionPos(ResourceLocation dimension, int rx, int rz) {}
+
+    /**
+     * Per-region regen progress pushed by the server: bit (localZ*32 +
+     * localX) set = chunk re-rendered. Absent region = nothing done yet.
+     */
+    public static final Map<RegionPos, long[]> regenDoneMasks = new ConcurrentHashMap<>();
 
     private static final Map<RegionKey, Region> REGIONS = new ConcurrentHashMap<>();
     private static final Map<RegionKey, Assembly> PENDING = new ConcurrentHashMap<>();
@@ -218,6 +229,8 @@ public final class ClientMapCache {
         LAST_REQUESTED.clear();
         HOVER_CHUNKS.clear();
         HOVER_REQUESTED.clear();
+        regenActive = false;
+        regenDoneMasks.clear();
     }
 
     public static int loadedCount() {
