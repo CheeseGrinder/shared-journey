@@ -41,6 +41,28 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
     (les entrées explicites restent honorées — pas de migration de config nécessaire), et la
     descente traverse l'air (un bloc caché au-dessus du vide, ex. propagule de mangrove, ne
     peint plus de gris).
+- [x] **Path du train survolé + suivi au clic** — **fait** : au survol d'un train sur la
+  carte plein écran, sa route restante jusqu'à la prochaine gare est tracée en doré ; au
+  clic sur un train, la vue le SUIT (annulé par un pan, le recentrage joueur ou la fermeture).
+  Découverte clé : `Navigation.currentPath` de Create ne contient QUE les décisions
+  d'embranchement (consommées par `navigateOptions`), pas la géométrie — la route est donc
+  SIMULÉE côté serveur (`CreateTrainPathService.walkRoute`) : départ du `TravellingPoint`
+  de tête (ou de queue si `destinationBehindTrain`), marche du graphe arête par arête avec
+  échantillonnage de la géométrie (`TrackEdge.getPosition`, pas de 3 blocs sur les courbes →
+  virages lisses), décisions consommées aux embranchements, arrêt quand
+  `distanceToDestination` est épuisée (la ligne finit pile à la gare). Aller-retour réseau
+  dédié (`TrainPathRequestPayload` throttlé / `TrainPathPayload`), pick client via
+  `TrainMapSyncClient.currentData`. Rendu : la polyline est rasterisée en cellules puis
+  CONFRONTÉE AU BUFFER DE PIXELS DE CREATE (`TrainMapRenderer.getPixel`, couloir ±1 bloc,
+  recalcul 2×/s) — seuls les pixels de rail CLAIRS sont repeints (le contour sombre reste),
+  avec le relief préservé (doré modulé par la luminance du pixel remplacé). Le path reste
+  peint tant qu'un train est suivi, pas seulement au survol.
+  _Limites ACCEPTÉES (itérations « embranchements » revertées, elles empiraient les choses) :
+  la marche s'arrête à un embranchement sans décision correspondante (la ligne reprend une
+  fois l'embranchement franchi) et le doré peut déborder d'un ou deux pixels sur la branche
+  divergente d'un croisement. NE PAS retenter le fallback « première option » de
+  navigateOptions ni le filtre par distance au segment sans meilleure compréhension de
+  l'orientation des TravellingPoints/décisions de Create._
 - [x] **Overlay de progression du regen** — **fait** : pendant un `/sj admin regen [full]`,
   les chunks pas encore re-rendus sont voilés en violet (`STALE_OVERLAY`) sur la minimap et
   la carte plein écran, à la granularité CHUNK. Le serveur pousse ~1×/s des masques de
@@ -57,9 +79,17 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
   d'insertion, glyphes toujours au-dessus). Au passage, comportement JourneyMap adopté :
   label centré au-dessus du point (plus d'offset latéral) et affiché seulement quand le
   viseur pointe près du waypoint (cône ~12°).
-- [ ] **P2 · ★★★☆☆ — Noms des gares et des trains toujours absents** sur la carte (le tooltip
-  au survol via `renderAndPick` de Create ne s'affiche pas — instrumenter le `Rect2i` de bornes
-  et le pick).
+- [x] **P2 · ★★★☆☆ — Noms des gares et des trains toujours absents** — **corrigé**. Cause
+  racine (diagnostiquée au désassembleur sur Create 6.0.10) : **bug dans Create** —
+  `JourneyTrainMap.onRender` calcule le pick du survol en blocs RELATIFS AU CENTRE de la
+  carte (`(souris - centreÉcran)/scale`, sans « + mapCenter »), alors que `drawPoints`/
+  `drawTrains` comparent à des coordonnées monde ABSOLUES (le chemin Xaero de Create ajoute
+  bien le centre, lui). Le tooltip ne pouvait donc jamais s'afficher, même dans le vrai
+  JourneyMap. Fix : l'événement de rendu n'est plus dispatché au plugin « create »
+  (`overlayFilter`), et `CreateTrainMapBridge.renderMap` rejoue `TrainMapManager.renderAndPick`
+  par réflexion avec le pick converti en coordonnées absolues + tooltip via
+  `RemovedGuiUtils.drawHoveringText` (widget de toggle inclus, plein écran uniquement ;
+  la minimap garde le rendu sans tooltip).
 - [x] **P2 · ★★☆☆☆ — Téléportation en vol** — **corrigé** : le Y d'arrivée est maintenant
   calculé côté serveur via la nouvelle commande `/sj tp <x> <z>` (heightmap MOTION_BLOCKING+1,
   scan sous le plafond dans le Nether) au lieu du `/tp` vanilla avec Y client ou `~`.
@@ -232,10 +262,9 @@ réécrire.
    les renderers fraîchement nettoyés.~~ ✔ **fait** (`BlockPalette` + palette vanilla embarquée
    + `engine.blockColorOverrides` ; regénérer la palette via le générateur offline à chaque
    montée de version Minecraft).
-4. ~~**Infos de survol charge-proof** (P2 ★★★★☆) — le sidecar par région s'appuie sur le moteur
-   nettoyé en 2.~~ ✔ **fait** (sidecar `MapLayer.INFO` sur le pipeline région existant).
-   Restent : **lisibilité des labels de waypoints** (P2 ★★★☆☆) + **noms des gares/trains**
-   (P2 ★★★☆☆).
+4. ~~**Infos de survol charge-proof** (P2 ★★★★☆) + **lisibilité des labels de waypoints**
+   (P2 ★★★☆☆) + **noms des gares/trains** (P2 ★★★☆☆).~~ ✔ **fait** (sidecar `MapLayer.INFO`,
+   labels JM-like fond/texte fiabilisés + cône de visée, pick Create corrigé dans le bridge).
 5. **Chantier UI** : rework écran waypoint + écran de gestion des waypoints (P2 ★★★★☆), puis
    menu clic droit style JM (P3 ★★★☆☆) — les nouveaux écrans appliquent directement les
    conventions posées en 2, et remplacent l'ancien code UI non nettoyé.

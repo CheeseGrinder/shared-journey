@@ -37,6 +37,7 @@ public class SharedJourneyClient {
         Payloads.Hooks.clientPlayerPositions = ClientNetHandler::handlePlayerPositions;
         Payloads.Hooks.clientRegenState = ClientNetHandler::handleRegenState;
         Payloads.Hooks.clientRegenChunks = ClientNetHandler::handleRegenChunks;
+        Payloads.Hooks.clientTrainPath = ClientNetHandler::handleTrainPath;
     }
 
     @SubscribeEvent

@@ -45,6 +45,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.common.NeoForge;
@@ -98,6 +99,12 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     private MapLayer layer;
     private int bandIndex;
     private boolean dragged;
+    /**
+     * Create train being followed (clicked on the map): the view re-centers
+     * on it every frame until the player pans, recenters on themselves or
+     * closes the map.
+     */
+    private UUID followedTrain;
 
     private BandSlider bandSlider;
     /** Context menu (right click) buttons, removed on the next click. */
@@ -321,6 +328,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     }
 
     private void centerOnPlayer() {
+        followedTrain = null;
         var player = Minecraft.getInstance().player;
         if (player != null) {
             centerX = player.getX();
@@ -479,6 +487,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         if (button == 0) {
             dragged = true;
+            followedTrain = null;
             centerX -= dragX / zoom;
             centerZ -= dragY / zoom;
             return true;
@@ -548,6 +557,16 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         int wx = (int) Math.floor(worldX(mouseX));
         int wz = (int) Math.floor(worldZ(mouseY));
+        // Click on a Create train: follow it (cancelled by panning,
+        // recentering on the player or closing the map).
+        UUID train = CreateTrainMapBridge.trainAt(worldX(mouseX), worldZ(mouseY));
+        if (train != null) {
+            followedTrain = train;
+            hasSelection = false;
+            lastClickAt = now;
+            lastClickWaypoint = null;
+            return true;
+        }
         boolean sameBlock = hasSelection && selectedBlockX == wx && selectedBlockZ == wz;
         if (doubleClick && sameBlock && lastClickWaypoint == null) {
             lastClickAt = 0;
@@ -938,11 +957,25 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         var mc = Minecraft.getInstance();
+        // Followed train (clicked): keep the view centered on it.
+        if (followedTrain != null) {
+            Vec3 trainPos = CreateTrainMapBridge.trainPosition(followedTrain);
+            if (trainPos == null) {
+                followedTrain = null;
+            } else {
+                centerX = trainPos.x;
+                centerZ = trainPos.z;
+            }
+        }
         renderBackgroundLayers(gg);
         // Bridged JourneyMap plugin overlays (Create trains, RNS
-        // deposits...): above the map, below the widgets.
+        // deposits...): above the map, below the widgets. Create's train
+        // map is rendered directly (its JM render path has a broken hover
+        // pick — see CreateTrainMapBridge), with name tooltips.
         if (pluginOverlaysActive()) {
             JourneyMapFullscreenBridge.fireRender(this, gg, mouseX, mouseY, partialTick);
+            CreateTrainMapBridge.renderMap(
+                    gg, width, height, centerX, centerZ, zoom, mouseX, mouseY, true, followedTrain);
         }
 
         // Public API overlays (api.client.event.MapRenderEvent): same spot

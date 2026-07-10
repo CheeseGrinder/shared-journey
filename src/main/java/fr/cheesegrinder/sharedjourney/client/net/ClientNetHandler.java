@@ -1,5 +1,6 @@
 package fr.cheesegrinder.sharedjourney.client.net;
 
+import fr.cheesegrinder.sharedjourney.client.compat.CreateTrainMapBridge;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 
@@ -44,5 +45,9 @@ public final class ClientNetHandler {
     public static void handleRegenChunks(Payloads.RegenChunksPayload payload) {
         ClientMapCache.regenDoneMasks.put(
                 new ClientMapCache.RegionPos(payload.dimension(), payload.rx(), payload.rz()), payload.mask());
+    }
+
+    public static void handleTrainPath(Payloads.TrainPathPayload payload) {
+        CreateTrainMapBridge.acceptPath(payload.trainId(), payload.xs(), payload.zs());
     }
 }

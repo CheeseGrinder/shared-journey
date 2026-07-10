@@ -48,6 +48,8 @@ public final class Payloads {
         public static Consumer<PlayerPositionsPayload> clientPlayerPositions = p -> {};
         public static Consumer<RegenStatePayload> clientRegenState = p -> {};
         public static Consumer<RegenChunksPayload> clientRegenChunks = p -> {};
+        public static Consumer<TrainPathPayload> clientTrainPath = p -> {};
+        public static BiConsumer<Player, TrainPathRequestPayload> serverTrainPathRequest = (pl, p) -> {};
         public static BiConsumer<Player, RegionRequestPayload> serverRegionRequest = (pl, p) -> {};
         public static BiConsumer<Player, ClientIndexPayload> serverClientIndex = (pl, p) -> {};
         public static BiConsumer<Player, MapVisibilityPayload> serverMapVisibility = (pl, p) -> {};
@@ -368,6 +370,59 @@ public final class Payloads {
         }
     }
 
+    // ---------------------------------------------------------------- C2S/S2C: train path (Create bridge)
+
+    /** Client asks for the navigation path of a train hovered on the map. */
+    public record TrainPathRequestPayload(UUID trainId) implements CustomPacketPayload {
+        public static final Type<TrainPathRequestPayload> TYPE = new Type<>(id("train_path_request"));
+
+        public static final StreamCodec<FriendlyByteBuf, TrainPathRequestPayload> CODEC = StreamCodec.of(
+                (buf, p) -> buf.writeUUID(p.trainId), buf -> new TrainPathRequestPayload(buf.readUUID()));
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Remaining navigation path of a train (Create), as a polyline of block
+     * coordinates in the requesting player's dimension. Empty when the
+     * train no longer exists or is not navigating.
+     */
+    public record TrainPathPayload(UUID trainId, int[] xs, int[] zs) implements CustomPacketPayload {
+        public static final Type<TrainPathPayload> TYPE = new Type<>(id("train_path"));
+
+        public static final StreamCodec<FriendlyByteBuf, TrainPathPayload> CODEC =
+                StreamCodec.of(TrainPathPayload::write, TrainPathPayload::read);
+
+        private static void write(FriendlyByteBuf buf, TrainPathPayload p) {
+            buf.writeUUID(p.trainId);
+            buf.writeVarInt(p.xs.length);
+            for (int i = 0; i < p.xs.length; i++) {
+                buf.writeVarInt(p.xs[i]);
+                buf.writeVarInt(p.zs[i]);
+            }
+        }
+
+        private static TrainPathPayload read(FriendlyByteBuf buf) {
+            UUID trainId = buf.readUUID();
+            int n = buf.readVarInt();
+            int[] xs = new int[n];
+            int[] zs = new int[n];
+            for (int i = 0; i < n; i++) {
+                xs[i] = buf.readVarInt();
+                zs[i] = buf.readVarInt();
+            }
+            return new TrainPathPayload(trainId, xs, zs);
+        }
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     // ---------------------------------------------------------------- registration
 
     public static void register(final RegisterPayloadHandlersEvent event) {
@@ -418,5 +473,15 @@ public final class Payloads {
                 RegenChunksPayload.TYPE,
                 RegenChunksPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientRegenChunks.accept(payload)));
+
+        registrar.playToServer(
+                TrainPathRequestPayload.TYPE,
+                TrainPathRequestPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.serverTrainPathRequest.accept(ctx.player(), payload)));
+
+        registrar.playToClient(
+                TrainPathPayload.TYPE,
+                TrainPathPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientTrainPath.accept(payload)));
     }
 }

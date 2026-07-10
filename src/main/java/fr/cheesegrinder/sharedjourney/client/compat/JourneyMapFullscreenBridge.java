@@ -97,7 +97,9 @@ public final class JourneyMapFullscreenBridge {
     /** Client config overlay toggles, by plugin modId. */
     private static Predicate<String> overlayFilter() {
         return modId -> switch (modId) {
-            case "create" -> MapClientConfig.SHOW_TRAIN_OVERLAY.get();
+            // Create's JM render path has a broken hover pick: its train
+            // map is rendered directly by CreateTrainMapBridge instead.
+            case "create" -> false;
             case "create_rns" -> MapClientConfig.SHOW_DEPOSIT_OVERLAY.get();
             default -> true;
         };
@@ -216,6 +218,9 @@ public final class JourneyMapFullscreenBridge {
         }
         pose.translate(cx - sw / 2f, cy - sh / 2f, 0);
         fireRender(view, gg, 0, 0, 0f);
+        // Create's train map, rendered directly (see overlayFilter): no
+        // toggle widget nor tooltips on the minimap.
+        CreateTrainMapBridge.renderMap(gg, sw, sh, px, pz, zoom, 0, 0, false, null);
         pose.popPose();
     }
 
