@@ -2,338 +2,179 @@
 
 Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ (faible plus-value) → ★★★★★ (forte plus-value).
 
-## Bugs
+Le chantier UI est **parqué** (décision : on y reviendra plus tard) — ses items sont regroupés
+dans leur section et n'entrent pas dans l'ordre courant.
 
-- [x] **P0 · ★★★★★ — Marqueur du joueur local absent** : ~~afficher un marqueur pour le joueur
-  dont c'est la session (minimap + carte plein écran)~~ — **corrigé** : les triangles de
-  `EntityDots.drawPlayerArrow` étaient émis avec un winding inversé par rapport aux quads GUI
-  vanilla → éliminés par le back-face culling. Winding corrigé + `disableCull` +
-  `setShaderColor(1,1,1,1)` contre l'état GL laissé par les overlays des plugins.
-  → Suite : asset dédié pour le marqueur (voir UI / UX).
-- [x] **P1 · ★★★★☆ — Couleur des beacons de waypoints instable** — **corrigé** : la
-  WaypointFactory du bridge tirait une couleur aléatoire à chaque création (et le guid étant
-  lui-même aléatoire par session, le hasher n'aurait rien réglé). La couleur est maintenant
-  dérivée de l'identité stable du waypoint (modId + dimension + position) via une teinte HSV
-  (`stableColor`) — identique entre sessions et entre joueurs ; `setColor` d'un mod garde la
-  priorité.
-- [x] **P1 · ★★★★★ — Couleurs de blocs incomplètes** — **corrigé** : rendu par palette de
-  textures à la JourneyMap, côté serveur. `TextureColorExtractor` (Java pur + Gson : blockstate
-  → modèle (chaîne de parents) → texture → moyenne des pixels opaques, lecture raster directe
-  pour les PNG grayscale que `getRGB` éclaircissait) ; palette vanilla embarquée
-  (`assets/sharedjourney/palette/vanilla.json`, 1059 blocs, générée offline depuis le jar
-  client — les serveurs dédiés n'ont pas les textures client, et le rendu solo/dédié reste
-  identique) ; `BlockPalette` chaîne overrides config (`engine.blockColorOverrides`, couture
-  API) → palette embarquée → extraction runtime (jars de mods) → fallback `MapColor`.
-  Les feuilles de cerisier sont roses (#E5ACC2). Notes d'implémentation :
-  - accès ressources : les mods étant des modules Java nommés, `ClassLoader.getResourceAsStream`
-    est bloqué par l'encapsulation de modules → lookup même-module via `Class#getResourceAsStream`
-    + jars des autres mods via `ModList.getModFileById(namespace).getFile().findResource(...)` ;
-  - feuilles/vignes : règle générique, AUCUNE espèce hardcodée — texture colorée (cherry,
-    azalea, mods) = sa couleur ; texture grayscale (`ColorUtil.isGrayscale`) = teintée au
-    runtime en jeu → teinte foliage du biome. Les teintes fixes vanilla (birch, spruce,
-    mangrove, lily_pad — constantes client inaccessibles côté serveur) sont cuites en DONNÉES
-    dans la palette générée (`BAKED_TINTS` du générateur) ; pour un mod, l'échappatoire est
-    `engine.blockColorOverrides` ;
-  - VRAIE cause racine du gris cherry : `#minecraft:flowers` (défaut de `hiddenBlocks`)
-    contient `cherry_leaves`/`flowering_azalea_leaves` depuis la 1.20 (pollinisation des
-    abeilles) → feuilles « cachées », la descente s'arrêtait sur l'AIR sous la canopée →
-    `MapColor.NONE` → STONE gris. Double fix : un match par TAG ne cache jamais des feuilles
-    (les entrées explicites restent honorées — pas de migration de config nécessaire), et la
-    descente traverse l'air (un bloc caché au-dessus du vide, ex. propagule de mangrove, ne
-    peint plus de gris).
-- [x] **Path du train survolé + suivi au clic** — **fait** : au survol d'un train sur la
-  carte plein écran, sa route restante jusqu'à la prochaine gare est tracée en doré ; au
-  clic sur un train, la vue le SUIT (annulé par un pan, le recentrage joueur ou la fermeture).
-  Découverte clé : `Navigation.currentPath` de Create ne contient QUE les décisions
-  d'embranchement (consommées par `navigateOptions`), pas la géométrie — la route est donc
-  SIMULÉE côté serveur (`CreateTrainPathService.walkRoute`) : départ du `TravellingPoint`
-  de tête (ou de queue si `destinationBehindTrain`), marche du graphe arête par arête avec
-  échantillonnage de la géométrie (`TrackEdge.getPosition`, pas de 3 blocs sur les courbes →
-  virages lisses), décisions consommées aux embranchements, arrêt quand
-  `distanceToDestination` est épuisée (la ligne finit pile à la gare). Aller-retour réseau
-  dédié (`TrainPathRequestPayload` throttlé / `TrainPathPayload`), pick client via
-  `TrainMapSyncClient.currentData`. Rendu : la polyline est rasterisée en cellules puis
-  CONFRONTÉE AU BUFFER DE PIXELS DE CREATE (`TrainMapRenderer.getPixel`, couloir ±1 bloc,
-  recalcul 2×/s) — seuls les pixels de rail CLAIRS sont repeints (le contour sombre reste),
-  avec le relief préservé (doré modulé par la luminance du pixel remplacé). Le path reste
-  peint tant qu'un train est suivi, pas seulement au survol.
-  _Limites ACCEPTÉES (itérations « embranchements » revertées, elles empiraient les choses) :
-  la marche s'arrête à un embranchement sans décision correspondante (la ligne reprend une
-  fois l'embranchement franchi) et le doré peut déborder d'un ou deux pixels sur la branche
-  divergente d'un croisement. NE PAS retenter le fallback « première option » de
-  navigateOptions ni le filtre par distance au segment sans meilleure compréhension de
-  l'orientation des TravellingPoints/décisions de Create._
-- [x] **Overlay de progression du regen** — **fait** : pendant un `/sj admin regen [full]`,
-  les chunks pas encore re-rendus sont voilés en violet (`STALE_OVERLAY`) sur la minimap et
-  la carte plein écran, à la granularité CHUNK. Le serveur pousse ~1×/s des masques de
-  1024 bits par région touchée (`RegenChunksPayload`) + un état start/stop
-  (`RegenStatePayload`, envoyé aussi aux joueurs qui rejoignent en cours) ; le client dessine
-  les chunks manquants en runs horizontaux fusionnés (`MinimapRenderer.drawRegenVeil`).
-- [x] **P2 · ★★★☆☆ — Labels de waypoints : lisibilité** — **corrigé**. Cause racine du
-  grisage partiel (diagnostiquée sur les sources vanilla) : le fond de `drawInBatch` est un
-  quad « white glyph » émis dans le MÊME buffer trié par distance que les glyphes
-  (`sortOnUpload`) ; son centroïde étant au milieu du label, la moitié des glyphes légèrement
-  plus « loin » de la caméra était triée SOUS le fond translucide → grisée (coupure nette au
-  milieu, côté dépendant de l'angle). Fix : fond émis manuellement dans
-  `RenderType.textBackgroundSeeThrough` AVANT le texte (buffers séparés → flush dans l'ordre
-  d'insertion, glyphes toujours au-dessus). Au passage, comportement JourneyMap adopté :
-  label centré au-dessus du point (plus d'offset latéral) et affiché seulement quand le
-  viseur pointe près du waypoint (cône ~12°).
-- [x] **P2 · ★★★☆☆ — Noms des gares et des trains toujours absents** — **corrigé**. Cause
-  racine (diagnostiquée au désassembleur sur Create 6.0.10) : **bug dans Create** —
-  `JourneyTrainMap.onRender` calcule le pick du survol en blocs RELATIFS AU CENTRE de la
-  carte (`(souris - centreÉcran)/scale`, sans « + mapCenter »), alors que `drawPoints`/
-  `drawTrains` comparent à des coordonnées monde ABSOLUES (le chemin Xaero de Create ajoute
-  bien le centre, lui). Le tooltip ne pouvait donc jamais s'afficher, même dans le vrai
-  JourneyMap. Fix : l'événement de rendu n'est plus dispatché au plugin « create »
-  (`overlayFilter`), et `CreateTrainMapBridge.renderMap` rejoue `TrainMapManager.renderAndPick`
-  par réflexion avec le pick converti en coordonnées absolues + tooltip via
-  `RemovedGuiUtils.drawHoveringText` (widget de toggle inclus, plein écran uniquement ;
-  la minimap garde le rendu sans tooltip).
-- [x] **P2 · ★★☆☆☆ — Téléportation en vol** — **corrigé** : le Y d'arrivée est maintenant
-  calculé côté serveur via la nouvelle commande `/sj tp <x> <z>` (heightmap MOTION_BLOCKING+1,
-  scan sous le plafond dans le Nether) au lieu du `/tp` vanilla avec Y client ou `~`.
-- [x] **P2 · ★★★★☆ — Infos de survol (bloc/biome) : perf et tenue en charge** — **fait**
-  (piste 1, le sidecar) : le moteur produit au rendu de chaque chunk (il l'a déjà en main,
-  sur un worker) les données de survol — hauteurs, bloc de surface par colonne, biome par
-  cellule 4×4, palettisés région-wide (`HoverRegionData`, blob .bin gzippé, ~440 o/chunk en
-  pire cas aléatoire). Le sidecar est une **pseudo-couche `MapLayer.INFO`** : il réutilise
-  TOUT le pipeline région existant (index.json, handshake, delta sync avec budget, push
-  immédiat au re-rendu, cache disque client, purge) au lieu d'un canal parallèle. Le survol
-  plein écran est maintenant 100 % local (chunk chargé → lecture directe, sinon sidecar) :
-  zéro requête, instantané comme JourneyMap, tenue en charge par construction.
-  L'ancien chemin à la demande (`MapInfoRequest`/`MapInfoChunk`, `level.getChunk()` synchrone
-  sur le main thread) est SUPPRIMÉ — protocole réseau passé en version « 2 ».
-  _**Anti-exploit satisfait par construction** : plus aucune réponse serveur dépendante de
-  l'état de chargement d'un chunk (l'attaque par timing n'a plus de canal)._
-  _INFO est verrouillé hors affichage : exclu de layersFor/config (validators), de
-  `/sj admin layer`, du cycle de couches client (listes serveur), et `ChunkColorizer` le
-  rejette. Les données apparaissent au fur et à mesure des re-rendus (ou `regen full`)._
-- [ ] **P3 · ★★★☆☆ — Fuites d'information malgré « me cacher de la carte »** : au-delà du
-  timing des infos de survol (voir ci-dessus), un joueur caché « dessine » sa position sur la
-  carte partagée par trois vecteurs :
-  1. les blocs qu'il casse/pose (re-rendu + push en direct des régions) ;
-  2. les nouveaux chunks qu'il GÉNÈRE en explorant (le front d'exploration trace sa
-     trajectoire en temps réel) ;
-  3. le déverrouillage des bandes CAVE autour de lui (`CaveTracker`) quand il est sous terre.
-  _Design proposé : file de QUARANTAINE côté serveur, qui gate la DIFFUSION (le rendu du PNG,
-  lui, se fait normalement). L'attribution exacte d'un changement étant impossible
-  (NeighborNotify n'a pas d'entité), heuristique de proximité : tout chunk dirty / nouveau
-  chunk / unlock cave situé à moins de N chunks d'un joueur caché part en quarantaine._
-  - _Indexée par CHUNK, pas par joueur (pas de propriétaire) : deux joueurs cachés proches
-    partagent les mêmes entrées, un seul timer ; au drain, on ré-évalue — si un joueur caché
-    (n'importe lequel) est encore à proximité, on prolonge._
-  - _Destinataires : push immédiat pour le joueur caché lui-même et pour les joueurs assez
-    proches pour que le jeu leur streame déjà la zone (ils voient les changements en jeu, la
-    carte ne leur apprend rien) ; différé pour tous les autres._
-  - _Version « publique » par région distincte de la version réelle : sinon le handshake de
-    reconnexion contourne la quarantaine._
-  - _Drain PROGRESSIF après le délai configurable (ex. 5-15 min) : un drain d'un coup
-    redessinerait la trajectoire entière._
-  _Alternative radicale en option serveur : les joueurs cachés ne contribuent pas du tout à
-  la carte tant qu'un joueur visible ne repasse pas par la zone (carte moins complète, zéro
-  fuite)._
+## Prochain chantier : clean code du socle
 
-- [ ] **P4 · ★★★☆☆ — Intégrité et robustesse du cache client (images de régions)** : si un
-  client modifie un PNG de région dans son cache (Photoshop...), rien ne le détecte — le
-  handshake ne compare que les VERSIONS (timestamps) de l'index, pas le contenu : l'image
-  trafiquée reste affichée tant que le serveur ne re-rend pas la région.
-  _Principe : la sécurité vient du SERVEUR, pas du format — tout fichier client (JSON, NBT,
-  métadonnées PNG) est modifiable par le joueur. Trois volets :_
-  1. _**vérification serveur** (la vraie protection) : hash du PNG calculé au rendu et stocké
-     dans l'index serveur. Au handshake, le client RECALCULE le hash de ses fichiers locaux
-     (pas celui de son index, falsifiable aussi) et l'envoie avec la version ; même version +
-     hash différent = trafiqué/corrompu → le serveur re-pousse la région. Le hash EST le
-     "diff" serveur/local, en quelques octets par région. Utiliser SHA-256 : CRC32 ne détecte
-     que la corruption accidentelle (forger un fichier à CRC identique est trivial).
-     Fallback manuel existant : `/sj purge` ;_
-  2. _**métadonnées embarquées dans le PNG** (chunk tEXt : clé de région, version, hash) :
-     l'index client devient un cache RECONSTRUCTIBLE — auto-réparation en cas de
-     corruption/désync, sans scanner tous les PNG à chaque session (reconstruction à la
-     demande seulement) ;_
-  3. _**format des fichiers machine-only** : envisager NBT (binaire, compact, `NbtIo`) pour
-     les index à la place du JSON ; GARDER le JSON pour `waypoints.json` (lisibilité/debug/
-     backup = feature). À trancher pendant le chantier clean code._
+Jamais fait (étape 2 du plan d'origine, doublée par les features) ; le moment est bon :
+l'UI vient d'être réécrite, la passe ne sera plus invalidée par un rework.
 
-- [ ] **P3 · ★★★★☆ — API publique enrichie** : même si le mod reste privé, exposer un maximum
-  dans le package `api` pour permettre à d'autres mods d'interagir.
-  _**Stratégie retenue (cadrage fait)** : pas de grande API spéculative. Deux règles :_
-  1. _**règle de la couture** : chaque chantier conçoit ses internals AVEC le point
-     d'extension (pipeline, listes d'entrées enregistrables), même non publié ;_
-  2. _**publication en fin de chantier** : chaque tranche d'API est publiée à la fin du
-     chantier qui stabilise son modèle — jamais avant (modèle instable), jamais longtemps
-     après (couture fraîche). Le mod étant privé, casser une tranche publiée trop tôt reste
-     borné à une session de refactor._
-  - [x] **rendu écran (v1 faite)** : `api.client.MapView` (géométrie, conversions
-    monde↔écran, couche) + `api.client.event.MapRenderEvent` (posté chaque frame pour la
-    minimap ET le plein écran, sous les marqueurs joueurs) + `FullMapScreenEvent.Opened/
-    Closed` + `MapLayerChangedEvent`. Le `BridgedMapView` du bridge JM étend `MapView`.
-    **Consommateur de validation prévu : les waypoints de bannière** (icônes sur la carte).
-    Suite v2 : enregistrement d'icônes/marqueurs de haut niveau (clamping bordure fourni).
-  - [ ] **rendu serveur (image de région)** : surcharge de couleur par bloc, post-traitement
-    de région, blocs masqués — **couture posée pendant le chantier palette** :
-    `engine.blockColorOverrides` (config serveur, prioritaire sur toute la chaîne) et
-    `BlockPalette` comme point d'entrée unique de résolution ; reste à publier (événement ou
-    registre `api`) quand un consommateur concret existe ;
-  - [ ] **UI fullscreen** (boutons, menu contextuel, barre d'infos) — **après le rework UI**
-    (étape 5), les écrans actuels vont être réécrits ;
-  - [ ] **waypoints** : façade CRUD — **après stabilisation du modèle** (groupes, death
-    waypoints de l'écran de gestion) ; le besoin est couvert d'ici là par le bridge JM ;
-  - [ ] **couches** : finaliser le pipeline `LayerRegisterEvent` — bloqueur structurel :
-    `RegionKey`/réseau/disque sont indexés sur l'enum `MapLayer`, passer à des ids libres est
-    un chantier dédié. En attendant, documenter l'événement comme non câblé ;
-  - [ ] **lecture/actions** (positions joueurs, état des régions, re-rendu) : à la demande,
-    quand un consommateur concret existe (YAGNI).
-- [x] **P2 · ★★★★☆ — Écran de gestion des waypoints** — **fait** (design v2 après retours).
-  Modèle : champ `group` sur `Waypoint` (groupes réservés `default`/`deaths`/`public`,
-  waypoints bridgés groupés par modId source), visibilité par groupe persistée
-  (`hiddenGroups`), groupes gérés persistés (`groups`, un groupe vide survit à la session),
-  death waypoints automatiques à l'ouverture du DeathScreen (config client `deathWaypoints`).
-  Écran `WaypointListScreen` façon JourneyMap : **deux panneaux** — liste des groupes à
-  gauche (pseudo-groupe « Tous » en tête, clic = sélection surlignée en doré, checkbox =
-  visibilité du groupe, compteur) ; waypoints du groupe sélectionné à droite (la dimension
-  est une simple donnée affichée en info, pas un axe de tri ; en vue « Tous », le groupe de
-  chaque waypoint est aussi affiché). Sous la liste de gauche : Nouveau groupe / Renommer /
-  Supprimer (interdits pour default/deaths/public/groupes bridgés type waystones ; supprimer
-  un groupe supprime ses waypoints) puis Done ; les modals de saisie/confirmation reprennent
-  le style panneau sombre des autres écrans (`ModalScreen`). « + Nouveau waypoint » est la
-  dernière ligne de la liste de droite (créé dans le groupe sélectionné) ; compteurs de
-  groupe recalculés en direct (une suppression met à jour le nombre). Raccourcis clavier :
-  U = ouvrir la gestion des waypoints, B = créer un waypoint à la position du joueur
-  (rebindables, catégorie Shared Journey). Actions par waypoint :
-  afficher/masquer, éditer, TP (op + même dimension), supprimer. Ouvert depuis la carte
-  plein écran (icône barre gauche + entrée du sous-menu clic droit). Dans l'écran
-  d'édition, le groupe est un champ texte avec autocomplétion sur les groupes existants
-  (un nouveau nom crée le groupe à la sauvegarde). Fix : `filtered()` triait la liste
-  immuable du store (crash à l'ouverture).
-- [x] **P2 · ★★★★☆ — Waypoints publics (ex-type GLOBAL)** — **fait**. Le type `GLOBAL`
-  (affichage cross-dimension) devient `PUBLIC` : waypoint partagé avec tous les joueurs,
-  autoritaire côté serveur (`PublicWaypointService`, persisté dans
-  `<monde>/data/sharedjourney/waypoints_public.json`, broadcast à chaque changement, envoi
-  complet au login). Payloads bidirectionnels upsert/remove (registrar versionné « 3 »).
-  Côté client : source volatile `public`, groupe réservé « public » ; le flag `visible`
-  reste un choix LOCAL (jamais broadcast, persisté dans `hiddenIds` de `waypoints.json`) ;
-  promotion/rétrogradation privé↔public gérée dans `WaypointStore.update`. Les anciens
-  waypoints GLOBAL sauvegardés migrent en DIMENSION (pas de publication silencieuse).
-  Tous les types sont désormais liés à leur dimension. Permission : tout joueur peut
-  créer/modifier/supprimer un waypoint public (à restreindre plus tard si besoin, cap
-  serveur 1024 waypoints).
-- [ ] **P3 · ★★★☆☆ — Waypoints de bannière** : reprendre le comportement vanilla
-  bannière + carte — une bannière NOMMÉE (renommée à l'enclume) posée dans le monde devient un
-  marqueur partagé sur la carte (minimap + plein écran), affiché avec l'icône de bannière
-  vanilla (textures `map/decorations/banner_<couleur>.png`, la couleur suit la bannière),
-  retiré quand la bannière est cassée.
-  _Design : contrairement aux waypoints actuels (100 % client, `WaypointStore`), c'est du
-  SERVEUR-autoritaire, cohérent avec la philosophie du mod : détection pose/casse côté serveur
-  (`BlockEvent` + block entity `Nameable`), persistance dans le dossier monde, nouveau payload
-  S2C (liste complète au login + broadcast à chaque changement), côté client une source
-  volatile type `source = "banner"` resynchronisée à chaque session (le store ne persiste déjà
-  que la source "user"). Rendu : icône bannière au lieu du losange `drawWaypointDiamond`._
-- [ ] **P3 · ★★★☆☆ — Suivi de train : lisser la caméra** — le recentrage sur le train suivi
-  est sec (position recopiée chaque frame) ; interpoler le déplacement de la vue vers la
-  position du train pour un suivi fluide.
-- [ ] **P3 · ★★★☆☆ — Overlay des rails Create en souterrain** — l'overlay reste affiché en
-  surface quand la voie passe sous terre (illogique) et n'apparaît pas sur les couches CAVE.
-  Étudier : corréler les pixels du `TrainMapRenderer` de Create avec la couche affichée et
-  les hauteurs (sidecar INFO ?) pour masquer les tronçons souterrains en surface et/ou les
-  afficher dans la bande CAVE correspondante.
-- [ ] **P3 · ★★★☆☆ — Bouton boussole** sur l'interface : basculer l'orientation de la carte
-  (nord fixe vs orientée joueur).
-- [ ] **P3 · ★★★☆☆ — Écran de config intégré** au plein écran (plutôt que l'écran NeoForge)
-  pour modifier rapidement les options.
-- [ ] **P3 · ★★★☆☆ — Éditeur dédié pour les couches par dimension et les bandes CAVE** :
-  aujourd'hui c'est du texte brut (`namespace:dimension=DAY,NIGHT,...`, liste d'entiers pour
-  les bandes) dans l'écran NeoForge — compliqué à utiliser. Cible : un écran avec la liste des
-  dimensions connues et des cases à cocher par couche (comme la modal « Dimensions » de JM),
-  et un éditeur visuel des bandes CAVE (plages Y, ajout/suppression).
-  _C'est de la config SERVEUR : l'édition depuis le client demande un payload dédié réservé
-  aux ops (permission niveau 2+), avec re-broadcast des couches actives comme au reload.
-  À intégrer au chantier « écran de config intégré »._
-- [ ] **P4 · ★★☆☆☆ — Inventorier les options de la carte plein écran** : lister l'existant,
-  identifier ce qui manque (vs JourneyMap) et l'ajouter.
-- [ ] **P4 · ★★☆☆☆ — Inventorier les configs** (client, common, serveur) : voir ce qui
-  mériterait d'être configurable et ne l'est pas.
+- [ ] **P2 · ★★★★☆ — Nettoyage du socle** : `common`, `server` (moteur, services, réseau),
+  `client.service`, bridges. Responsabilité unique par fichier, documentation systématique,
+  reste de français → anglais, utilitaires/globals pour le code répété.
+- [ ] **P2 · ★★★★☆ — Classes dédiées traductions + constantes** : centraliser les clés i18n
+  (classe type `Translations`/`Lang` avec helpers) et les constantes partagées (couleurs UI,
+  tailles, noms de fichiers, clés JSON) ; éliminer les magic numbers/strings restants.
+  À faire AVANT l'écran de config intégré (qui produira beaucoup de nouvelles clés).
+- [ ] **P3 · ★★★☆☆ — Publier la façade API waypoints** (fin de chantier, règle de la
+  couture) : le modèle est maintenant stable (groupes, publics, death) — CRUD + événements
+  dans `api`. Trancher au passage : format NBT pour les index machine-only (JSON conservé
+  pour `waypoints.json`, lisibilité/backup = feature).
 
-## UI / UX
+## Features (hors UI)
 
-- [ ] **P3 · ★★★☆☆ — Asset dédié pour le marqueur du joueur** : remplacer le triangle vectoriel
-  (`EntityDots.drawPlayerArrow`) par une image/texture dédiée (reprendre le style des assets
-  JourneyMap ou en créer), sur la minimap et la carte plein écran.
-- [ ] **P3 · ★★★☆☆ — Icône in-world des waypoints (losange JM)** : afficher un losange à la
-  position du waypoint dans le monde, TOUJOURS visible (pas besoin de viser le waypoint,
-  contrairement au label qui reste conditionné au cône de visée), mais masqué hors des
-  bornes `beaconMinDistance`/`beaconMaxDistance` de la config client. D'abord dessiné en
-  vectoriel, puis remplacé par une texture PNG (`assets/sharedjourney/textures/...`) pour
-  être personnalisable via resource pack.
-- [x] **P2 · ★★★★☆ — Rework de l'écran de création/édition de waypoint** — **fait** : vrai
-  formulaire structuré (panneau + labels) : nom, position X/Y/Z éditable, groupe via bouton
-  cycle sur les groupes existants uniquement (créés dans le gestionnaire ; deaths exclu sauf
-  s'il est le groupe courant ; verrouillé sur « public » pour le type PUBLIC), couleur
-  (champ hex synchronisé, palette, bouton aléatoire, aperçu), visibilité, type ;
-  Entrée = sauvegarder ; Done/Supprimer/Annuler.
-  Ajout post-retour : picker HSB façon JourneyMap (carré saturation/valeur + bande de
-  teinte, clic/drag, gradients exacts via `Mth.hsvToRgb`), synchronisé avec le champ hex,
-  la palette et l'aperçu.
-- [x] **P3 · ★★★☆☆ — Rework du menu clic droit** — **fait** : `ContextMenu` custom (panneau
-  plat sombre, lignes surlignées au survol, en-tête coordonnées du bloc cliqué, sous-menu
-  Waypoints ancré à sa ligne parente qui reste surlignée), rendu en dernier dans
-  `FullMapScreen.render` (toujours au-dessus), Échap ferme le menu, le release du clic
-  consommé est avalé (pas de sélection de bloc sous la ligne cliquée).
-- [ ] **P4 · ★★☆☆☆ — Grouper les boutons d'overlay** ensemble sur la carte plein écran
-  (toggles RNS/trains/grille... dans un groupe visuel dédié).
-- [ ] **P4 · ★★☆☆☆ — Passe sur les textes** : nettoyer/harmoniser les libellés existants.
+- [ ] **P3 · ★★★★☆ — Waypoints de bannière** : une bannière NOMMÉE (enclume) posée devient un
+  marqueur partagé (minimap + plein écran, icône bannière vanilla
+  `map/decorations/banner_<couleur>.png`, couleur suivie), retiré quand elle est cassée.
+  _Coût en forte baisse : le pipeline serveur-autoritaire (persistance monde + broadcast +
+  envoi complet au login + source client volatile) existe depuis les waypoints publics —
+  détection pose/casse (`BlockEvent` + block entity `Nameable`) et une source `banner` à
+  brancher dessus. Consommateur de validation prévu pour l'API `MapRenderEvent`._
+- [ ] **P3 · ★★★☆☆ — Fuites d'information malgré « me cacher de la carte »** : un joueur caché
+  « dessine » sa position par trois vecteurs — blocs cassés/posés (push en direct), nouveaux
+  chunks générés (front d'exploration), déverrouillage des bandes CAVE (`CaveTracker`).
+  _Design proposé : file de QUARANTAINE côté serveur qui gate la DIFFUSION (le rendu PNG se
+  fait normalement). Attribution exacte impossible → heuristique de proximité (tout chunk
+  dirty/nouveau/unlock à moins de N chunks d'un joueur caché part en quarantaine). Indexée
+  par CHUNK (pas de propriétaire ; au drain on ré-évalue la proximité). Push immédiat pour
+  le joueur caché et les joueurs assez proches (le jeu leur streame déjà la zone) ; différé
+  pour les autres. Version « publique » par région distincte de la réelle (sinon le
+  handshake de reconnexion contourne la quarantaine). Drain PROGRESSIF (5-15 min config) —
+  un drain d'un coup redessinerait la trajectoire. Alternative radicale en option serveur :
+  les joueurs cachés ne contribuent pas du tout à la carte._
+- [ ] **P3 · ★★☆☆☆ — Suivi de train : lisser la caméra** (quick win) : le recentrage est sec
+  (position recopiée chaque frame) ; interpoler la vue vers la position du train.
+- [ ] **P3 · ★★★★☆ — Têtes de mobs sur le radar** : têtes à la place des points, sur la
+  minimap et la carte plein écran. **Compatible mods par construction** : pas de jeu de
+  sprites vanilla hardcodé — rendre la tête depuis le modèle/texture de l'entité elle-même
+  (approche Xaero : le rendu marche pour n'importe quel mob moddé sans intégration), avec
+  cache des icônes rendues par type d'entité et fallback point coloré si le rendu échoue.
 
-## Qualité de code
+## API publique (tranches restantes)
 
-- [ ] **P3 · ★★★☆☆ — Nettoyage** : responsabilité unique par fichier, documentation
-  systématique, passer la doc et les commentaires de config en anglais, créer des
-  utilitaires/globals, remplacer les chaînes répétées par des constantes statiques.
-- [ ] **P3 · ★★★☆☆ — Classes dédiées pour les traductions et constantes** : centraliser les
-  clés i18n (classe type `Translations`/`Lang` avec des helpers par écran) et les constantes
-  partagées (couleurs UI, tailles, noms de fichiers, clés JSON) pour une lecture plus claire ;
-  éliminer au passage les magic numbers/strings restants dans les écrans et services.
-- [x] **P4 · ★★☆☆☆ — Configs client par section** — **fait** : `ClientConfig` est maintenant
-  une façade qui assemble `MinimapClientConfig`, `RadarClientConfig`, `WaypointClientConfig`
-  et `MapClientConfig` (clés TOML inchangées, pas de reset de config).
-- [ ] **P4 · ★★☆☆☆ — Optimisation** : passe de perf générale (allocations par frame, réflexion
-  dans les chemins chauds du bridge, caches).
-- [ ] **P5 · ★★☆☆☆ — Rendu via shader** : JourneyMap dessine avec ses propres shaders (au sens
-  draw) — étudier la même approche pour des rendus plus propres (formes, anti-aliasing).
-- [ ] **P5 · ★☆☆☆☆ — Traductions** : vérifier les clés de config/UI manquantes et supprimer
-  celles devenues inutiles.
+_Stratégie (cadrage fait) : pas d'API spéculative. Règle de la couture (les internals de
+chaque chantier prévoient le point d'extension) + publication en FIN du chantier qui
+stabilise le modèle._
+
+- [x] **rendu écran (v1)** : `api.client.MapView` + `MapRenderEvent` (minimap + plein écran)
+  + `FullMapScreenEvent.Opened/Closed` + `MapLayerChangedEvent`. Suite v2 : enregistrement
+  d'icônes/marqueurs de haut niveau (clamping bordure fourni).
+- [ ] **waypoints** : façade CRUD — voir « Prochain chantier » (modèle stabilisé).
+- [ ] **rendu serveur (image de région)** : couture posée (`engine.blockColorOverrides` +
+  `BlockPalette` point d'entrée unique) ; publier événement/registre quand un consommateur
+  concret existe.
+- [ ] **UI fullscreen** (boutons, menu contextuel, barre d'infos) — avec le chantier UI.
+- [ ] **couches** : finaliser `LayerRegisterEvent` — bloqueur structurel : `RegionKey`/
+  réseau/disque indexés sur l'enum `MapLayer`, passer à des ids libres est un chantier
+  dédié. En attendant, documenter l'événement comme non câblé.
+- [ ] **lecture/actions** (positions joueurs, état des régions, re-rendu) : YAGNI, à la
+  demande d'un consommateur concret.
+
+## Chantier UI (parqué — plus tard)
+
+- [ ] **P3 · ★★★☆☆ — Icône in-world des waypoints (losange JM)** : losange à la position du
+  waypoint, TOUJOURS visible (pas de cône de visée, contrairement au label), masqué hors des
+  bornes `beaconMinDistance`/`beaconMaxDistance`. D'abord vectoriel, puis texture PNG
+  (personnalisable par resource pack).
+- [ ] **P3 · ★★★☆☆ — Asset dédié pour le marqueur du joueur** : remplacer le triangle
+  vectoriel (`EntityDots.drawPlayerArrow`) par une texture (style JourneyMap), minimap +
+  plein écran.
+- [ ] **P3 · ★★★☆☆ — Bouton boussole** : basculer l'orientation de la carte (nord fixe vs
+  orientée joueur).
+- [ ] **P3 · ★★★☆☆ — Écran de config intégré** au plein écran (plutôt que l'écran NeoForge),
+  incluant l'**éditeur des couches par dimension et des bandes CAVE** (aujourd'hui du texte
+  brut ; cible : cases à cocher par dimension façon modal « Dimensions » de JM + éditeur
+  visuel des plages Y). _Config SERVEUR : payload dédié réservé aux ops (niveau 2+) avec
+  re-broadcast des couches actives. Dépend de la passe constantes/i18n._
+- [ ] **P4 · ★★☆☆☆ — Grouper les boutons d'overlay** (toggles RNS/trains/grille...) dans un
+  groupe visuel dédié de la carte plein écran.
+- [ ] **P4 · ★★☆☆☆ — Passe sur les textes** : nettoyer/harmoniser les libellés.
+- [ ] **P4 · ★★☆☆☆ — Inventorier les options de la carte plein écran** (vs JourneyMap) et
+  **les configs** (client, common, serveur) : ce qui manque, ce qui devrait être configurable.
+
+## Robustesse / perf (P4+)
+
+- [ ] **P4 · ★★★☆☆ — Intégrité du cache client (images de régions)** : un PNG modifié
+  localement n'est pas détecté (le handshake ne compare que les versions). _La sécurité
+  vient du SERVEUR : hash SHA-256 calculé au rendu et stocké dans l'index serveur ; au
+  handshake le client RECALCULE le hash de ses fichiers (pas son index, falsifiable) —
+  même version + hash différent → re-push. En complément : métadonnées dans le PNG
+  (chunk tEXt) pour un index client reconstructible. CRC32 insuffisant (forgeable)._
+- [ ] **P4 · ★★★☆☆ — Overlay des rails Create en souterrain** (recherche) : l'overlay reste
+  affiché en surface quand la voie est enterrée et n'apparaît pas sur les couches CAVE.
+  Corréler les pixels du `TrainMapRenderer` avec la couche affichée et les hauteurs
+  (sidecar INFO ?) pour masquer en surface et/ou afficher dans la bande CAVE.
+- [ ] **P4 · ★★☆☆☆ — Optimisation** : allocations par frame, réflexion dans les chemins
+  chauds des bridges, caches.
+- [ ] **P5 · ★★☆☆☆ — Rendu via shader** : étudier l'approche JourneyMap (draw avec ses
+  propres shaders) pour des formes plus propres (anti-aliasing).
+- [ ] **P5 · ★☆☆☆☆ — Audit des traductions** : clés manquantes/mortes (sera largement
+  couvert par la passe constantes/i18n).
 
 ## Ordre recommandé
 
-Principe : quelques micro-fixes pour garder le jeu testable, puis le **clean code en premier
-grand chantier** pour repartir d'une base saine — mais ciblé sur les parties STABLES : l'UI
-(écrans, menus) sera nettoyée par son propre rework, inutile de la documenter avant de la
-réécrire.
+1. **Clean code du socle** (P2) : nettoyage + classes traductions/constantes, et en fin de
+   chantier la **façade API waypoints** (P3).
+2. **Waypoints de bannière** (P3 ★★★★☆) — s'appuie directement sur le pipeline des waypoints
+   publics, et valide l'API de rendu écran.
+3. **Têtes de mobs sur le radar** (P3 ★★★★☆, compatible mods) + quick win : lissage de la
+   caméra du suivi de train (P3 ★★☆☆☆).
+4. **Fuites d'information** (P3) — gros morceau design (quarantaine), à lancer quand on veut
+   un chantier serveur.
+5. **Chantier UI** (quand déparqué) : losange in-world + marqueur joueur + boussole, puis
+   écran de config intégré + éditeur couches/bandes, groupement des overlays, passe textes,
+   inventaires, tranche API UI.
+6. **Robustesse** : intégrité du cache (hash), rails souterrains.
+7. **Optimisation** (P4), puis shaders + audit traductions (P5).
 
-1. ~~**Micro-fixes testabilité** : marqueur du joueur local (P0 ★★★★★), couleur des beacons
-   stable (P1 ★★★★☆), téléportation en vol (P2 ★★☆☆☆).~~ ✔ **fait** (l'asset dédié du
-   marqueur suivra avec le chantier UI). On peut tester proprement pendant tout le refactor.
-2. **Clean code — le socle** (P3 ★★★☆☆) : `common`, `server` (moteur, services, réseau),
-   `client.service`, bridge JourneyMap. Responsabilité unique, utils, constantes, docs et
-   commentaires de config en anglais, **configs par section** (P4). L'UI est EXCLUE de cette
-   passe (voir 5). C'est aussi ici qu'on **cadre l'API publique** (P3 ★★★★☆) : frontière
-   api/interne, façade waypoints, événements — les hooks de draw suivront avec les chantiers
-   rendu/UI.
-3. ~~**Couleurs de blocs (palette textures)** (P1 ★★★★★) — premier gros chantier feature, sur
-   les renderers fraîchement nettoyés.~~ ✔ **fait** (`BlockPalette` + palette vanilla embarquée
-   + `engine.blockColorOverrides` ; regénérer la palette via le générateur offline à chaque
-   montée de version Minecraft).
-4. ~~**Infos de survol charge-proof** (P2 ★★★★☆) + **lisibilité des labels de waypoints**
-   (P2 ★★★☆☆) + **noms des gares/trains** (P2 ★★★☆☆).~~ ✔ **fait** (sidecar `MapLayer.INFO`,
-   labels JM-like fond/texte fiabilisés + cône de visée, pick Create corrigé dans le bridge).
-5. **Chantier UI** : rework écran waypoint + écran de gestion des waypoints (P2 ★★★★☆), puis
-   menu clic droit style JM (P3 ★★★☆☆) — les nouveaux écrans appliquent directement les
-   conventions posées en 2, et remplacent l'ancien code UI non nettoyé.
-6. **Petites features indépendantes** : bouton boussole (P3), têtes des mobs (P3),
-   waypoints de bannière (P3 — premier vrai cas de waypoints poussés par le serveur, peut
-   servir de brouillon à la sync waypoints).
-7. **Écran de config intégré** (P3 ★★★☆☆) — s'appuie sur le chantier UI ; inclut l'éditeur
-   des couches par dimension et des bandes CAVE (P3 ★★★☆☆, config serveur → payload op).
-8. **Groupement des boutons d'overlay + passe textes + inventaires options/configs +
-   intégrité du cache client (hash des régions)** (P4).
-9. **Optimisation** (P4) — sur la base nettoyée et les nouveaux écrans.
-10. **Shaders de rendu + audit des traductions** (P5).
+## Fait (résumé — détails dans l'historique git)
+
+- **Marqueur du joueur local** : winding des triangles corrigé + `disableCull` (l'asset
+  texture suivra avec le chantier UI).
+- **Couleur des beacons bridgés stable** : dérivée de l'identité du waypoint (modId +
+  dimension + position), plus de couleur aléatoire par session.
+- **Couleurs de blocs (palette textures)** : `BlockPalette` — overrides config → palette
+  vanilla embarquée (générée offline par `tools/PaletteGenerator`, **à régénérer à chaque
+  montée de version Minecraft**) → extraction runtime des jars de mods → fallback
+  `MapColor`. Feuilles : règle générique grayscale = teinte biome, jamais d'espèce
+  hardcodée ; un match par TAG de `hiddenBlocks` ne cache jamais des feuilles ; la descente
+  traverse l'air.
+- **Téléportation depuis la carte** : `/sj tp <x> <z>`, Y calculé serveur (heightmap, scan
+  sous plafond Nether).
+- **Infos de survol charge-proof** : sidecar `HoverRegionData` porté par la pseudo-couche
+  `MapLayer.INFO` (réutilise tout le pipeline région : index, handshake, delta sync, cache
+  disque). Survol 100 % local, **anti-exploit timing par construction** (plus de requête
+  dépendante du chargement d'un chunk). INFO est verrouillé hors affichage (config,
+  commandes, cycle client). Protocole réseau v2.
+- **Labels de waypoints lisibles** : fond émis dans un buffer séparé
+  (`textBackgroundSeeThrough`) — le tri par distance de `drawInBatch` grisait la moitié des
+  glyphes ; label centré, affiché dans un cône de visée ~12°, clampé + boost de taille à
+  distance.
+- **Noms des gares/trains** : bug DANS Create (pick relatif au centre sans « + mapCenter ») ;
+  rendu rejoué par le bridge avec pick corrigé + tooltips.
+- **Path du train survolé + suivi au clic** : route simulée côté serveur
+  (`CreateTrainPathService.walkRoute` — `currentPath` de Create ne contient que les
+  décisions d'embranchement), repeinte en doré sur les pixels de rail de Create (relief
+  préservé, contours intacts). _Limites ACCEPTÉES : la marche s'arrête à un embranchement
+  sans décision, léger débordement possible aux croisements. **NE PAS retenter** le fallback
+  « première option » de navigateOptions ni le filtre par distance au segment sans meilleure
+  compréhension de l'orientation des TravellingPoints de Create._
+- **Overlay de progression du regen** : chunks pas encore re-rendus voilés en violet,
+  granularité chunk (masques 1024 bits par région, ~1×/s).
+- **Écran de gestion des waypoints** (design v3) : deux panneaux façon JM (groupes à gauche
+  avec « Tous », sélection dorée, checkbox de visibilité, compteurs live ; waypoints à
+  droite avec « + Nouveau waypoint » en dernière ligne), groupes gérés (créer/renommer/
+  supprimer, réservés protégés), modals stylés (`ModalScreen`), raccourcis U (manager) et
+  B (créer à la position du joueur).
+- **Écran de création/édition** : formulaire structuré (nom, X/Y/Z, groupe avec
+  autocomplétion — un nouveau nom crée le groupe, couleur hex + palette + picker HSB +
+  aléatoire, visibilité, type), Entrée = sauvegarder.
+- **Menu clic droit custom** (`ContextMenu`) : panneau plat sombre, survol, en-tête
+  coordonnées, sous-menu ancré ; Échap ferme ; release du clic consommé avalé.
+- **Waypoints publics** (ex-GLOBAL) : partagés via le serveur (`PublicWaypointService`,
+  persistés dans le monde, broadcast + envoi complet au login, protocole v3) ; `visible`
+  reste un choix local (`hiddenIds`) ; migration des anciens GLOBAL en DIMENSION ; death
+  waypoints automatiques (groupe `deaths`, config `deathWaypoints`).
+- **Configs client par section** : `ClientConfig` façade de `MinimapClientConfig`,
+  `RadarClientConfig`, `WaypointClientConfig`, `MapClientConfig` (clés TOML inchangées).
