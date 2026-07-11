@@ -13,6 +13,7 @@ import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
+import fr.cheesegrinder.sharedjourney.common.util.Lang;
 import fr.cheesegrinder.sharedjourney.common.util.UndergroundCheck;
 
 import net.minecraft.client.DeltaTracker;
@@ -549,15 +550,15 @@ public final class MinimapRenderer {
 
     private static String periodKey(long dayTime) {
         if (dayTime >= 22300) {
-            return "sharedjourney.time.sunrise";
+            return Lang.TIME_SUNRISE;
         }
         if (dayTime >= 13700) {
-            return "sharedjourney.time.night";
+            return Lang.TIME_NIGHT;
         }
         if (dayTime >= 12000) {
-            return "sharedjourney.time.sunset";
+            return Lang.TIME_SUNSET;
         }
-        return "sharedjourney.time.day";
+        return Lang.TIME_DAY;
     }
 
     /**

@@ -2,6 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.gui;
 
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
+import fr.cheesegrinder.sharedjourney.common.util.Lang;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -113,10 +114,7 @@ public class WaypointEditScreen extends Screen {
     }
 
     public WaypointEditScreen(Screen parent, Waypoint waypoint, boolean creating) {
-        super(
-                creating
-                        ? Component.translatable("sharedjourney.waypoint.create")
-                        : Component.translatable("sharedjourney.waypoint.edit"));
+        super(creating ? Component.translatable(Lang.WAYPOINT_CREATE) : Component.translatable(Lang.WAYPOINT_EDIT));
         this.parent = parent;
         this.original = waypoint;
         this.creating = creating;
@@ -150,7 +148,7 @@ public class WaypointEditScreen extends Screen {
         // reserved group while the type is PUBLIC.
         groupBox = textBox(left, y, FORM_WIDTH, "");
         groupBox.setMaxLength(32);
-        groupBox.setTooltip(Tooltip.create(Component.translatable("sharedjourney.waypoint.group.tooltip")));
+        groupBox.setTooltip(Tooltip.create(Component.translatable(Lang.WAYPOINT_GROUP_TOOLTIP)));
         groupBox.setResponder(this::onGroupTyped);
         refreshGroupField();
         y += ROW_STEP;
@@ -159,7 +157,7 @@ public class WaypointEditScreen extends Screen {
         colorBox = textBox(left, y, 74, String.format("#%06X", color));
         colorBox.setMaxLength(7);
         colorBox.setResponder(this::onColorTyped);
-        addRenderableWidget(Button.builder(Component.translatable("sharedjourney.waypoint.random"), b -> {
+        addRenderableWidget(Button.builder(Component.translatable(Lang.WAYPOINT_RANDOM), b -> {
                     setColor(0xFFFFFF & ThreadLocalRandom.current().nextInt());
                 })
                 .bounds(left + 78, y, 70, 18)
@@ -194,7 +192,7 @@ public class WaypointEditScreen extends Screen {
                     refreshGroupField();
                 })
                 .bounds(left + 122, y, 118, 20)
-                .tooltip(Tooltip.create(Component.translatable("sharedjourney.waypoint.type.tooltip")))
+                .tooltip(Tooltip.create(Component.translatable(Lang.WAYPOINT_TYPE_TOOLTIP)))
                 .build());
         y += 26;
 
@@ -211,9 +209,7 @@ public class WaypointEditScreen extends Screen {
                     .bounds(left, y, 76, 20)
                     .build());
             addRenderableWidget(Button.builder(
-                            Component.translatable("sharedjourney.waypoint.delete")
-                                    .withStyle(s -> s.withColor(0xFF6060)),
-                            b -> {
+                            Component.translatable(Lang.WAYPOINT_DELETE).withStyle(s -> s.withColor(0xFF6060)), b -> {
                                 WaypointStore.remove(original.id());
                                 close();
                             })
@@ -386,12 +382,11 @@ public class WaypointEditScreen extends Screen {
     }
 
     private Component visibilityLabel() {
-        return Component.translatable(visible ? "sharedjourney.waypoint.visible" : "sharedjourney.waypoint.hidden");
+        return Component.translatable(visible ? Lang.WAYPOINT_VISIBLE : Lang.WAYPOINT_HIDDEN);
     }
 
     private Component typeLabel() {
-        String key = "sharedjourney.waypoint.type." + type.name().toLowerCase(Locale.ROOT);
-        return Component.translatable("sharedjourney.waypoint.type", Component.translatable(key));
+        return Component.translatable(Lang.WAYPOINT_TYPE, Component.translatable(Lang.waypointType(type)));
     }
 
     private static Waypoint.Type nextType(Waypoint.Type type) {
@@ -446,8 +441,8 @@ public class WaypointEditScreen extends Screen {
         super.renderBackground(gg, mouseX, mouseY, partialTick);
         int left = width / 2 - FORM_WIDTH / 2;
         int bottom = panelTop + 14 + 3 * ROW_STEP + 22 + 26 + PICKER_ROW + 26 + 30;
-        gg.fill(left - 12, panelTop - 26, left + FORM_WIDTH + 12, bottom, 0xE0101014);
-        gg.renderOutline(left - 12, panelTop - 26, FORM_WIDTH + 24, bottom - panelTop + 26, 0xFF404048);
+        gg.fill(left - 12, panelTop - 26, left + FORM_WIDTH + 12, bottom, UiColors.PANEL_BACKGROUND);
+        gg.renderOutline(left - 12, panelTop - 26, FORM_WIDTH + 24, bottom - panelTop + 26, UiColors.PANEL_BORDER);
     }
 
     @Override
@@ -456,13 +451,13 @@ public class WaypointEditScreen extends Screen {
         int left = width / 2 - FORM_WIDTH / 2;
         gg.drawCenteredString(font, title, width / 2, panelTop - 18, 0xFFFFFF);
         int y = panelTop + 14;
-        drawLabel(gg, "sharedjourney.waypoint.name", left, y);
+        drawLabel(gg, Lang.WAYPOINT_NAME, left, y);
         y += ROW_STEP;
-        drawLabel(gg, "sharedjourney.waypoint.position", left, y);
+        drawLabel(gg, Lang.WAYPOINT_POSITION, left, y);
         y += ROW_STEP;
-        drawLabel(gg, "sharedjourney.waypoint.group", left, y);
+        drawLabel(gg, Lang.WAYPOINT_GROUP, left, y);
         y += ROW_STEP;
-        drawLabel(gg, "sharedjourney.waypoint.color", left, y);
+        drawLabel(gg, Lang.WAYPOINT_COLOR, left, y);
         // Current color preview, right of the Random button.
         gg.fill(left + 154, y, left + FORM_WIDTH, y + 18, 0xFF000000 | color);
         gg.renderOutline(left + 154, y, FORM_WIDTH - 154, 18, 0xFF000000);
@@ -487,13 +482,13 @@ public class WaypointEditScreen extends Screen {
         int h = groupSuggestions.size() * SUGGESTION_ROW + 4;
         gg.pose().pushPose();
         gg.pose().translate(0, 0, 200);
-        gg.fill(x, y, x + FORM_WIDTH, y + h, 0xF016161C);
-        gg.renderOutline(x, y, FORM_WIDTH, h, 0xFF44444C);
+        gg.fill(x, y, x + FORM_WIDTH, y + h, UiColors.MENU_BACKGROUND);
+        gg.renderOutline(x, y, FORM_WIDTH, h, UiColors.MENU_BORDER);
         int hovered = suggestionIndexAt(mouseX, mouseY);
         for (int i = 0; i < groupSuggestions.size(); i++) {
             int rowY = y + 2 + i * SUGGESTION_ROW;
             if (i == hovered) {
-                gg.fill(x + 1, rowY, x + FORM_WIDTH - 1, rowY + SUGGESTION_ROW, 0xFF32323C);
+                gg.fill(x + 1, rowY, x + FORM_WIDTH - 1, rowY + SUGGESTION_ROW, UiColors.ROW_HIGHLIGHT);
             }
 
             gg.drawString(font, groupSuggestions.get(i), x + 5, rowY + 2, i == hovered ? 0xFFFFFF : 0xC8C8C8);

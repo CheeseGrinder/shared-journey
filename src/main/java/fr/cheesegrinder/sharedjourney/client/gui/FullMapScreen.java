@@ -18,6 +18,7 @@ import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
+import fr.cheesegrinder.sharedjourney.common.util.Lang;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
@@ -202,25 +203,21 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         x = addLayerIcon(x, step, MapLayer.CAVE, Items.TORCH, allowed);
         x += 6;
 
-        x = addToggleIcon(x, step, Items.LANTERN, "sharedjourney.action.show_cave", MapClientConfig.SHOW_CAVE);
-        x = addToggleIcon(
-                x, step, Items.ZOMBIE_HEAD, "sharedjourney.action.show_mobs", RadarClientConfig.RADAR_HOSTILE);
-        x = addToggleIcon(
-                x, step, Items.PORKCHOP, "sharedjourney.action.show_animals", RadarClientConfig.RADAR_PASSIVE);
-        x = addToggleIcon(x, step, Items.BONE, "sharedjourney.action.show_pets", RadarClientConfig.RADAR_PETS);
-        x = addToggleIcon(
-                x, step, Items.EMERALD, "sharedjourney.action.show_villagers", RadarClientConfig.RADAR_VILLAGERS);
-        x = addToggleIcon(x, step, Items.IRON_BARS, "sharedjourney.action.show_grid", MapClientConfig.SHOW_GRID);
-        x = addToggleIcon(
-                x, step, Items.PLAYER_HEAD, "sharedjourney.action.hide_from_map", RadarClientConfig.HIDE_FROM_MAP);
+        x = addToggleIcon(x, step, Items.LANTERN, Lang.ACTION_SHOW_CAVE, MapClientConfig.SHOW_CAVE);
+        x = addToggleIcon(x, step, Items.ZOMBIE_HEAD, Lang.ACTION_SHOW_MOBS, RadarClientConfig.RADAR_HOSTILE);
+        x = addToggleIcon(x, step, Items.PORKCHOP, Lang.ACTION_SHOW_ANIMALS, RadarClientConfig.RADAR_PASSIVE);
+        x = addToggleIcon(x, step, Items.BONE, Lang.ACTION_SHOW_PETS, RadarClientConfig.RADAR_PETS);
+        x = addToggleIcon(x, step, Items.EMERALD, Lang.ACTION_SHOW_VILLAGERS, RadarClientConfig.RADAR_VILLAGERS);
+        x = addToggleIcon(x, step, Items.IRON_BARS, Lang.ACTION_SHOW_GRID, MapClientConfig.SHOW_GRID);
+        x = addToggleIcon(x, step, Items.PLAYER_HEAD, Lang.ACTION_HIDE_FROM_MAP, RadarClientConfig.HIDE_FROM_MAP);
 
-        IconButton keys = addIcon(x, 6, Items.WRITABLE_BOOK, "sharedjourney.action.show_keys", b -> {
+        IconButton keys = addIcon(x, 6, Items.WRITABLE_BOOK, Lang.ACTION_SHOW_KEYS, b -> {
             showKeys = !showKeys;
             refreshToolbar();
         });
         toggleIcons.put(keys, () -> showKeys);
 
-        addIcon(width - 26, 6, Items.BARRIER, "sharedjourney.action.close", b -> onClose());
+        addIcon(width - 26, 6, Items.BARRIER, Lang.ACTION_CLOSE, b -> onClose());
     }
 
     /** Left bar: position search, follow player, zoom. */
@@ -228,7 +225,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         // Below the bridged plugins' overlay controls (Create's train map
         // draws its toggle in the top-left corner) to avoid overlapping.
         int y = 70;
-        addIcon(6, y, Items.COMPASS, "sharedjourney.action.locate", b -> {
+        addIcon(6, y, Items.COMPASS, Lang.ACTION_LOCATE, b -> {
             locateOpen = !locateOpen;
             updateLocateWidgets();
         });
@@ -245,16 +242,16 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         updateLocateWidgets();
 
         // Buttons stacked at the same step (22 px) for an even column.
-        addIcon(6, y + 22, Items.ENDER_EYE, "sharedjourney.action.follow", b -> centerOnPlayer());
+        addIcon(6, y + 22, Items.ENDER_EYE, Lang.ACTION_FOLLOW, b -> centerOnPlayer());
         addRenderableWidget(Button.builder(Component.literal("+"), b -> zoomStep(1, width / 2.0, height / 2.0))
                 .bounds(6, y + 44, 20, 20)
-                .tooltip(Tooltip.create(Component.translatable("sharedjourney.action.zoom_in")))
+                .tooltip(Tooltip.create(Component.translatable(Lang.ACTION_ZOOM_IN)))
                 .build());
         addRenderableWidget(Button.builder(Component.literal("-"), b -> zoomStep(-1, width / 2.0, height / 2.0))
                 .bounds(6, y + 66, 20, 20)
-                .tooltip(Tooltip.create(Component.translatable("sharedjourney.action.zoom_out")))
+                .tooltip(Tooltip.create(Component.translatable(Lang.ACTION_ZOOM_OUT)))
                 .build());
-        addIcon(6, y + 88, Items.NAME_TAG, "sharedjourney.action.waypoints", b -> Minecraft.getInstance()
+        addIcon(6, y + 88, Items.NAME_TAG, Lang.ACTION_WAYPOINTS, b -> Minecraft.getInstance()
                 .setScreen(new WaypointListScreen(this)));
     }
 
@@ -265,12 +262,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     }
 
     private int addLayerIcon(int x, int step, MapLayer target, Item icon, List<MapLayer> allowed) {
-        IconButton b = addIcon(
-                x,
-                6,
-                icon,
-                "sharedjourney.action." + target.name().toLowerCase(Locale.ROOT),
-                btn -> selectLayer(target));
+        IconButton b = addIcon(x, 6, icon, Lang.actionLayer(target.name()), btn -> selectLayer(target));
         b.active = allowed.isEmpty() || allowed.contains(target);
         layerIcons.put(target, b);
         return x + step;
@@ -620,33 +612,30 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         List<ContextMenu.Item> items = new ArrayList<>();
         // TP goes through /tp: reserved to op players (level 2, known client-side).
         if (mc.player.hasPermissions(2)) {
-            items.add(ContextMenu.Item.action(
-                    Component.translatable("sharedjourney.context.teleport"), () -> teleportTo(wx, wz)));
+            items.add(ContextMenu.Item.action(Component.translatable(Lang.CONTEXT_TELEPORT), () -> teleportTo(wx, wz)));
         }
 
         items.add(ContextMenu.Item.submenu(
-                Component.translatable("sharedjourney.context.waypoints"),
+                Component.translatable(Lang.CONTEXT_WAYPOINTS),
                 List.of(
                         ContextMenu.Item.action(
-                                Component.translatable("sharedjourney.context.waypoint"),
+                                Component.translatable(Lang.CONTEXT_WAYPOINT),
                                 () -> createWaypointAt(wx, wz, Waypoint.Type.DIMENSION)),
                         ContextMenu.Item.action(
-                                Component.translatable("sharedjourney.context.waypoint_temp"),
-                                () -> createTempWaypointAt(wx, wz)),
+                                Component.translatable(Lang.CONTEXT_WAYPOINT_TEMP), () -> createTempWaypointAt(wx, wz)),
                         ContextMenu.Item.action(
-                                Component.translatable("sharedjourney.context.waypoint_public"),
+                                Component.translatable(Lang.CONTEXT_WAYPOINT_PUBLIC),
                                 () -> createWaypointAt(wx, wz, Waypoint.Type.PUBLIC)),
                         ContextMenu.Item.action(
-                                Component.translatable("sharedjourney.context.show_all"),
+                                Component.translatable(Lang.CONTEXT_SHOW_ALL),
                                 () -> WaypointStore.setAllVisible(dim, true)),
                         ContextMenu.Item.action(
-                                Component.translatable("sharedjourney.context.hide_all"),
+                                Component.translatable(Lang.CONTEXT_HIDE_ALL),
                                 () -> WaypointStore.setAllVisible(dim, false)),
                         ContextMenu.Item.action(
-                                Component.translatable("sharedjourney.context.manage_waypoints"),
+                                Component.translatable(Lang.CONTEXT_MANAGE_WAYPOINTS),
                                 () -> mc.setScreen(new WaypointListScreen(this))))));
-        items.add(
-                ContextMenu.Item.action(Component.translatable("sharedjourney.context.chat"), () -> logCoords(wx, wz)));
+        items.add(ContextMenu.Item.action(Component.translatable(Lang.CONTEXT_CHAT), () -> logCoords(wx, wz)));
 
         Component title = Component.literal(wx + ", " + wz);
         contextMenu = new ContextMenu(font, title, items, mouseX, mouseY, width, height, this::closeContextMenu);
@@ -728,12 +717,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     /** Writes the position to (local) chat; clicking it reopens the map here. */
     private void logCoords(int wx, int wz) {
         var mc = Minecraft.getInstance();
-        Component msg = Component.translatable("sharedjourney.coords.chat", wx, wz)
-                .withStyle(style -> style.withColor(ChatFormatting.AQUA)
-                        .withUnderlined(true)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/sj goto " + wx + " " + wz))
-                        .withHoverEvent(new HoverEvent(
-                                HoverEvent.Action.SHOW_TEXT, Component.translatable("sharedjourney.coords.open"))));
+        Component msg = Component.translatable(Lang.COORDS_CHAT, wx, wz).withStyle(style -> style.withColor(
+                        ChatFormatting.AQUA)
+                .withUnderlined(true)
+                .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/sj goto " + wx + " " + wz))
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.translatable(Lang.COORDS_OPEN))));
         mc.gui.getChat().addMessage(msg);
         onClose(); // close the map to reveal the chat
     }
@@ -806,7 +794,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             return true;
         }
 
-        // Pas de raccourcis pendant une saisie de texte.
+        // No shortcuts while typing in a text field.
         if (getFocused() instanceof EditBox) {
             return super.keyPressed(keyCode, scanCode, modifiers);
         }
@@ -1062,16 +1050,16 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             lines.add(key.getTranslatedKeyMessage().getString().toUpperCase(Locale.ROOT) + "  "
                     + Component.translatable(key.getName()).getString());
         }
-        lines.add(Component.translatable("sharedjourney.legend.drag").getString());
-        lines.add(Component.translatable("sharedjourney.legend.scroll").getString());
-        lines.add(Component.translatable("sharedjourney.legend.double_click").getString());
-        lines.add(Component.translatable("sharedjourney.legend.right_click").getString());
-        lines.add(Component.translatable("sharedjourney.legend.arrows").getString());
-        lines.add(Component.translatable("sharedjourney.legend.key_b").getString());
-        lines.add(Component.translatable("sharedjourney.legend.key_c").getString());
-        lines.add(Component.translatable("sharedjourney.legend.key_f").getString());
-        lines.add(Component.translatable("sharedjourney.legend.key_t").getString());
-        lines.add(Component.translatable("sharedjourney.legend.key_j").getString());
+        lines.add(Component.translatable(Lang.LEGEND_DRAG).getString());
+        lines.add(Component.translatable(Lang.LEGEND_SCROLL).getString());
+        lines.add(Component.translatable(Lang.LEGEND_DOUBLE_CLICK).getString());
+        lines.add(Component.translatable(Lang.LEGEND_RIGHT_CLICK).getString());
+        lines.add(Component.translatable(Lang.LEGEND_ARROWS).getString());
+        lines.add(Component.translatable(Lang.LEGEND_KEY_B).getString());
+        lines.add(Component.translatable(Lang.LEGEND_KEY_C).getString());
+        lines.add(Component.translatable(Lang.LEGEND_KEY_F).getString());
+        lines.add(Component.translatable(Lang.LEGEND_KEY_T).getString());
+        lines.add(Component.translatable(Lang.LEGEND_KEY_J).getString());
 
         int maxW = 0;
         for (String line : lines) {

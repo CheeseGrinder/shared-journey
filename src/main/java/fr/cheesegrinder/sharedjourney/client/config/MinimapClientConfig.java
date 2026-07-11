@@ -17,6 +17,7 @@ public final class MinimapClientConfig {
 
     public static ModConfigSpec.BooleanValue SHOW_COORDS;
 
+    /** Screen corner the HUD minimap is anchored to. */
     public enum Corner {
         TOP_LEFT,
         TOP_RIGHT,
@@ -24,6 +25,7 @@ public final class MinimapClientConfig {
         BOTTOM_RIGHT
     }
 
+    /** Outline shape used to draw the HUD minimap. */
     public enum Shape {
         CIRCLE,
         SQUARE

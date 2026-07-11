@@ -1,8 +1,10 @@
 package fr.cheesegrinder.sharedjourney;
 
+import fr.cheesegrinder.sharedjourney.api.WaypointApi;
 import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapBridge;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.net.ClientNetHandler;
+import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 
 import net.neoforged.api.distmarker.Dist;
@@ -40,6 +42,16 @@ public class SharedJourneyClient {
         Payloads.Hooks.clientTrainPath = ClientNetHandler::handleTrainPath;
         Payloads.Hooks.clientPublicWaypoint = ClientNetHandler::handlePublicWaypoint;
         Payloads.Hooks.clientPublicWaypointRemove = ClientNetHandler::handlePublicWaypointRemove;
+
+        // Public API facade (spec: published once the waypoint model is stable).
+        WaypointApi.Hooks.all = WaypointStore::all;
+        WaypointApi.Hooks.forDimension = WaypointStore::forDimension;
+        WaypointApi.Hooks.get = WaypointStore::get;
+        WaypointApi.Hooks.add = WaypointStore::add;
+        WaypointApi.Hooks.update = WaypointStore::update;
+        WaypointApi.Hooks.remove = WaypointStore::remove;
+        WaypointApi.Hooks.isShown = WaypointStore::isShown;
+        WaypointApi.Hooks.groups = WaypointStore::groups;
     }
 
     @SubscribeEvent

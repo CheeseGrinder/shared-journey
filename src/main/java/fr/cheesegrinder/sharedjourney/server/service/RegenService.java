@@ -3,6 +3,7 @@ package fr.cheesegrinder.sharedjourney.server.service;
 import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
+import fr.cheesegrinder.sharedjourney.common.util.Lang;
 
 import net.minecraft.Util;
 import net.minecraft.nbt.CompoundTag;
@@ -127,15 +128,14 @@ public final class RegenService {
         announceStart();
 
         // Unique regions, across all layers/bands.
-        record RegionPos(ResourceKey<Level> dim, int rx, int rz) {}
-        Set<RegionPos> regions = new HashSet<>();
+        Set<MaskKey> regions = new HashSet<>();
         for (RegionKey key : mgr.indexedRegions()) {
-            regions.add(new RegionPos(key.dimension(), key.rx(), key.rz()));
+            regions.add(new MaskKey(key.dimension(), key.rx(), key.rz()));
         }
 
         ArrayDeque<Batch> q = new ArrayDeque<>();
         int count = 0;
-        for (RegionPos region : regions) {
+        for (MaskKey region : regions) {
             ServerLevel level = server.getLevel(region.dim());
             if (level == null) {
                 continue;
@@ -179,7 +179,7 @@ public final class RegenService {
         announceStart();
         final int myEpoch = ++epoch;
         bossBar = new ServerBossEvent(
-                Component.translatable("sharedjourney.regen.scan"),
+                Component.translatable(Lang.REGEN_SCAN),
                 BossEvent.BossBarColor.GREEN,
                 BossEvent.BossBarOverlay.PROGRESS);
         bossBar.setProgress(0f);
@@ -482,6 +482,6 @@ public final class RegenService {
     }
 
     private static Component barName() {
-        return Component.translatable("sharedjourney.regen.bossbar", done, total);
+        return Component.translatable(Lang.REGEN_BOSSBAR, done, total);
     }
 }

@@ -80,6 +80,7 @@ public final class ClientMapCache {
     /** Sidecars absent from disk: avoids retrying the read every frame. */
     private static final Set<RegionKey> HOVER_MISSES = new HashSet<>();
 
+    /** Biome/block/Y info of a hovered map column. */
     public record HoverInfo(int y, String biomeId, String blockId) {}
 
     /**
@@ -119,6 +120,7 @@ public final class ClientMapCache {
         return new HoverInfo(column.y(), column.biomeId(), column.blockId());
     }
 
+    /** A fully-assembled cached region texture, at the version it was received. */
     public record Region(long version, ResourceLocation texture) {}
 
     private static final class Assembly {

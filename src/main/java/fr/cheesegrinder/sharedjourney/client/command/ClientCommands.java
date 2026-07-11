@@ -4,6 +4,7 @@ import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.DiskCache;
+import fr.cheesegrinder.sharedjourney.common.util.Lang;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -53,8 +54,7 @@ public final class ClientCommands {
                                     int deleted = DiskCache.purge(layer);
                                     ctx.getSource()
                                             .sendSuccess(
-                                                    () -> Component.translatable(
-                                                            "sharedjourney.command.purged", deleted, layer),
+                                                    () -> Component.translatable(Lang.COMMAND_PURGED, deleted, layer),
                                                     false);
                                     return deleted;
                                 })))

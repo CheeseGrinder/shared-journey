@@ -1,0 +1,36 @@
+package fr.cheesegrinder.sharedjourney.client.gui;
+
+/**
+ * Shared ARGB color palette of the mod's custom-rendered screens
+ * (dark panel style: {@link WaypointEditScreen}, {@link ModalScreen},
+ * {@link ContextMenu}, the group autocomplete dropdown). Centralized so
+ * the panels stay visually consistent and the values aren't repeated.
+ */
+final class UiColors {
+
+    /** Panel/dropdown background (translucent near-black). */
+    static final int PANEL_BACKGROUND = 0xE0101014;
+
+    /** Panel border (dark gray). */
+    static final int PANEL_BORDER = 0xFF404048;
+
+    /** Flat menu/dropdown background (context menu, autocomplete). */
+    static final int MENU_BACKGROUND = 0xF016161C;
+
+    /** Flat menu/dropdown border. */
+    static final int MENU_BORDER = 0xFF44444C;
+
+    /** Hovered/selected row highlight. */
+    static final int ROW_HIGHLIGHT = 0xFF32323C;
+
+    /** Default row text. */
+    static final int TEXT = 0xFFCACACA;
+
+    /** Hovered/selected row text. */
+    static final int TEXT_HOVER = 0xFFFFFFFF;
+
+    /** Muted title/header text. */
+    static final int TEXT_TITLE = 0xFF8A8A92;
+
+    private UiColors() {}
+}

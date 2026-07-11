@@ -38,13 +38,6 @@ public final class ContextMenu {
     /** Space reserved on the right for the submenu ">" marker. */
     private static final int ARROW_WIDTH = 10;
 
-    private static final int BACKGROUND = 0xF016161C;
-    private static final int BORDER = 0xFF44444C;
-    private static final int HIGHLIGHT = 0xFF32323C;
-    private static final int TEXT = 0xFFCACACA;
-    private static final int TEXT_HOVER = 0xFFFFFFFF;
-    private static final int TITLE = 0xFF8A8A92;
-
     private final Font font;
     /** Non-clickable header row (the clicked block position); nullable. */
     private final Component title;
@@ -148,7 +141,7 @@ public final class ContextMenu {
         drawPanel(gg, x, y, w, h);
         int rowY = y + PAD_Y;
         if (title != null) {
-            gg.drawString(font, title, x + PAD_X, rowY + 3, TITLE);
+            gg.drawString(font, title, x + PAD_X, rowY + 3, UiColors.TEXT_TITLE);
             rowY += ROW_HEIGHT;
         }
 
@@ -161,8 +154,8 @@ public final class ContextMenu {
     }
 
     private void drawPanel(GuiGraphics gg, int px, int py, int pw, int ph) {
-        gg.fill(px, py, px + pw, py + ph, BACKGROUND);
-        gg.renderOutline(px, py, pw, ph, BORDER);
+        gg.fill(px, py, px + pw, py + ph, UiColors.MENU_BACKGROUND);
+        gg.renderOutline(px, py, pw, ph, UiColors.MENU_BORDER);
     }
 
     private void drawRows(
@@ -174,12 +167,17 @@ public final class ContextMenu {
             // The row whose submenu is open stays highlighted (JM-like).
             boolean marked = hovered || (root && item == openSubmenu);
             if (marked) {
-                gg.fill(panelX + 1, rowTop, panelX + panelW - 1, rowTop + ROW_HEIGHT, HIGHLIGHT);
+                gg.fill(panelX + 1, rowTop, panelX + panelW - 1, rowTop + ROW_HEIGHT, UiColors.ROW_HIGHLIGHT);
             }
 
-            gg.drawString(font, item.label(), panelX + PAD_X, rowTop + 3, marked ? TEXT_HOVER : TEXT);
+            gg.drawString(font, item.label(), panelX + PAD_X, rowTop + 3, marked ? UiColors.TEXT_HOVER : UiColors.TEXT);
             if (item.hasChildren()) {
-                gg.drawString(font, ">", panelX + panelW - PAD_X - 4, rowTop + 3, marked ? TEXT_HOVER : TEXT);
+                gg.drawString(
+                        font,
+                        ">",
+                        panelX + panelW - PAD_X - 4,
+                        rowTop + 3,
+                        marked ? UiColors.TEXT_HOVER : UiColors.TEXT);
             }
         }
     }

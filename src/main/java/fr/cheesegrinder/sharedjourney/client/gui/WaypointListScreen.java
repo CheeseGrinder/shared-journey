@@ -2,6 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.gui;
 
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
+import fr.cheesegrinder.sharedjourney.common.util.Lang;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -63,7 +64,7 @@ public class WaypointListScreen extends Screen {
     private Button deleteButton;
 
     public WaypointListScreen(Screen parent) {
-        super(Component.translatable("sharedjourney.waypoints.title"));
+        super(Component.translatable(Lang.WAYPOINTS_TITLE));
         this.parent = parent;
     }
 
@@ -75,19 +76,17 @@ public class WaypointListScreen extends Screen {
 
         // Left panel: groups + management buttons + Done.
         groupList = addRenderableWidget(new GroupList(minecraft, LEFT_WIDTH, height - GROUP_LIST_TOP - LEFT_FOOTER));
-        addRenderableWidget(
-                Button.builder(Component.translatable("sharedjourney.waypoints.group_new"), b -> openGroupPrompt(null))
-                        .bounds(MARGIN, height - 70, LEFT_WIDTH, 20)
+        addRenderableWidget(Button.builder(Component.translatable(Lang.WAYPOINTS_GROUP_NEW), b -> openGroupPrompt(null))
+                .bounds(MARGIN, height - 70, LEFT_WIDTH, 20)
+                .build());
+        renameButton = addRenderableWidget(
+                Button.builder(Component.translatable(Lang.WAYPOINTS_GROUP_RENAME), b -> openGroupPrompt(selectedGroup))
+                        .bounds(MARGIN, height - 48, LEFT_WIDTH / 2 - 2, 20)
                         .build());
-        renameButton = addRenderableWidget(Button.builder(
-                        Component.translatable("sharedjourney.waypoints.group_rename"),
-                        b -> openGroupPrompt(selectedGroup))
-                .bounds(MARGIN, height - 48, LEFT_WIDTH / 2 - 2, 20)
-                .build());
-        deleteButton = addRenderableWidget(Button.builder(
-                        Component.translatable("sharedjourney.waypoints.group_delete"), b -> confirmDeleteGroup())
-                .bounds(MARGIN + LEFT_WIDTH / 2 + 2, height - 48, LEFT_WIDTH / 2 - 2, 20)
-                .build());
+        deleteButton = addRenderableWidget(
+                Button.builder(Component.translatable(Lang.WAYPOINTS_GROUP_DELETE), b -> confirmDeleteGroup())
+                        .bounds(MARGIN + LEFT_WIDTH / 2 + 2, height - 48, LEFT_WIDTH / 2 - 2, 20)
+                        .build());
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
                 .bounds(MARGIN, height - 26, LEFT_WIDTH, 20)
                 .build());
@@ -109,8 +108,7 @@ public class WaypointListScreen extends Screen {
         // Only the creation row left: the group is empty.
         if (waypointList.children().size() <= 1) {
             int cx = MARGIN + LEFT_WIDTH + PANEL_GAP + (width - MARGIN * 2 - LEFT_WIDTH - PANEL_GAP) / 2;
-            gg.drawCenteredString(
-                    font, Component.translatable("sharedjourney.waypoints.empty_group"), cx, height / 2, 0xAAAAAA);
+            gg.drawCenteredString(font, Component.translatable(Lang.WAYPOINTS_EMPTY_GROUP), cx, height / 2, 0xAAAAAA);
         }
     }
 
@@ -136,8 +134,7 @@ public class WaypointListScreen extends Screen {
 
     /** Name prompt shared by group creation (renameFrom=null) and rename. */
     private void openGroupPrompt(String renameFrom) {
-        String titleKey =
-                renameFrom == null ? "sharedjourney.waypoints.group_new" : "sharedjourney.waypoints.group_rename_title";
+        String titleKey = renameFrom == null ? Lang.WAYPOINTS_GROUP_NEW : Lang.WAYPOINTS_GROUP_RENAME_TITLE;
         Consumer<String> onConfirm = name -> {
             boolean applied =
                     renameFrom == null ? WaypointStore.createGroup(name) : WaypointStore.renameGroup(renameFrom, name);
@@ -155,8 +152,7 @@ public class WaypointListScreen extends Screen {
         long count = WaypointStore.all().stream()
                 .filter(wp -> wp.group().equals(group))
                 .count();
-        Component message =
-                Component.translatable("sharedjourney.waypoints.group_delete_confirm", groupLabel(group), count);
+        Component message = Component.translatable(Lang.WAYPOINTS_GROUP_DELETE_CONFIRM, groupLabel(group), count);
         Minecraft.getInstance().setScreen(new GroupDeleteScreen(this, message, () -> {
             WaypointStore.deleteGroup(group);
             selectedGroup = GROUP_ALL;
@@ -166,19 +162,19 @@ public class WaypointListScreen extends Screen {
     /** Display name of a group: reserved groups are translated. */
     static Component groupLabel(String group) {
         if (GROUP_ALL.equals(group)) {
-            return Component.translatable("sharedjourney.waypoints.group_all");
+            return Component.translatable(Lang.WAYPOINTS_GROUP_ALL);
         }
 
         if (Waypoint.GROUP_DEFAULT.equals(group)) {
-            return Component.translatable("sharedjourney.group.default");
+            return Component.translatable(Lang.GROUP_DEFAULT);
         }
 
         if (Waypoint.GROUP_DEATHS.equals(group)) {
-            return Component.translatable("sharedjourney.group.deaths");
+            return Component.translatable(Lang.GROUP_DEATHS);
         }
 
         if (Waypoint.GROUP_PUBLIC.equals(group)) {
-            return Component.translatable("sharedjourney.group.public");
+            return Component.translatable(Lang.GROUP_PUBLIC);
         }
         return Component.literal(group);
     }
@@ -270,7 +266,7 @@ public class WaypointListScreen extends Screen {
                         : Checkbox.builder(Component.empty(), font)
                                 .selected(WaypointStore.isGroupVisible(group))
                                 .onValueChange((cb, value) -> WaypointStore.setGroupVisible(group, value))
-                                .tooltip(Tooltip.create(Component.translatable("sharedjourney.waypoints.group_toggle")))
+                                .tooltip(Tooltip.create(Component.translatable(Lang.WAYPOINTS_GROUP_TOGGLE)))
                                 .build();
             }
 
@@ -395,8 +391,7 @@ public class WaypointListScreen extends Screen {
                     int mouseY,
                     boolean hovering,
                     float partialTick) {
-                Component label =
-                        Component.literal("+ ").append(Component.translatable("sharedjourney.waypoint.create"));
+                Component label = Component.literal("+ ").append(Component.translatable(Lang.WAYPOINT_CREATE));
                 int color = hovering ? 0xFFFFFF : 0x80E080;
                 gg.drawCenteredString(font, label, left + width / 2, top + 6, color);
             }
@@ -430,20 +425,19 @@ public class WaypointListScreen extends Screen {
                             b.setMessage(visibilityLabel());
                         })
                         .size(30, 20)
-                        .tooltip(Tooltip.create(Component.translatable("sharedjourney.waypoints.toggle")))
+                        .tooltip(Tooltip.create(Component.translatable(Lang.WAYPOINTS_TOGGLE)))
                         .build();
                 buttons.add(visibility);
                 buttons.add(Button.builder(
-                                Component.translatable("sharedjourney.waypoints.edit"),
+                                Component.translatable(Lang.WAYPOINTS_EDIT),
                                 b -> mc.setScreen(new WaypointEditScreen(WaypointListScreen.this, waypoint)))
                         .size(40, 20)
                         .build());
                 if (mc.player != null && mc.player.hasPermissions(2)) {
                     Button tp = Button.builder(
-                                    Component.translatable("sharedjourney.waypoints.teleport"),
-                                    b -> teleportTo(waypoint))
+                                    Component.translatable(Lang.WAYPOINTS_TELEPORT), b -> teleportTo(waypoint))
                             .size(26, 20)
-                            .tooltip(Tooltip.create(Component.translatable("sharedjourney.context.teleport")))
+                            .tooltip(Tooltip.create(Component.translatable(Lang.CONTEXT_TELEPORT)))
                             .build();
                     tp.active = sameDimension(mc, waypoint);
                     buttons.add(tp);
@@ -453,7 +447,7 @@ public class WaypointListScreen extends Screen {
                             rebuild();
                         })
                         .size(20, 20)
-                        .tooltip(Tooltip.create(Component.translatable("sharedjourney.waypoint.delete")))
+                        .tooltip(Tooltip.create(Component.translatable(Lang.WAYPOINT_DELETE)))
                         .build();
                 buttons.add(delete);
             }
@@ -461,7 +455,7 @@ public class WaypointListScreen extends Screen {
             private Component visibilityLabel() {
                 Waypoint current = WaypointStore.get(waypoint.id());
                 boolean visible = current == null ? waypoint.visible() : current.visible();
-                String key = visible ? "sharedjourney.waypoints.on" : "sharedjourney.waypoints.off";
+                String key = visible ? Lang.WAYPOINTS_ON : Lang.WAYPOINTS_OFF;
                 return Component.translatable(key);
             }
 
@@ -583,7 +577,7 @@ public class WaypointListScreen extends Screen {
         private final Runnable onDelete;
 
         GroupDeleteScreen(Screen parent, Component message, Runnable onDelete) {
-            super(Component.translatable("sharedjourney.waypoints.group_delete_title"), parent);
+            super(Component.translatable(Lang.WAYPOINTS_GROUP_DELETE_TITLE), parent);
             this.message = message;
             this.onDelete = onDelete;
         }
@@ -598,8 +592,7 @@ public class WaypointListScreen extends Screen {
             super.init();
             int buttonsY = contentTop + messageLines().size() * 10 + 12;
             addRenderableWidget(Button.builder(
-                            Component.translatable("sharedjourney.waypoints.group_delete")
-                                    .withStyle(s -> s.withColor(0xFF6060)),
+                            Component.translatable(Lang.WAYPOINTS_GROUP_DELETE).withStyle(s -> s.withColor(0xFF6060)),
                             b -> {
                                 onDelete.run();
                                 onClose();

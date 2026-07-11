@@ -5,22 +5,35 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
 Le chantier UI est **parqué** (décision : on y reviendra plus tard) — ses items sont regroupés
 dans leur section et n'entrent pas dans l'ordre courant.
 
-## Prochain chantier : clean code du socle
+## Clean code du socle — fait
 
-Jamais fait (étape 2 du plan d'origine, doublée par les features) ; le moment est bon :
-l'UI vient d'être réécrite, la passe ne sera plus invalidée par un rework.
+Étape 2 du plan d'origine (jamais faite, doublée par les features), lancée une fois l'UI
+réécrite pour que la passe ne soit pas invalidée par un rework.
 
-- [ ] **P2 · ★★★★☆ — Nettoyage du socle** : `common`, `server` (moteur, services, réseau),
-  `client.service`, bridges. Responsabilité unique par fichier, documentation systématique,
-  reste de français → anglais, utilitaires/globals pour le code répété.
-- [ ] **P2 · ★★★★☆ — Classes dédiées traductions + constantes** : centraliser les clés i18n
-  (classe type `Translations`/`Lang` avec helpers) et les constantes partagées (couleurs UI,
-  tailles, noms de fichiers, clés JSON) ; éliminer les magic numbers/strings restants.
-  À faire AVANT l'écran de config intégré (qui produira beaucoup de nouvelles clés).
-- [ ] **P3 · ★★★☆☆ — Publier la façade API waypoints** (fin de chantier, règle de la
-  couture) : le modèle est maintenant stable (groupes, publics, death) — CRUD + événements
-  dans `api`. Trancher au passage : format NBT pour les index machine-only (JSON conservé
-  pour `waypoints.json`, lisibilité/backup = feature).
+- [x] **P2 · ★★★★☆ — Classes dédiées traductions + constantes** — **fait**.
+  `common.util.Lang` centralise toutes les clés i18n référencées en code (actions, contexte,
+  légende, écrans waypoint, groupes...) — exclut volontairement les clés
+  `sharedjourney.configuration.*` (dérivées automatiquement par NeoForge depuis le chemin TOML,
+  jamais appelées directement). `client.gui.UiColors` centralise la palette ARGB du style
+  panneau sombre partagée par `WaypointEditScreen`/`ModalScreen`/`ContextMenu` (background,
+  bordure, surbrillance de ligne, texte) — élimine la duplication de couleurs entre ces trois
+  écrans. `api.MapLayer#translationKey()` reste en dur (contrainte de layering : `api` ne peut
+  pas dépendre de `common` ; ce n'est pas une duplication, c'est la source unique de vérité).
+- [x] **P2 · ★★★★☆ — Nettoyage du socle** — **fait** : dernier commentaire français traduit
+  (`FullMapScreen`), 4 Javadoc de classe manquants ajoutés (`MinimapClientConfig.Corner/Shape`,
+  `ClientMapCache.Region/HoverInfo`), duplication exacte de record éliminée dans
+  `RegenService.start()` (un `record RegionPos` local était identique au `MaskKey` de la
+  classe). Audité et **volontairement laissés en l'état** (dans la tolérance du projet contre
+  l'abstraction prématurée) : le boilerplate GZIP de `Payloads`/`HoverRegionData` (corps
+  différents — string vs binaire structuré) et les helpers de réflexion des bridges JourneyMap/
+  Create (peu de recouvrement réel, logiques spécifiques à chaque mod, fragiles à fusionner).
+- [x] **P3 · ★★★☆☆ — Publier la façade API waypoints** — **fait** (fin de chantier, règle de
+  la couture) : `api.WaypointApi` (CRUD minimal — all/forDimension/get/add/update/remove/
+  isShown/groups — pas de gestion de groupes ni de session, YAGNI tant qu'un consommateur ne
+  le demande pas), indirection `Hooks` statique câblée par `SharedJourneyClient` vers
+  `WaypointStore` (même patron que `Payloads.Hooks`, car `api` ne peut référencer `client`).
+  Les événements `WaypointEvent.Added/Updated/Removed` existaient déjà.
+  _Reste à trancher séparément (non fait ici) : format NBT pour les index machine-only._
 
 ## Features (hors UI)
 
@@ -60,7 +73,8 @@ stabilise le modèle._
 - [x] **rendu écran (v1)** : `api.client.MapView` + `MapRenderEvent` (minimap + plein écran)
   + `FullMapScreenEvent.Opened/Closed` + `MapLayerChangedEvent`. Suite v2 : enregistrement
   d'icônes/marqueurs de haut niveau (clamping bordure fourni).
-- [ ] **waypoints** : façade CRUD — voir « Prochain chantier » (modèle stabilisé).
+- [x] **waypoints (v1)** : `api.WaypointApi` — voir « Clean code du socle ». Suite possible :
+  gestion des groupes (create/rename/delete), si un consommateur concret en a besoin.
 - [ ] **rendu serveur (image de région)** : couture posée (`engine.blockColorOverrides` +
   `BlockPalette` point d'entrée unique) ; publier événement/registre quand un consommateur
   concret existe.
@@ -114,10 +128,10 @@ stabilise le modèle._
 
 ## Ordre recommandé
 
-1. **Clean code du socle** (P2) : nettoyage + classes traductions/constantes, et en fin de
-   chantier la **façade API waypoints** (P3).
+1. ~~**Clean code du socle** (P2) : nettoyage + classes traductions/constantes, et en fin de
+   chantier la **façade API waypoints** (P3).~~ ✔ **fait**.
 2. **Waypoints de bannière** (P3 ★★★★☆) — s'appuie directement sur le pipeline des waypoints
-   publics, et valide l'API de rendu écran.
+   publics, et valide l'API de rendu écran. ← **prochain chantier**.
 3. **Têtes de mobs sur le radar** (P3 ★★★★☆, compatible mods) + quick win : lissage de la
    caméra du suivi de train (P3 ★★☆☆☆).
 4. **Fuites d'information** (P3) — gros morceau design (quarantaine), à lancer quand on veut
