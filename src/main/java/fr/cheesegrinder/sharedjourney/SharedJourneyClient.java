@@ -38,6 +38,8 @@ public class SharedJourneyClient {
         Payloads.Hooks.clientRegenState = ClientNetHandler::handleRegenState;
         Payloads.Hooks.clientRegenChunks = ClientNetHandler::handleRegenChunks;
         Payloads.Hooks.clientTrainPath = ClientNetHandler::handleTrainPath;
+        Payloads.Hooks.clientPublicWaypoint = ClientNetHandler::handlePublicWaypoint;
+        Payloads.Hooks.clientPublicWaypointRemove = ClientNetHandler::handlePublicWaypointRemove;
     }
 
     @SubscribeEvent

@@ -1,7 +1,10 @@
 package fr.cheesegrinder.sharedjourney.client.event;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
+import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.client.gui.FullMapScreen;
+import fr.cheesegrinder.sharedjourney.client.gui.WaypointEditScreen;
+import fr.cheesegrinder.sharedjourney.client.gui.WaypointListScreen;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 
@@ -63,6 +66,16 @@ public final class ClientInputEvents {
         }
         while (ClientSetupEvents.ZOOM_OUT.consumeClick()) {
             MinimapRenderer.zoomOut();
+        }
+        while (ClientSetupEvents.OPEN_WAYPOINTS.consumeClick()) {
+            if (mc.screen == null) {
+                mc.setScreen(new WaypointListScreen(null));
+            }
+        }
+        while (ClientSetupEvents.CREATE_WAYPOINT.consumeClick()) {
+            if (mc.screen == null) {
+                WaypointEditScreen.openCreateAtPlayer(null, Waypoint.GROUP_DEFAULT);
+            }
         }
 
         tickCounter++;

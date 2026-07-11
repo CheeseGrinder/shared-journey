@@ -51,6 +51,13 @@ public final class ClientSetupEvents {
             InputConstants.Type.KEYSYM,
             GLFW.GLFW_KEY_MINUS,
             "key.categories.sharedjourney");
+    public static final KeyMapping OPEN_WAYPOINTS = new KeyMapping(
+            "key.sharedjourney.waypoints", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_U, "key.categories.sharedjourney");
+    public static final KeyMapping CREATE_WAYPOINT = new KeyMapping(
+            "key.sharedjourney.create_waypoint",
+            InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_B,
+            "key.categories.sharedjourney");
 
     private ClientSetupEvents() {}
 
@@ -61,6 +68,8 @@ public final class ClientSetupEvents {
         event.register(CYCLE_LAYER);
         event.register(ZOOM_IN);
         event.register(ZOOM_OUT);
+        event.register(OPEN_WAYPOINTS);
+        event.register(CREATE_WAYPOINT);
     }
 
     /** On every client config save: re-send the visibility preference. */

@@ -385,7 +385,7 @@ public final class MinimapRenderer {
         double sinT = Math.sin(theta);
         float maxR = half;
         for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
-            if (!wp.visible()) {
+            if (!WaypointStore.isShown(wp)) {
                 continue;
             }
 

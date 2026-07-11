@@ -49,7 +49,11 @@ public final class Payloads {
         public static Consumer<RegenStatePayload> clientRegenState = p -> {};
         public static Consumer<RegenChunksPayload> clientRegenChunks = p -> {};
         public static Consumer<TrainPathPayload> clientTrainPath = p -> {};
+        public static Consumer<PublicWaypointPayload> clientPublicWaypoint = p -> {};
+        public static Consumer<PublicWaypointRemovePayload> clientPublicWaypointRemove = p -> {};
         public static BiConsumer<Player, TrainPathRequestPayload> serverTrainPathRequest = (pl, p) -> {};
+        public static BiConsumer<Player, PublicWaypointPayload> serverPublicWaypoint = (pl, p) -> {};
+        public static BiConsumer<Player, PublicWaypointRemovePayload> serverPublicWaypointRemove = (pl, p) -> {};
         public static BiConsumer<Player, RegionRequestPayload> serverRegionRequest = (pl, p) -> {};
         public static BiConsumer<Player, ClientIndexPayload> serverClientIndex = (pl, p) -> {};
         public static BiConsumer<Player, MapVisibilityPayload> serverMapVisibility = (pl, p) -> {};
@@ -423,11 +427,64 @@ public final class Payloads {
         }
     }
 
+    // ---------------------------------------------------------------- C2S/S2C: public waypoints
+
+    /**
+     * Public waypoint upsert, server-authoritative: a client creates or
+     * edits one (C2S), the server persists it in the world folder and
+     * broadcasts it back (S2C) to every player — including at login (full
+     * send). Visibility is deliberately absent: showing or hiding a public
+     * waypoint is a per-client choice, never shared.
+     */
+    public record PublicWaypointPayload(
+            UUID id, String name, ResourceLocation dimension, int x, int y, int z, int colorRgb)
+            implements CustomPacketPayload {
+        // Payloads.id: the bare call would resolve to the id() accessor.
+        public static final Type<PublicWaypointPayload> TYPE = new Type<>(Payloads.id("public_waypoint"));
+
+        public static final StreamCodec<FriendlyByteBuf, PublicWaypointPayload> CODEC = StreamCodec.of(
+                (buf, p) -> {
+                    buf.writeUUID(p.id);
+                    buf.writeUtf(p.name, 48);
+                    buf.writeResourceLocation(p.dimension);
+                    buf.writeVarInt(p.x);
+                    buf.writeVarInt(p.y);
+                    buf.writeVarInt(p.z);
+                    buf.writeInt(p.colorRgb);
+                },
+                buf -> new PublicWaypointPayload(
+                        buf.readUUID(),
+                        buf.readUtf(48),
+                        buf.readResourceLocation(),
+                        buf.readVarInt(),
+                        buf.readVarInt(),
+                        buf.readVarInt(),
+                        buf.readInt()));
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** Public waypoint removal (C2S request, S2C broadcast). */
+    public record PublicWaypointRemovePayload(UUID id) implements CustomPacketPayload {
+        public static final Type<PublicWaypointRemovePayload> TYPE = new Type<>(Payloads.id("public_waypoint_remove"));
+
+        public static final StreamCodec<FriendlyByteBuf, PublicWaypointRemovePayload> CODEC =
+                StreamCodec.of((buf, p) -> buf.writeUUID(p.id), buf -> new PublicWaypointRemovePayload(buf.readUUID()));
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     // ---------------------------------------------------------------- registration
 
     public static void register(final RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar =
-                event.registrar(SharedJourneyConstants.MOD_ID).versioned("2");
+                event.registrar(SharedJourneyConstants.MOD_ID).versioned("3");
 
         registrar.playToClient(
                 LayerSettingsPayload.TYPE,
@@ -483,5 +540,29 @@ public final class Payloads {
                 TrainPathPayload.TYPE,
                 TrainPathPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientTrainPath.accept(payload)));
+
+        // Bidirectional: the same payload is a client edit request (C2S)
+        // and the server's authoritative broadcast (S2C).
+        registrar.playBidirectional(
+                PublicWaypointPayload.TYPE,
+                PublicWaypointPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> {
+                    if (ctx.flow().isServerbound()) {
+                        Hooks.serverPublicWaypoint.accept(ctx.player(), payload);
+                    } else {
+                        Hooks.clientPublicWaypoint.accept(payload);
+                    }
+                }));
+
+        registrar.playBidirectional(
+                PublicWaypointRemovePayload.TYPE,
+                PublicWaypointRemovePayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> {
+                    if (ctx.flow().isServerbound()) {
+                        Hooks.serverPublicWaypointRemove.accept(ctx.player(), payload);
+                    } else {
+                        Hooks.clientPublicWaypointRemove.accept(payload);
+                    }
+                }));
     }
 }

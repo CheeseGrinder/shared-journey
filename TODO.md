@@ -184,8 +184,40 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
     un chantier dédié. En attendant, documenter l'événement comme non câblé ;
   - [ ] **lecture/actions** (positions joueurs, état des régions, re-rendu) : à la demande,
     quand un consommateur concret existe (YAGNI).
-- [ ] **P2 · ★★★★☆ — Écran de gestion des waypoints** : groupes, ajout/édition/suppression,
-  filtre par dimension, waypoints globaux, groupe « morts » (death waypoints), etc.
+- [x] **P2 · ★★★★☆ — Écran de gestion des waypoints** — **fait** (design v2 après retours).
+  Modèle : champ `group` sur `Waypoint` (groupes réservés `default`/`deaths`/`public`,
+  waypoints bridgés groupés par modId source), visibilité par groupe persistée
+  (`hiddenGroups`), groupes gérés persistés (`groups`, un groupe vide survit à la session),
+  death waypoints automatiques à l'ouverture du DeathScreen (config client `deathWaypoints`).
+  Écran `WaypointListScreen` façon JourneyMap : **deux panneaux** — liste des groupes à
+  gauche (pseudo-groupe « Tous » en tête, clic = sélection surlignée en doré, checkbox =
+  visibilité du groupe, compteur) ; waypoints du groupe sélectionné à droite (la dimension
+  est une simple donnée affichée en info, pas un axe de tri ; en vue « Tous », le groupe de
+  chaque waypoint est aussi affiché). Sous la liste de gauche : Nouveau groupe / Renommer /
+  Supprimer (interdits pour default/deaths/public/groupes bridgés type waystones ; supprimer
+  un groupe supprime ses waypoints) puis Done ; les modals de saisie/confirmation reprennent
+  le style panneau sombre des autres écrans (`ModalScreen`). « + Nouveau waypoint » est la
+  dernière ligne de la liste de droite (créé dans le groupe sélectionné) ; compteurs de
+  groupe recalculés en direct (une suppression met à jour le nombre). Raccourcis clavier :
+  U = ouvrir la gestion des waypoints, B = créer un waypoint à la position du joueur
+  (rebindables, catégorie Shared Journey). Actions par waypoint :
+  afficher/masquer, éditer, TP (op + même dimension), supprimer. Ouvert depuis la carte
+  plein écran (icône barre gauche + entrée du sous-menu clic droit). Dans l'écran
+  d'édition, le groupe est un champ texte avec autocomplétion sur les groupes existants
+  (un nouveau nom crée le groupe à la sauvegarde). Fix : `filtered()` triait la liste
+  immuable du store (crash à l'ouverture).
+- [x] **P2 · ★★★★☆ — Waypoints publics (ex-type GLOBAL)** — **fait**. Le type `GLOBAL`
+  (affichage cross-dimension) devient `PUBLIC` : waypoint partagé avec tous les joueurs,
+  autoritaire côté serveur (`PublicWaypointService`, persisté dans
+  `<monde>/data/sharedjourney/waypoints_public.json`, broadcast à chaque changement, envoi
+  complet au login). Payloads bidirectionnels upsert/remove (registrar versionné « 3 »).
+  Côté client : source volatile `public`, groupe réservé « public » ; le flag `visible`
+  reste un choix LOCAL (jamais broadcast, persisté dans `hiddenIds` de `waypoints.json`) ;
+  promotion/rétrogradation privé↔public gérée dans `WaypointStore.update`. Les anciens
+  waypoints GLOBAL sauvegardés migrent en DIMENSION (pas de publication silencieuse).
+  Tous les types sont désormais liés à leur dimension. Permission : tout joueur peut
+  créer/modifier/supprimer un waypoint public (à restreindre plus tard si besoin, cap
+  serveur 1024 waypoints).
 - [ ] **P3 · ★★★☆☆ — Waypoints de bannière** : reprendre le comportement vanilla
   bannière + carte — une bannière NOMMÉE (renommée à l'enclume) posée dans le monde devient un
   marqueur partagé sur la carte (minimap + plein écran), affiché avec l'icône de bannière
@@ -197,6 +229,14 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
   S2C (liste complète au login + broadcast à chaque changement), côté client une source
   volatile type `source = "banner"` resynchronisée à chaque session (le store ne persiste déjà
   que la source "user"). Rendu : icône bannière au lieu du losange `drawWaypointDiamond`._
+- [ ] **P3 · ★★★☆☆ — Suivi de train : lisser la caméra** — le recentrage sur le train suivi
+  est sec (position recopiée chaque frame) ; interpoler le déplacement de la vue vers la
+  position du train pour un suivi fluide.
+- [ ] **P3 · ★★★☆☆ — Overlay des rails Create en souterrain** — l'overlay reste affiché en
+  surface quand la voie passe sous terre (illogique) et n'apparaît pas sur les couches CAVE.
+  Étudier : corréler les pixels du `TrainMapRenderer` de Create avec la couche affichée et
+  les hauteurs (sidecar INFO ?) pour masquer les tronçons souterrains en surface et/ou les
+  afficher dans la bande CAVE correspondante.
 - [ ] **P3 · ★★★☆☆ — Bouton boussole** sur l'interface : basculer l'orientation de la carte
   (nord fixe vs orientée joueur).
 - [ ] **P3 · ★★★☆☆ — Écran de config intégré** au plein écran (plutôt que l'écran NeoForge)
@@ -219,10 +259,26 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
 - [ ] **P3 · ★★★☆☆ — Asset dédié pour le marqueur du joueur** : remplacer le triangle vectoriel
   (`EntityDots.drawPlayerArrow`) par une image/texture dédiée (reprendre le style des assets
   JourneyMap ou en créer), sur la minimap et la carte plein écran.
-- [ ] **P2 · ★★★★☆ — Rework de l'écran de création/édition de waypoint** : en faire un vrai
-  screen structuré style JourneyMap (l'actuel est brouillon).
-- [ ] **P3 · ★★★☆☆ — Rework du menu clic droit** : rendu propre style JourneyMap (panneau
-  custom) au lieu de boutons Minecraft empilés.
+- [ ] **P3 · ★★★☆☆ — Icône in-world des waypoints (losange JM)** : afficher un losange à la
+  position du waypoint dans le monde, TOUJOURS visible (pas besoin de viser le waypoint,
+  contrairement au label qui reste conditionné au cône de visée), mais masqué hors des
+  bornes `beaconMinDistance`/`beaconMaxDistance` de la config client. D'abord dessiné en
+  vectoriel, puis remplacé par une texture PNG (`assets/sharedjourney/textures/...`) pour
+  être personnalisable via resource pack.
+- [x] **P2 · ★★★★☆ — Rework de l'écran de création/édition de waypoint** — **fait** : vrai
+  formulaire structuré (panneau + labels) : nom, position X/Y/Z éditable, groupe via bouton
+  cycle sur les groupes existants uniquement (créés dans le gestionnaire ; deaths exclu sauf
+  s'il est le groupe courant ; verrouillé sur « public » pour le type PUBLIC), couleur
+  (champ hex synchronisé, palette, bouton aléatoire, aperçu), visibilité, type ;
+  Entrée = sauvegarder ; Done/Supprimer/Annuler.
+  Ajout post-retour : picker HSB façon JourneyMap (carré saturation/valeur + bande de
+  teinte, clic/drag, gradients exacts via `Mth.hsvToRgb`), synchronisé avec le champ hex,
+  la palette et l'aperçu.
+- [x] **P3 · ★★★☆☆ — Rework du menu clic droit** — **fait** : `ContextMenu` custom (panneau
+  plat sombre, lignes surlignées au survol, en-tête coordonnées du bloc cliqué, sous-menu
+  Waypoints ancré à sa ligne parente qui reste surlignée), rendu en dernier dans
+  `FullMapScreen.render` (toujours au-dessus), Échap ferme le menu, le release du clic
+  consommé est avalé (pas de sélection de bloc sous la ligne cliquée).
 - [ ] **P4 · ★★☆☆☆ — Grouper les boutons d'overlay** ensemble sur la carte plein écran
   (toggles RNS/trains/grille... dans un groupe visuel dédié).
 - [ ] **P4 · ★★☆☆☆ — Passe sur les textes** : nettoyer/harmoniser les libellés existants.
@@ -232,6 +288,10 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
 - [ ] **P3 · ★★★☆☆ — Nettoyage** : responsabilité unique par fichier, documentation
   systématique, passer la doc et les commentaires de config en anglais, créer des
   utilitaires/globals, remplacer les chaînes répétées par des constantes statiques.
+- [ ] **P3 · ★★★☆☆ — Classes dédiées pour les traductions et constantes** : centraliser les
+  clés i18n (classe type `Translations`/`Lang` avec des helpers par écran) et les constantes
+  partagées (couleurs UI, tailles, noms de fichiers, clés JSON) pour une lecture plus claire ;
+  éliminer au passage les magic numbers/strings restants dans les écrans et services.
 - [x] **P4 · ★★☆☆☆ — Configs client par section** — **fait** : `ClientConfig` est maintenant
   une façade qui assemble `MinimapClientConfig`, `RadarClientConfig`, `WaypointClientConfig`
   et `MapClientConfig` (clés TOML inchangées, pas de reset de config).

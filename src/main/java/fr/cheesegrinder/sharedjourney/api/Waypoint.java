@@ -9,7 +9,8 @@ import java.util.UUID;
  * Immutable waypoint. {@code source} identifies the origin:
  * {@link #SOURCE_USER} for hand-created points, or the modId of the
  * third-party mod that created it through the JourneyMap bridge
- * (ex: "waystones").
+ * (ex: "waystones"). {@code group} organizes waypoints in the management
+ * screen; group visibility is toggled as a whole there.
  */
 public record Waypoint(
         UUID id,
@@ -20,6 +21,7 @@ public record Waypoint(
         int z,
         int colorRgb,
         String source,
+        String group,
         boolean visible,
         Type type) {
 
@@ -27,15 +29,38 @@ public record Waypoint(
     public static final String SOURCE_USER = "user";
 
     /**
-     * Waypoint scope:
-     * - DIMENSION: visible only in its home dimension;
-     * - GLOBAL: visible in every dimension;
+     * Source of the server-shared public waypoints. Volatile client-side
+     * (resynchronized by the server at every login), like bridged mods'.
+     */
+    public static final String SOURCE_PUBLIC = "public";
+
+    /** Default group of hand-created waypoints. */
+    public static final String GROUP_DEFAULT = "default";
+
+    /** Reserved group of the automatic death waypoints. */
+    public static final String GROUP_DEATHS = "deaths";
+
+    /** Reserved group of the server-shared public waypoints. */
+    public static final String GROUP_PUBLIC = "public";
+
+    public Waypoint {
+        if (group == null || group.isBlank()) {
+            group = GROUP_DEFAULT;
+        }
+    }
+
+    /**
+     * Waypoint scope. Every type is bound to its home dimension:
+     * - DIMENSION: private, only this client sees it;
+     * - PUBLIC: shared with every player through the server (persisted in
+     *   the world folder, broadcast on change). Its {@code visible} flag
+     *   stays a per-client choice and is never shared;
      * - TEMP: like DIMENSION, but automatically removed when the player
      *   gets close (client-configurable radius).
      */
     public enum Type {
         DIMENSION,
-        GLOBAL,
+        PUBLIC,
         TEMP
     }
 
@@ -54,24 +79,29 @@ public record Waypoint(
                 pos.getZ(),
                 colorRgb & 0xFFFFFF,
                 source,
+                GROUP_DEFAULT,
                 true,
                 type);
     }
 
     public Waypoint withName(String newName) {
-        return new Waypoint(id, newName, dimension, x, y, z, colorRgb, source, visible, type);
+        return new Waypoint(id, newName, dimension, x, y, z, colorRgb, source, group, visible, type);
     }
 
     public Waypoint withColor(int rgb) {
-        return new Waypoint(id, name, dimension, x, y, z, rgb & 0xFFFFFF, source, visible, type);
+        return new Waypoint(id, name, dimension, x, y, z, rgb & 0xFFFFFF, source, group, visible, type);
+    }
+
+    public Waypoint withGroup(String newGroup) {
+        return new Waypoint(id, name, dimension, x, y, z, colorRgb, source, newGroup, visible, type);
     }
 
     public Waypoint withVisible(boolean v) {
-        return new Waypoint(id, name, dimension, x, y, z, colorRgb, source, v, type);
+        return new Waypoint(id, name, dimension, x, y, z, colorRgb, source, group, v, type);
     }
 
     public Waypoint withType(Type newType) {
-        return new Waypoint(id, name, dimension, x, y, z, colorRgb, source, visible, newType);
+        return new Waypoint(id, name, dimension, x, y, z, colorRgb, source, group, visible, newType);
     }
 
     public BlockPos pos() {

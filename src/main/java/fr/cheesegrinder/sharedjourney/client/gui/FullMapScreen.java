@@ -107,8 +107,14 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     private UUID followedTrain;
 
     private BandSlider bandSlider;
-    /** Context menu (right click) buttons, removed on the next click. */
-    private final List<Button> contextButtons = new ArrayList<>();
+    /** Right-click context menu (custom panel), null when closed. */
+    private ContextMenu contextMenu;
+    /**
+     * A press consumed by the context menu closes it before the matching
+     * release: this flag swallows that release so it doesn't fall through
+     * to the map (block selection under the clicked row).
+     */
+    private boolean suppressNextRelease;
 
     // Top action bar: one button per layer + toggles with their state.
     private final Map<MapLayer, IconButton> layerIcons = new EnumMap<>(MapLayer.class);
@@ -156,7 +162,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     @Override
     protected void init() {
         bandSlider = addRenderableWidget(new BandSlider(width / 2 - 75, height - 40, 150, 20));
-        contextButtons.clear(); // init() recreates every widget (resize)
+        closeContextMenu(); // resize: drop the transient menu
         buildTopToolbar();
         buildLeftToolbar();
         updateBandButtons();
@@ -248,6 +254,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 .bounds(6, y + 66, 20, 20)
                 .tooltip(Tooltip.create(Component.translatable("sharedjourney.action.zoom_out")))
                 .build());
+        addIcon(6, y + 88, Items.NAME_TAG, "sharedjourney.action.waypoints", b -> Minecraft.getInstance()
+                .setScreen(new WaypointListScreen(this)));
     }
 
     private IconButton addIcon(int x, int y, Item icon, String tooltipKey, Button.OnPress press) {
@@ -461,6 +469,12 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         dragged = false;
+        // Context menu first: it draws on top of everything.
+        if (contextMenu != null && button == 0 && contextMenu.mouseClicked(mouseX, mouseY)) {
+            suppressNextRelease = true;
+            return true;
+        }
+
         // Create's train map toggle widget (drawn top-left by its overlay):
         // its native handler only knows about JM's screen.
         if (button == 0
@@ -497,6 +511,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (suppressNextRelease) {
+            suppressNextRelease = false;
+            return true;
+        }
+
         if (super.mouseReleased(mouseX, mouseY, button)) {
             return true;
         }
@@ -597,91 +616,44 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         int wx = (int) Math.floor(worldX(mouseX));
         int wz = (int) Math.floor(worldZ(mouseY));
-        // TP goes through /tp: reserved to op players (level 2, known client-side).
-        boolean canTeleport = mc.player.hasPermissions(2);
-        int rows = canTeleport ? 3 : 2;
-        int w = 140, h = 20;
-        int bx = (int) Math.min(mouseX, width - w - 4);
-        int by = (int) Math.min(mouseY, height - rows * (h + 1) - 4);
-        if (canTeleport) {
-            addContextButton(bx, by, w, h, "sharedjourney.context.teleport", () -> teleportTo(wx, wz));
-            by += h + 1;
-        }
-
-        // "Waypoints >" runs no action: it unfolds the submenu.
-        int subY = by;
-        Button waypoints = Button.builder(
-                        Component.translatable("sharedjourney.context.waypoints"),
-                        btn -> openWaypointsSubmenu(bx, subY, w, h, wx, wz))
-                .bounds(bx, by, w, h)
-                .build();
-        contextButtons.add(waypoints);
-        addRenderableWidget(waypoints);
-
-        addContextButton(bx, by + h + 1, w, h, "sharedjourney.context.chat", () -> logCoords(wx, wz));
-    }
-
-    /** Waypoints submenu, unfolded next to the main menu. */
-    private void openWaypointsSubmenu(int menuX, int menuY, int w, int h, int wx, int wz) {
-        var mc = Minecraft.getInstance();
-        if (mc.level == null) {
-            return;
-        }
-
         var dim = mc.level.dimension().location();
-        int sx = menuX + w + 2;
-        if (sx + w > width - 4) {
-            sx = menuX - w - 2;
+        List<ContextMenu.Item> items = new ArrayList<>();
+        // TP goes through /tp: reserved to op players (level 2, known client-side).
+        if (mc.player.hasPermissions(2)) {
+            items.add(ContextMenu.Item.action(
+                    Component.translatable("sharedjourney.context.teleport"), () -> teleportTo(wx, wz)));
         }
 
-        int rows = 5;
-        int sy = Math.min(menuY, height - rows * (h + 1) - 4);
-        addContextButton(
-                sx,
-                sy,
-                w,
-                h,
-                "sharedjourney.context.waypoint",
-                () -> createWaypointAt(wx, wz, Waypoint.Type.DIMENSION));
-        addContextButton(
-                sx, sy + (h + 1), w, h, "sharedjourney.context.waypoint_temp", () -> createTempWaypointAt(wx, wz));
-        addContextButton(
-                sx,
-                sy + 2 * (h + 1),
-                w,
-                h,
-                "sharedjourney.context.waypoint_global",
-                () -> createWaypointAt(wx, wz, Waypoint.Type.GLOBAL));
-        addContextButton(
-                sx,
-                sy + 3 * (h + 1),
-                w,
-                h,
-                "sharedjourney.context.show_all",
-                () -> WaypointStore.setAllVisible(dim, true));
-        addContextButton(
-                sx,
-                sy + 4 * (h + 1),
-                w,
-                h,
-                "sharedjourney.context.hide_all",
-                () -> WaypointStore.setAllVisible(dim, false));
-    }
+        items.add(ContextMenu.Item.submenu(
+                Component.translatable("sharedjourney.context.waypoints"),
+                List.of(
+                        ContextMenu.Item.action(
+                                Component.translatable("sharedjourney.context.waypoint"),
+                                () -> createWaypointAt(wx, wz, Waypoint.Type.DIMENSION)),
+                        ContextMenu.Item.action(
+                                Component.translatable("sharedjourney.context.waypoint_temp"),
+                                () -> createTempWaypointAt(wx, wz)),
+                        ContextMenu.Item.action(
+                                Component.translatable("sharedjourney.context.waypoint_public"),
+                                () -> createWaypointAt(wx, wz, Waypoint.Type.PUBLIC)),
+                        ContextMenu.Item.action(
+                                Component.translatable("sharedjourney.context.show_all"),
+                                () -> WaypointStore.setAllVisible(dim, true)),
+                        ContextMenu.Item.action(
+                                Component.translatable("sharedjourney.context.hide_all"),
+                                () -> WaypointStore.setAllVisible(dim, false)),
+                        ContextMenu.Item.action(
+                                Component.translatable("sharedjourney.context.manage_waypoints"),
+                                () -> mc.setScreen(new WaypointListScreen(this))))));
+        items.add(
+                ContextMenu.Item.action(Component.translatable("sharedjourney.context.chat"), () -> logCoords(wx, wz)));
 
-    private void addContextButton(int x, int y, int w, int h, String key, Runnable action) {
-        Button b = Button.builder(Component.translatable(key), btn -> {
-                    closeContextMenu();
-                    action.run();
-                })
-                .bounds(x, y, w, h)
-                .build();
-        contextButtons.add(b);
-        addRenderableWidget(b);
+        Component title = Component.literal(wx + ", " + wz);
+        contextMenu = new ContextMenu(font, title, items, mouseX, mouseY, width, height, this::closeContextMenu);
     }
 
     private void closeContextMenu() {
-        contextButtons.forEach(this::removeWidget);
-        contextButtons.clear();
+        contextMenu = null;
     }
 
     /** Surface Y if the chunk is loaded client-side, else -1. */
@@ -823,6 +795,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (contextMenu != null && keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            closeContextMenu();
+            return true;
+        }
+
         boolean enter = keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER;
         if (locateOpen && enter && (locateX.isFocused() || locateZ.isFocused())) {
             doLocate();
@@ -1009,6 +986,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                             hovered.name() + " (" + hovered.x() + ", " + hovered.y() + ", " + hovered.z() + ")"),
                     mouseX,
                     mouseY);
+        }
+
+        // Context menu last: always on top.
+        if (contextMenu != null) {
+            contextMenu.render(gg, mouseX, mouseY);
         }
     }
 
@@ -1207,7 +1189,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         // Waypoints on top, in screen coordinates (constant size regardless of zoom)
         for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
-            if (!wp.visible()) {
+            if (!WaypointStore.isShown(wp)) {
                 continue;
             }
 

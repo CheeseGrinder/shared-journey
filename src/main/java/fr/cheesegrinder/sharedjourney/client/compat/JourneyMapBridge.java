@@ -659,6 +659,7 @@ public final class JourneyMapBridge {
 
             apiWaypoints.put(guid, jmWaypoint);
             UUID id = knownWaypoints.computeIfAbsent(guid, g -> UUID.nameUUIDFromBytes((modId + "|" + g).getBytes()));
+            // Bridged waypoints are grouped under their source mod's id.
             Waypoint wp = new Waypoint(
                     id,
                     name,
@@ -667,6 +668,7 @@ public final class JourneyMapBridge {
                     pos.getY(),
                     pos.getZ(),
                     color & 0xFFFFFF,
+                    modId,
                     modId,
                     true,
                     Waypoint.Type.DIMENSION);

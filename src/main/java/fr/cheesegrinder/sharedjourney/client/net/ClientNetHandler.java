@@ -2,6 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.net;
 
 import fr.cheesegrinder.sharedjourney.client.compat.CreateTrainMapBridge;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
+import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 
 import java.util.HashMap;
@@ -49,5 +50,13 @@ public final class ClientNetHandler {
 
     public static void handleTrainPath(Payloads.TrainPathPayload payload) {
         CreateTrainMapBridge.acceptPath(payload.trainId(), payload.xs(), payload.zs());
+    }
+
+    public static void handlePublicWaypoint(Payloads.PublicWaypointPayload payload) {
+        WaypointStore.acceptPublicUpsert(payload);
+    }
+
+    public static void handlePublicWaypointRemove(Payloads.PublicWaypointRemovePayload payload) {
+        WaypointStore.acceptPublicRemove(payload.id());
     }
 }

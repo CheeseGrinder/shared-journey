@@ -3,11 +3,13 @@ package fr.cheesegrinder.sharedjourney.client.service;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.api.event.WaypointEvent;
 import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
+import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -23,6 +25,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -37,6 +41,21 @@ public final class WaypointStore {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static final Map<UUID, Waypoint> WAYPOINTS = new ConcurrentHashMap<>();
+    /** Groups explicitly hidden in the management screen. */
+    private static final Set<String> HIDDEN_GROUPS = ConcurrentHashMap.newKeySet();
+    /**
+     * User-managed groups (management screen). Persisted so an empty
+     * group survives the session; reserved and bridged groups exist only
+     * through their waypoints.
+     */
+    private static final Set<String> KNOWN_GROUPS = ConcurrentHashMap.newKeySet();
+    /**
+     * Public waypoints hidden by THIS client. Public waypoints are
+     * server-authoritative and resynchronized at login, so their visible
+     * flag cannot be persisted with them: this local set is.
+     */
+    private static final Set<UUID> HIDDEN_IDS = ConcurrentHashMap.newKeySet();
+
     private static Path file;
 
     private WaypointStore() {}
@@ -57,6 +76,9 @@ public final class WaypointStore {
     public static void closeSession() {
         save();
         WAYPOINTS.clear();
+        HIDDEN_GROUPS.clear();
+        HIDDEN_IDS.clear();
+        KNOWN_GROUPS.clear();
         file = null;
     }
 
@@ -66,10 +88,10 @@ public final class WaypointStore {
         return new ArrayList<>(WAYPOINTS.values());
     }
 
-    /** Waypoints displayable in a dimension: its own + the global ones. */
+    /** Waypoints of a dimension (every type is bound to its dimension). */
     public static List<Waypoint> forDimension(ResourceLocation dim) {
         return WAYPOINTS.values().stream()
-                .filter(w -> w.type() == Waypoint.Type.GLOBAL || w.dimension().equals(dim))
+                .filter(w -> w.dimension().equals(dim))
                 .toList();
     }
 
@@ -77,8 +99,136 @@ public final class WaypointStore {
         return WAYPOINTS.get(id);
     }
 
-    /** Adds a waypoint. Returns false if a listener cancelled the addition. */
+    // ------------------------------------------------------------------ groups
+
+    /** Should this waypoint be rendered (own flag AND its group's)? */
+    public static boolean isShown(Waypoint wp) {
+        return wp.visible() && isGroupVisible(wp.group());
+    }
+
+    public static boolean isGroupVisible(String group) {
+        return !HIDDEN_GROUPS.contains(group);
+    }
+
+    public static void setGroupVisible(String group, boolean visible) {
+        boolean changed = visible ? HIDDEN_GROUPS.remove(group) : HIDDEN_GROUPS.add(group);
+        if (changed) {
+            save();
+        }
+    }
+
+    /**
+     * All groups: the user-managed ones (persisted, possibly empty) plus
+     * those existing through their waypoints (reserved, bridged). Sorted,
+     * the default group always listed first.
+     */
+    public static List<String> groups() {
+        TreeSet<String> names = new TreeSet<>(KNOWN_GROUPS);
+        for (Waypoint wp : WAYPOINTS.values()) {
+            names.add(wp.group());
+        }
+        names.remove(Waypoint.GROUP_DEFAULT);
+
+        List<String> ordered = new ArrayList<>();
+        ordered.add(Waypoint.GROUP_DEFAULT);
+        ordered.addAll(names);
+        return ordered;
+    }
+
+    /**
+     * Groups a user waypoint can be assigned to: default plus the
+     * user-managed ones. Excludes the reserved groups (deaths is
+     * automatic, public follows the PUBLIC type) and the bridged mods'.
+     */
+    public static List<String> assignableGroups() {
+        List<String> ordered = new ArrayList<>();
+        for (String group : groups()) {
+            if (Waypoint.GROUP_DEFAULT.equals(group) || isEditableGroup(group)) {
+                ordered.add(group);
+            }
+        }
+        return ordered;
+    }
+
+    /**
+     * Can this group be renamed/deleted in the management screen? The
+     * reserved groups (default, deaths, public) and the bridged mods'
+     * groups (waystones... any group holding non-user waypoints) cannot.
+     */
+    public static boolean isEditableGroup(String group) {
+        if (Waypoint.GROUP_DEFAULT.equals(group)
+                || Waypoint.GROUP_DEATHS.equals(group)
+                || Waypoint.GROUP_PUBLIC.equals(group)) {
+            return false;
+        }
+
+        return WAYPOINTS.values().stream()
+                .noneMatch(wp -> wp.group().equals(group) && !Waypoint.SOURCE_USER.equals(wp.source()));
+    }
+
+    /** Creates an empty group. Returns false on invalid/taken names. */
+    public static boolean createGroup(String name) {
+        String group = name == null ? "" : name.trim();
+        if (group.isEmpty() || groups().contains(group)) {
+            return false;
+        }
+
+        KNOWN_GROUPS.add(group);
+        save();
+        return true;
+    }
+
+    /** Renames a user group, moving its waypoints and hidden state along. */
+    public static boolean renameGroup(String from, String to) {
+        String next = to == null ? "" : to.trim();
+        if (!isEditableGroup(from) || next.isEmpty() || groups().contains(next)) {
+            return false;
+        }
+
+        for (Waypoint wp : all()) {
+            if (wp.group().equals(from)) {
+                WAYPOINTS.put(wp.id(), wp.withGroup(next));
+            }
+        }
+
+        KNOWN_GROUPS.remove(from);
+        KNOWN_GROUPS.add(next);
+        if (HIDDEN_GROUPS.remove(from)) {
+            HIDDEN_GROUPS.add(next);
+        }
+        save();
+        return true;
+    }
+
+    /** Deletes a user group AND every waypoint it holds. */
+    public static boolean deleteGroup(String group) {
+        if (!isEditableGroup(group)) {
+            return false;
+        }
+
+        for (Waypoint wp : all()) {
+            if (wp.group().equals(group)) {
+                remove(wp.id());
+            }
+        }
+
+        KNOWN_GROUPS.remove(group);
+        HIDDEN_GROUPS.remove(group);
+        save();
+        return true;
+    }
+
+    /**
+     * Adds a waypoint. Returns false if a listener cancelled the addition.
+     * PUBLIC waypoints are routed to the server, which persists them and
+     * broadcasts them back (the local copy appears with the echo).
+     */
     public static boolean add(Waypoint wp) {
+        if (wp.type() == Waypoint.Type.PUBLIC) {
+            sendPublicUpsert(wp);
+            return true;
+        }
+
         WaypointEvent.Added event = new WaypointEvent.Added(wp);
         NeoForge.EVENT_BUS.post(event);
         if (event.isCanceled()) {
@@ -91,17 +241,142 @@ public final class WaypointStore {
     }
 
     public static void update(Waypoint wp) {
+        Waypoint old = WAYPOINTS.get(wp.id());
+        boolean wasPublic = old != null && old.type() == Waypoint.Type.PUBLIC;
+        if (wasPublic || wp.type() == Waypoint.Type.PUBLIC) {
+            updatePublic(old, wp, wasPublic);
+            return;
+        }
+
         WAYPOINTS.put(wp.id(), wp);
         NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
         save();
     }
 
+    /**
+     * Updates involving a PUBLIC waypoint. Shared fields (name, position,
+     * color, dimension) go through the server; the visible flag is applied
+     * locally only ({@link #HIDDEN_IDS}), it is a per-client choice.
+     */
+    private static void updatePublic(Waypoint old, Waypoint wp, boolean wasPublic) {
+        if (!wasPublic) {
+            // Promoted private → public: publish; the echo re-adds it.
+            if (old != null) {
+                WAYPOINTS.remove(wp.id());
+                save();
+            }
+            sendPublicUpsert(wp);
+            return;
+        }
+
+        if (wp.type() != Waypoint.Type.PUBLIC) {
+            // Demoted public → private: server copy removed, local kept.
+            sendPublicRemove(wp.id());
+            HIDDEN_IDS.remove(wp.id());
+            Waypoint local = new Waypoint(
+                    wp.id(),
+                    wp.name(),
+                    wp.dimension(),
+                    wp.x(),
+                    wp.y(),
+                    wp.z(),
+                    wp.colorRgb(),
+                    Waypoint.SOURCE_USER,
+                    Waypoint.GROUP_DEFAULT,
+                    wp.visible(),
+                    wp.type());
+            WAYPOINTS.put(local.id(), local);
+            NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(local));
+            save();
+            return;
+        }
+
+        boolean sharedChanged = old == null
+                || !old.name().equals(wp.name())
+                || !old.dimension().equals(wp.dimension())
+                || old.x() != wp.x()
+                || old.y() != wp.y()
+                || old.z() != wp.z()
+                || old.colorRgb() != wp.colorRgb();
+        Waypoint normalized = normalizedPublic(
+                wp.id(), wp.name(), wp.dimension(), wp.x(), wp.y(), wp.z(), wp.colorRgb(), wp.visible());
+        WAYPOINTS.put(normalized.id(), normalized);
+        setHiddenId(normalized.id(), !normalized.visible());
+        NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(normalized));
+        save();
+        if (sharedChanged) {
+            sendPublicUpsert(normalized);
+        }
+    }
+
     public static void remove(UUID id) {
         Waypoint wp = WAYPOINTS.remove(id);
+        if (wp == null) {
+            return;
+        }
+
+        if (wp.type() == Waypoint.Type.PUBLIC) {
+            // Removed locally right away for responsiveness; the server
+            // broadcast makes it effective for everyone (echo idempotent).
+            sendPublicRemove(id);
+            HIDDEN_IDS.remove(id);
+        }
+        NeoForge.EVENT_BUS.post(new WaypointEvent.Removed(wp));
+        save();
+    }
+
+    // ------------------------------------------------------------------ public waypoints
+
+    /** Server broadcast: upsert of a public waypoint (login or edit). */
+    public static void acceptPublicUpsert(Payloads.PublicWaypointPayload p) {
+        Waypoint wp = normalizedPublic(
+                p.id(), p.name(), p.dimension(), p.x(), p.y(), p.z(), p.colorRgb(), !HIDDEN_IDS.contains(p.id()));
+        WAYPOINTS.put(wp.id(), wp);
+        // Updated (not the cancellable Added) even for new entries: the
+        // server is authoritative, listeners cannot veto the sync.
+        NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
+    }
+
+    /** Server broadcast: removal of a public waypoint. */
+    public static void acceptPublicRemove(UUID id) {
+        Waypoint wp = WAYPOINTS.remove(id);
+        HIDDEN_IDS.remove(id);
         if (wp != null) {
             NeoForge.EVENT_BUS.post(new WaypointEvent.Removed(wp));
-            save();
         }
+    }
+
+    private static Waypoint normalizedPublic(
+            UUID id, String name, ResourceLocation dim, int x, int y, int z, int color, boolean visible) {
+        return new Waypoint(
+                id,
+                name,
+                dim,
+                x,
+                y,
+                z,
+                color,
+                Waypoint.SOURCE_PUBLIC,
+                Waypoint.GROUP_PUBLIC,
+                visible,
+                Waypoint.Type.PUBLIC);
+    }
+
+    private static void setHiddenId(UUID id, boolean hidden) {
+        if (hidden) {
+            HIDDEN_IDS.add(id);
+        } else {
+            HIDDEN_IDS.remove(id);
+        }
+    }
+
+    private static void sendPublicUpsert(Waypoint wp) {
+        PacketDistributor.sendToServer(new Payloads.PublicWaypointPayload(
+                wp.id(), wp.name(), wp.dimension(), wp.x(), wp.y(), wp.z(), wp.colorRgb()));
+    }
+
+    private static void sendPublicRemove(UUID id) {
+        PacketDistributor.sendToServer(new Payloads.PublicWaypointRemovePayload(id));
     }
 
     /** Forces the visibility of every waypoint of a dimension (+ globals). */
@@ -148,17 +423,48 @@ public final class WaypointStore {
 
     private static void load() {
         WAYPOINTS.clear();
+        HIDDEN_GROUPS.clear();
+        HIDDEN_IDS.clear();
+        KNOWN_GROUPS.clear();
         if (file == null || !Files.exists(file)) {
             return;
         }
 
         try {
-            JsonArray arr = GSON.fromJson(Files.readString(file), JsonArray.class);
-            if (arr == null) {
+            JsonElement root = GSON.fromJson(Files.readString(file), JsonElement.class);
+            if (root == null) {
                 return;
             }
 
-            for (JsonElement el : arr) {
+            // Current format: {hiddenGroups: [...], waypoints: [...]}.
+            // Legacy format (pre-groups): a bare waypoint array.
+            JsonArray waypoints;
+            if (root.isJsonObject()) {
+                JsonObject o = root.getAsJsonObject();
+                waypoints = o.getAsJsonArray("waypoints");
+                if (o.has("hiddenGroups")) {
+                    for (JsonElement el : o.getAsJsonArray("hiddenGroups")) {
+                        HIDDEN_GROUPS.add(el.getAsString());
+                    }
+                }
+                if (o.has("hiddenIds")) {
+                    for (JsonElement el : o.getAsJsonArray("hiddenIds")) {
+                        HIDDEN_IDS.add(UUID.fromString(el.getAsString()));
+                    }
+                }
+                if (o.has("groups")) {
+                    for (JsonElement el : o.getAsJsonArray("groups")) {
+                        KNOWN_GROUPS.add(el.getAsString());
+                    }
+                }
+            } else {
+                waypoints = root.getAsJsonArray();
+            }
+            if (waypoints == null) {
+                return;
+            }
+
+            for (JsonElement el : waypoints) {
                 JsonObject o = el.getAsJsonObject();
                 // Only user waypoints are persisted: those of bridged mods
                 // (Waystones...) are resynchronized every session by their
@@ -183,16 +489,30 @@ public final class WaypointStore {
                         o.get("z").getAsInt(),
                         o.get("color").getAsInt(),
                         o.has("source") ? o.get("source").getAsString() : Waypoint.SOURCE_USER,
+                        o.has("group") ? o.get("group").getAsString() : Waypoint.GROUP_DEFAULT,
                         !o.has("visible") || o.get("visible").getAsBoolean(),
                         readType(o));
                 WAYPOINTS.put(wp.id(), wp);
+            }
+
+            // Migration (pre group-management files): groups created as
+            // free text only exist on their waypoints — adopt them.
+            for (Waypoint wp : WAYPOINTS.values()) {
+                if (isEditableGroup(wp.group())) {
+                    KNOWN_GROUPS.add(wp.group());
+                }
             }
         } catch (Exception e) {
             LOGGER.error("Failed to read waypoints", e);
         }
     }
 
-    /** Waypoint type, DIMENSION by default (files from older versions). */
+    /**
+     * Waypoint type, DIMENSION by default (files from older versions).
+     * The former GLOBAL type (cross-dimension display) also migrates to
+     * DIMENSION: PUBLIC has different semantics (server-shared) and old
+     * personal waypoints must not get silently published.
+     */
     private static Waypoint.Type readType(JsonObject o) {
         if (!o.has("type")) {
             return Waypoint.Type.DIMENSION;
@@ -226,13 +546,35 @@ public final class WaypointStore {
             o.addProperty("z", wp.z());
             o.addProperty("color", wp.colorRgb());
             o.addProperty("source", wp.source());
+            o.addProperty("group", wp.group());
             o.addProperty("visible", wp.visible());
             o.addProperty("type", wp.type().name());
             arr.add(o);
         }
+
+        JsonArray hidden = new JsonArray();
+        for (String group : HIDDEN_GROUPS) {
+            hidden.add(group);
+        }
+
+        JsonArray hiddenIds = new JsonArray();
+        for (UUID id : HIDDEN_IDS) {
+            hiddenIds.add(id.toString());
+        }
+
+        JsonArray groups = new JsonArray();
+        for (String group : KNOWN_GROUPS) {
+            groups.add(group);
+        }
+
+        JsonObject root = new JsonObject();
+        root.add("hiddenGroups", hidden);
+        root.add("hiddenIds", hiddenIds);
+        root.add("groups", groups);
+        root.add("waypoints", arr);
         try {
             Files.createDirectories(file.getParent());
-            Files.writeString(file, GSON.toJson(arr));
+            Files.writeString(file, GSON.toJson(root));
         } catch (IOException e) {
             LOGGER.error("Failed to save waypoints", e);
         }

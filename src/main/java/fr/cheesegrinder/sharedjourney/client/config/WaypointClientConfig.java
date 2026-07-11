@@ -22,6 +22,9 @@ public final class WaypointClientConfig {
     /** Waypoint names (fullscreen map + beacon labels). */
     public static ModConfigSpec.BooleanValue SHOW_WAYPOINT_NAMES;
 
+    /** Automatic waypoint on death (in the reserved "deaths" group). */
+    public static ModConfigSpec.BooleanValue DEATH_WAYPOINTS;
+
     private WaypointClientConfig() {}
 
     static void define(ModConfigSpec.Builder b) {
@@ -35,5 +38,7 @@ public final class WaypointClientConfig {
                 .defineInRange("beaconMaxDistance", 512, 16, 4096);
         SHOW_WAYPOINT_NAMES =
                 b.comment("Waypoint names (fullscreen map + beacon labels).").define("showWaypointNames", true);
+        DEATH_WAYPOINTS = b.comment("Automatically create a waypoint where you die (\"deaths\" group).")
+                .define("deathWaypoints", true);
     }
 }

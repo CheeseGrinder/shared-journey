@@ -95,7 +95,7 @@ public final class WaypointBeaconRenderer {
         // text and mask it.
         List<Waypoint> shown = new ArrayList<>();
         for (Waypoint wp : waypoints) {
-            if (!wp.visible()) {
+            if (!WaypointStore.isShown(wp)) {
                 continue;
             }
 
