@@ -53,6 +53,8 @@ public final class Payloads {
         public static Consumer<PublicWaypointRemovePayload> clientPublicWaypointRemove = p -> {};
         public static Consumer<PlayerWaypointPayload> clientPlayerWaypoint = p -> {};
         public static Consumer<PlayerWaypointRemovePayload> clientPlayerWaypointRemove = p -> {};
+        public static Consumer<BannerWaypointPayload> clientBannerWaypoint = p -> {};
+        public static Consumer<BannerWaypointRemovePayload> clientBannerWaypointRemove = p -> {};
         public static BiConsumer<Player, TrainPathRequestPayload> serverTrainPathRequest = (pl, p) -> {};
         public static BiConsumer<Player, PublicWaypointPayload> serverPublicWaypoint = (pl, p) -> {};
         public static BiConsumer<Player, PublicWaypointRemovePayload> serverPublicWaypointRemove = (pl, p) -> {};
@@ -553,11 +555,63 @@ public final class Payloads {
         }
     }
 
+    // ---------------------------------------------------------------- S2C: banner waypoints
+
+    /**
+     * Banner waypoint upsert, S2C only: unlike public/player waypoints,
+     * clients never request these — the server alone detects them (a
+     * NAMED banner placed in the world) and broadcasts to everyone. Read-
+     * only client-side, like a bridged mod's; visibility is deliberately
+     * absent, same rationale as public waypoints.
+     */
+    public record BannerWaypointPayload(
+            UUID id, String name, ResourceLocation dimension, int x, int y, int z, int colorRgb)
+            implements CustomPacketPayload {
+        public static final Type<BannerWaypointPayload> TYPE = new Type<>(Payloads.id("banner_waypoint"));
+
+        public static final StreamCodec<FriendlyByteBuf, BannerWaypointPayload> CODEC = StreamCodec.of(
+                (buf, p) -> {
+                    buf.writeUUID(p.id);
+                    buf.writeUtf(p.name, 48);
+                    buf.writeResourceLocation(p.dimension);
+                    buf.writeVarInt(p.x);
+                    buf.writeVarInt(p.y);
+                    buf.writeVarInt(p.z);
+                    buf.writeInt(p.colorRgb);
+                },
+                buf -> new BannerWaypointPayload(
+                        buf.readUUID(),
+                        buf.readUtf(48),
+                        buf.readResourceLocation(),
+                        buf.readVarInt(),
+                        buf.readVarInt(),
+                        buf.readVarInt(),
+                        buf.readInt()));
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** Banner waypoint removal (S2C only): the banner was broken. */
+    public record BannerWaypointRemovePayload(UUID id) implements CustomPacketPayload {
+        public static final Type<BannerWaypointRemovePayload> TYPE = new Type<>(Payloads.id("banner_waypoint_remove"));
+
+        public static final StreamCodec<FriendlyByteBuf, BannerWaypointRemovePayload> CODEC =
+                StreamCodec.of((buf, p) -> buf.writeUUID(p.id), buf -> new BannerWaypointRemovePayload(buf.readUUID()));
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     // ---------------------------------------------------------------- registration
 
     public static void register(final RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar =
-                event.registrar(SharedJourneyConstants.MOD_ID).versioned("5");
+                event.registrar(SharedJourneyConstants.MOD_ID).versioned("6");
 
         registrar.playToClient(
                 LayerSettingsPayload.TYPE,
@@ -661,5 +715,15 @@ public final class Payloads {
                         Hooks.clientPlayerWaypointRemove.accept(payload);
                     }
                 }));
+
+        registrar.playToClient(
+                BannerWaypointPayload.TYPE,
+                BannerWaypointPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientBannerWaypoint.accept(payload)));
+
+        registrar.playToClient(
+                BannerWaypointRemovePayload.TYPE,
+                BannerWaypointRemovePayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientBannerWaypointRemove.accept(payload)));
     }
 }

@@ -34,6 +34,13 @@ public record Waypoint(
      */
     public static final String SOURCE_PUBLIC = "public";
 
+    /**
+     * Source of banner waypoints: a NAMED banner (renamed at an anvil
+     * before being placed) detected server-side. Read-only, world-derived,
+     * volatile client-side like public waypoints.
+     */
+    public static final String SOURCE_BANNER = "banner";
+
     /** Default group of hand-created waypoints. */
     public static final String GROUP_DEFAULT = "default";
 
@@ -42,6 +49,9 @@ public record Waypoint(
 
     /** Reserved group of the server-shared public waypoints. */
     public static final String GROUP_PUBLIC = "public";
+
+    /** Reserved group of banner waypoints. */
+    public static final String GROUP_BANNERS = "banners";
 
     public Waypoint {
         if (group == null || group.isBlank()) {

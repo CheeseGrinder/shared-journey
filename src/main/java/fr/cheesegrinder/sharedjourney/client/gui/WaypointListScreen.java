@@ -176,6 +176,10 @@ public class WaypointListScreen extends Screen {
         if (Waypoint.GROUP_PUBLIC.equals(group)) {
             return Component.translatable(Lang.GROUP_PUBLIC);
         }
+
+        if (Waypoint.GROUP_BANNERS.equals(group)) {
+            return Component.translatable(Lang.GROUP_BANNERS);
+        }
         return Component.literal(group);
     }
 
@@ -428,11 +432,17 @@ public class WaypointListScreen extends Screen {
                         .tooltip(Tooltip.create(Component.translatable(Lang.WAYPOINTS_TOGGLE)))
                         .build();
                 buttons.add(visibility);
-                buttons.add(Button.builder(
-                                Component.translatable(Lang.WAYPOINTS_EDIT),
-                                b -> mc.setScreen(new WaypointEditScreen(WaypointListScreen.this, waypoint)))
-                        .size(40, 20)
-                        .build());
+                // Banner waypoints are read-only (position/name/color are
+                // derived from the physical banner): no Edit, no Delete —
+                // removing them means breaking the banner in the world.
+                boolean banner = Waypoint.SOURCE_BANNER.equals(waypoint.source());
+                if (!banner) {
+                    buttons.add(Button.builder(
+                                    Component.translatable(Lang.WAYPOINTS_EDIT),
+                                    b -> mc.setScreen(new WaypointEditScreen(WaypointListScreen.this, waypoint)))
+                            .size(40, 20)
+                            .build());
+                }
                 if (mc.player != null && mc.player.hasPermissions(2)) {
                     Button tp = Button.builder(
                                     Component.translatable(Lang.WAYPOINTS_TELEPORT), b -> teleportTo(waypoint))
@@ -442,14 +452,16 @@ public class WaypointListScreen extends Screen {
                     tp.active = sameDimension(mc, waypoint);
                     buttons.add(tp);
                 }
-                Button delete = Button.builder(Component.literal("x").withStyle(s -> s.withColor(0xFF6060)), b -> {
-                            WaypointStore.remove(waypoint.id());
-                            rebuild();
-                        })
-                        .size(20, 20)
-                        .tooltip(Tooltip.create(Component.translatable(Lang.WAYPOINT_DELETE)))
-                        .build();
-                buttons.add(delete);
+                if (!banner) {
+                    Button delete = Button.builder(Component.literal("x").withStyle(s -> s.withColor(0xFF6060)), b -> {
+                                WaypointStore.remove(waypoint.id());
+                                rebuild();
+                            })
+                            .size(20, 20)
+                            .tooltip(Tooltip.create(Component.translatable(Lang.WAYPOINT_DELETE)))
+                            .build();
+                    buttons.add(delete);
+                }
             }
 
             private Component visibilityLabel() {
@@ -502,6 +514,11 @@ public class WaypointListScreen extends Screen {
                         .append(dimensionLabel(waypoint.dimension()));
                 if (GROUP_ALL.equals(selectedGroup)) {
                     info.append("  ■ ").append(groupLabel(waypoint.group()).getString());
+                }
+                if (Waypoint.SOURCE_BANNER.equals(waypoint.source())) {
+                    info.append("  · ")
+                            .append(Component.translatable(Lang.WAYPOINT_TYPE_BANNER)
+                                    .getString());
                 }
                 gg.drawString(font, info.toString(), left + 20, top + 11, 0x888888);
             }

@@ -95,6 +95,27 @@ public final class EntityDots {
     }
 
     /**
+     * Banner waypoint icon: vanilla's own held-map banner marker shape
+     * (traced pixel-for-pixel from {@code textures/map/decorations/
+     * <color>_banner.png}, which is identical across colors save for the
+     * fill) — a flag on a short peg, black outline, in an 8x8 local grid
+     * centered on (x, y).
+     */
+    public static void drawBannerIcon(GuiGraphics gg, float x, float y, int rgb, float scale) {
+        gg.pose().pushPose();
+        gg.pose().translate(x, y, 0);
+        gg.pose().scale(scale, scale, 1f);
+        int black = 0xFF000000;
+        int fill = 0xFF000000 | rgb;
+        gg.fill(-3, -4, 3, -3, black); // top bar
+        gg.fill(-2, -3, -1, 2, black); // left edge
+        gg.fill(1, -3, 2, 2, black); // right edge
+        gg.fill(-1, -3, 1, 2, fill); // cloth
+        gg.fill(-1, 2, 1, 4, black); // bottom peg
+        gg.pose().popPose();
+    }
+
+    /**
      * Player arrow: white triangle with a blue border pointing in the
      * given direction (0 = up the screen). Immediate drawing: the pending
      * GUI batch is flushed first.

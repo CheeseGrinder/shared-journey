@@ -69,4 +69,12 @@ public final class ClientNetHandler {
     public static void handlePlayerWaypointRemove(Payloads.PlayerWaypointRemovePayload payload) {
         WaypointStore.acceptPlayerRemove(payload.id());
     }
+
+    public static void handleBannerWaypoint(Payloads.BannerWaypointPayload payload) {
+        WaypointStore.acceptBannerUpsert(payload);
+    }
+
+    public static void handleBannerWaypointRemove(Payloads.BannerWaypointRemovePayload payload) {
+        WaypointStore.acceptBannerRemove(payload.id());
+    }
 }

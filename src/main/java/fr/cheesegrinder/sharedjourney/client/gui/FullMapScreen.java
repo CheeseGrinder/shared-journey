@@ -553,7 +553,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         boolean doubleClick = now - lastClickAt < DOUBLE_CLICK_MS;
         Waypoint nearest = nearestWaypoint(mouseX, mouseY);
         if (nearest != null) {
-            if (doubleClick && nearest.id().equals(lastClickWaypoint)) {
+            // Banner waypoints are read-only (position/name/color/group
+            // come from the physical banner): double-click does not open
+            // the edit form, same restriction as the manager screen.
+            boolean editable = !Waypoint.SOURCE_BANNER.equals(nearest.source());
+            if (doubleClick && editable && nearest.id().equals(lastClickWaypoint)) {
                 lastClickAt = 0;
                 lastClickWaypoint = null;
                 mc.setScreen(new WaypointEditScreen(this, nearest));
@@ -1187,7 +1191,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 continue;
             }
 
-            EntityDots.drawWaypointDiamond(gg, sx, sy, wp.colorRgb(), 1.2f);
+            if (Waypoint.SOURCE_BANNER.equals(wp.source())) {
+                EntityDots.drawBannerIcon(gg, sx, sy, wp.colorRgb(), 1.2f);
+            } else {
+                EntityDots.drawWaypointDiamond(gg, sx, sy, wp.colorRgb(), 1.2f);
+            }
             if (zoom >= 0.5f && WaypointClientConfig.SHOW_WAYPOINT_NAMES.get()) {
                 gg.drawCenteredString(font, wp.name(), sx, sy - 13, 0xFFFFFF);
             }

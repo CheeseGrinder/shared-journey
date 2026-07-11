@@ -160,13 +160,15 @@ public final class WaypointStore {
 
     /**
      * Can this group be renamed/deleted in the management screen? The
-     * reserved groups (default, deaths, public) and the bridged mods'
-     * groups (waystones... any group holding non-user waypoints) cannot.
+     * reserved groups (default, deaths, public, banners) and the bridged
+     * mods' groups (waystones... any group holding non-user waypoints)
+     * cannot.
      */
     public static boolean isEditableGroup(String group) {
         if (Waypoint.GROUP_DEFAULT.equals(group)
                 || Waypoint.GROUP_DEATHS.equals(group)
-                || Waypoint.GROUP_PUBLIC.equals(group)) {
+                || Waypoint.GROUP_PUBLIC.equals(group)
+                || Waypoint.GROUP_BANNERS.equals(group)) {
             return false;
         }
 
@@ -234,10 +236,15 @@ public final class WaypointStore {
      * broadcasts them back (the local copy appears with the echo). DIMENSION
      * waypoints are routed the same way (to the player's own, private
      * storage) when the server manages them; the cancellable event is only
-     * meaningful for the purely local path.
+     * meaningful for the purely local path. Both routes are gated on
+     * {@link Waypoint#SOURCE_USER}: bridged mods (Waystones...) and banner
+     * waypoints also flow through add/update/remove (see
+     * {@code JourneyMapBridge}), but they are read-only from THIS client's
+     * point of view and must never be pushed to a SharedJourney server
+     * channel, whatever their type happens to be.
      */
     public static boolean add(Waypoint wp) {
-        if (wp.type() == Waypoint.Type.PUBLIC) {
+        if (isUserPublic(wp)) {
             sendPublicUpsert(wp);
             return true;
         }
@@ -260,8 +267,8 @@ public final class WaypointStore {
 
     public static void update(Waypoint wp) {
         Waypoint old = WAYPOINTS.get(wp.id());
-        boolean wasPublic = old != null && old.type() == Waypoint.Type.PUBLIC;
-        if (wasPublic || wp.type() == Waypoint.Type.PUBLIC) {
+        boolean wasPublic = old != null && isUserPublic(old);
+        if (wasPublic || isUserPublic(wp)) {
             updatePublic(old, wp, wasPublic);
             return;
         }
@@ -273,14 +280,43 @@ public final class WaypointStore {
             return;
         }
 
+        if (Waypoint.SOURCE_BANNER.equals(wp.source())) {
+            updateBanner(wp);
+            return;
+        }
+
         WAYPOINTS.put(wp.id(), wp);
         NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
         save();
     }
 
-    /** DIMENSION waypoints go through the server when it manages them. */
+    /**
+     * Banner waypoints are read-only (no UI edits the position/name/
+     * color): the only field the UI can change is visibility, which is
+     * routed through {@link #HIDDEN_IDS} like PUBLIC — otherwise the
+     * next login's full resync (see {@code acceptBannerUpsert}) would
+     * silently reset it, since it recomputes {@code visible} from
+     * {@code HIDDEN_IDS}, not from the in-memory copy.
+     */
+    private static void updateBanner(Waypoint wp) {
+        setHiddenId(wp.id(), !wp.visible());
+        WAYPOINTS.put(wp.id(), wp);
+        NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
+        save();
+    }
+
+    /** A genuinely user-authored waypoint (not bridged/banner) of this type. */
+    private static boolean isUserType(Waypoint wp, Waypoint.Type type) {
+        return Waypoint.SOURCE_USER.equals(wp.source()) && wp.type() == type;
+    }
+
+    private static boolean isUserPublic(Waypoint wp) {
+        return isUserType(wp, Waypoint.Type.PUBLIC);
+    }
+
+    /** User DIMENSION waypoints go through the server when it manages them. */
     private static boolean isServerManaged(Waypoint wp) {
-        return wp.type() == Waypoint.Type.DIMENSION && ClientMapCache.serverManagesWaypoints;
+        return isUserType(wp, Waypoint.Type.DIMENSION) && ClientMapCache.serverManagesWaypoints;
     }
 
     /**
@@ -399,7 +435,7 @@ public final class WaypointStore {
             return;
         }
 
-        if (wp.type() == Waypoint.Type.PUBLIC) {
+        if (isUserPublic(wp)) {
             // Removed locally right away for responsiveness; the server
             // broadcast makes it effective for everyone (echo idempotent).
             sendPublicRemove(id);
@@ -508,6 +544,45 @@ public final class WaypointStore {
 
     private static void sendPlayerRemove(UUID id) {
         PacketDistributor.sendToServer(new Payloads.PlayerWaypointRemovePayload(id));
+    }
+
+    // ------------------------------------------------------------------ banner waypoints
+
+    /**
+     * Server broadcast: upsert of a banner waypoint (login, placement, or
+     * a re-broadcast). Read-only client-side: there is no C2S counterpart,
+     * the server alone detects named banners in the world.
+     */
+    public static void acceptBannerUpsert(Payloads.BannerWaypointPayload p) {
+        Waypoint wp = normalizedBanner(
+                p.id(), p.name(), p.dimension(), p.x(), p.y(), p.z(), p.colorRgb(), !HIDDEN_IDS.contains(p.id()));
+        WAYPOINTS.put(wp.id(), wp);
+        NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
+    }
+
+    /** Server broadcast: removal of a banner waypoint (the banner was broken). */
+    public static void acceptBannerRemove(UUID id) {
+        Waypoint wp = WAYPOINTS.remove(id);
+        HIDDEN_IDS.remove(id);
+        if (wp != null) {
+            NeoForge.EVENT_BUS.post(new WaypointEvent.Removed(wp));
+        }
+    }
+
+    private static Waypoint normalizedBanner(
+            UUID id, String name, ResourceLocation dim, int x, int y, int z, int color, boolean visible) {
+        return new Waypoint(
+                id,
+                name,
+                dim,
+                x,
+                y,
+                z,
+                color,
+                Waypoint.SOURCE_BANNER,
+                Waypoint.GROUP_BANNERS,
+                visible,
+                Waypoint.Type.PUBLIC);
     }
 
     /** Forces the visibility of every waypoint of a dimension (+ globals). */

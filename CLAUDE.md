@@ -40,9 +40,9 @@ Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
 | `common.region`  | `RegionKey`, `RegionIndex`, `RegionStorage` (disk layout + legacy migration), `HoverRegionData` (hover sidecar format)                                           |
 | `common.util`    | `UndergroundCheck` (shared client/server "is underground" rule), `Lang` (i18n key constants)                                                                     |
 | `server.command` | `MapCommands` (`/sj`, `/sharedjourney`)                                                                                                                          |
-| `server.event`   | `ServerLifecycleEvents`, `PlayerEvents`, `ChunkEvents`, `ConfigEvents`                                                                                           |
+| `server.event`   | `ServerLifecycleEvents`, `PlayerEvents`, `ChunkEvents`, `ConfigEvents`, `BannerWaypointEvents` (named banner placed/broken)                                     |
 | `server.render`  | `ChunkColorizer` (facade) + per-layer renderers (`SurfaceRenderer`, `TopoRenderer`, `BiomeRenderer`, `CaveRenderer`), `BlockPalette`, `TextureColorExtractor`, `BiomeTints`, `RenderContext`, `ColorUtil` |
-| `server.service` | `MapManager` (async engine), `SyncService` (delta sync), `RegenService` (full regen), `CaveTracker` (cave anti-exploit), `PublicWaypointService` (shared waypoints), `PlayerWaypointService` (per-player private waypoints) |
+| `server.service` | `MapManager` (async engine), `SyncService` (delta sync), `RegenService` (full regen), `CaveTracker` (cave anti-exploit), `PublicWaypointService` (shared waypoints), `PlayerWaypointService` (per-player private waypoints), `BannerWaypointService` (named banner markers) |
 | `client.command` | `ClientCommands` (`/sj purge`, `/sj cache`, `/sj goto`)                                                                                                          |
 | `client.config`  | `ClientConfig` (facade) + per-section `MinimapClientConfig`, `RadarClientConfig`, `WaypointClientConfig`, `MapClientConfig`                                     |
 | `client.event`   | `ClientSetupEvents` (keys, HUD layer), `ClientInputEvents`, `ClientSessionEvents`, `DeathWaypointEvents`                                                         |

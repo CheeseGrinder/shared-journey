@@ -99,6 +99,8 @@ public final class Lang {
     public static final String WAYPOINT_HIDDEN = key("waypoint.hidden");
     public static final String WAYPOINT_TYPE = key("waypoint.type");
     public static final String WAYPOINT_TYPE_TOOLTIP = key("waypoint.type.tooltip");
+    /** Display-only type label for banner waypoints (internally routed as PUBLIC). */
+    public static final String WAYPOINT_TYPE_BANNER = key("waypoint.type.banner");
 
     /** Label of one waypoint type ("sharedjourney.waypoint.type.public"...). */
     public static String waypointType(Waypoint.Type type) {
@@ -126,6 +128,7 @@ public final class Lang {
     public static final String GROUP_DEFAULT = key("group.default");
     public static final String GROUP_DEATHS = key("group.deaths");
     public static final String GROUP_PUBLIC = key("group.public");
+    public static final String GROUP_BANNERS = key("group.banners");
 
     // ------------------------------------------------------------------ commands / services
 

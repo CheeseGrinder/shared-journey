@@ -31,6 +31,7 @@
   "sharedjourney.waypoint.type.dimension": "Private",
   "sharedjourney.waypoint.type.public": "Public",
   "sharedjourney.waypoint.type.temp": "Temporary",
+  "sharedjourney.waypoint.type.banner": "Banner",
   "sharedjourney.waypoint.type.tooltip": "Private: only you see it. Public: shared with every player on the server. Temporary: automatically deleted when reached.",
   "sharedjourney.command.purged": "%s cached region file(s) deleted for layer '%s'",
 
@@ -62,6 +63,7 @@
   "sharedjourney.group.default": "Default",
   "sharedjourney.group.deaths": "Deaths",
   "sharedjourney.group.public": "Public",
+  "sharedjourney.group.banners": "Banners",
   "sharedjourney.coords.chat": "Position: %s, %s",
   "sharedjourney.coords.open": "Click to open the map here",
   "sharedjourney.regen.bossbar": "Map regeneration: %s/%s chunks",

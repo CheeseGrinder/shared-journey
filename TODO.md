@@ -78,13 +78,53 @@ réécrite pour que la passe ne soit pas invalidée par un rework.
 
 ## Features (hors UI)
 
-- [ ] **P3 · ★★★★☆ — Waypoints de bannière** : une bannière NOMMÉE (enclume) posée devient un
-  marqueur partagé (minimap + plein écran, icône bannière vanilla
-  `map/decorations/banner_<couleur>.png`, couleur suivie), retiré quand elle est cassée.
-  _Coût en forte baisse : le pipeline serveur-autoritaire (persistance monde + broadcast +
-  envoi complet au login + source client volatile) existe depuis les waypoints publics —
-  détection pose/casse (`BlockEvent` + block entity `Nameable`) et une source `banner` à
-  brancher dessus. Consommateur de validation prévu pour l'API `MapRenderEvent`._
+- [x] **P3 · ★★★★☆ — Waypoints de bannière** — **fait**. Une bannière NOMMÉE (renommée à
+  l'enclume AVANT d'être posée — un bloc déjà posé ne peut pas être renommé) devient un
+  marqueur partagé, retiré quand elle est cassée. Détection serveur (`BannerWaypointEvents`) :
+  `BlockEvent.EntityPlaceEvent` + `AbstractBannerBlock` + block entity `Nameable#hasCustomName`
+  pour la pose, `BlockEvent.BreakEvent` pour la casse. Persistance + broadcast :
+  `BannerWaypointService`, world-shared (`<monde>/data/sharedjourney/waypoints_banners.json`),
+  id déterministe `UUID.nameUUIDFromBytes(dim+pos)` (stable aux redémarrages, insensible aux
+  renommages en amont). **S2C uniquement** (pas de C2S) : contrairement aux waypoints publics/
+  joueurs, aucun client ne demande de upsert/suppression — le serveur est seul détecteur.
+  Nouveaux payloads `BannerWaypointPayload`/`Remove` (protocole v6). Côté client : source
+  réservée `SOURCE_BANNER`, groupe réservé `GROUP_BANNERS`, type `PUBLIC` (sémantiquement
+  correct : partagé, visibilité par client) — routage/persistance 100 % gratuits via le
+  pipeline waypoint existant (minimap, plein écran, gestionnaire).
+  _Icône et couleur (retour utilisateur post-V1) : le losange générique ne correspondait pas
+  à l'icône bannière de Minecraft sur une carte tenue en main. Forme exacte tracée pixel par
+  pixel depuis `assets/minecraft/textures/map/decorations/<couleur>_banner.png` (extrait du
+  jar client via le cache Gradle NeoFormRuntime) — identique pour toutes les couleurs (barre
+  noire du haut, bordures, tige du bas), seul le remplissage change — reproduite en 5 appels
+  `gg.fill()` dans `EntityDots#drawBannerIcon`, utilisée à la place de `drawWaypointDiamond`
+  pour les waypoints `SOURCE_BANNER` (minimap + plein écran). Couleur : `DyeColor#
+  getTextureDiffuseColor()` est la formule de teinture du CUIR, pas du tissu de bannière —
+  proche mais pas identique (ex. rouge `0xB3312C` vs `0xB02E26` réel) ; remplacé par une table
+  de correspondance exacte des 16 couleurs extraite des mêmes textures
+  (`BannerWaypointEvents#mapIconColor`).
+  _Lecture seule (retour utilisateur post-V1) : ni Edit ni Delete dans le gestionnaire pour
+  un waypoint `SOURCE_BANNER` — position/nom/couleur/groupe sont dérivés de la bannière
+  physique, seule la casser dans le monde le retire. Le bouton TP et le toggle de visibilité
+  (afficher/masquer, choix 100 % local) restent disponibles. Le groupe « Banners » lui-même
+  n'est déjà pas supprimable/renommable (`isEditableGroup`). La ligne affiche un tag « Banner »
+  (`Lang.WAYPOINT_TYPE_BANNER`) en plus du groupe, puisque le type interne reste `PUBLIC`
+  (routage) mais la nature affichée à l'utilisateur doit être « Banner ». Bug de persistance
+  corrigé au passage : le toggle de visibilité passait par le chemin `WAYPOINTS.put` direct
+  au lieu de `HIDDEN_IDS` — fonctionnait dans la session mais revenait visible à la
+  reconnexion suivante (`acceptBannerUpsert` recalcule `visible` depuis `HIDDEN_IDS`, jamais
+  mis à jour par ce chemin) ; nouveau `WaypointStore.updateBanner` route bien via `HIDDEN_IDS`.
+  Le double-clic sur un waypoint bannière dans la carte plein écran (`FullMapScreen`)
+  ouvrait aussi le formulaire d'édition, même chemin bloqué désormais.
+  _Bug corrigé au passage (détecté en concevant le routage, pas encore en prod) :
+  `WaypointStore.add/update/remove` routait vers les canaux serveur PUBLIC/joueur en ne
+  vérifiant que `type()`, pas `source()` — un waypoint BRIDGÉ (ex. Waystones via
+  `JourneyMapBridge`, qui appelle `WaypointStore.add/update` directement avec `source=modId`,
+  `type=DIMENSION`) aurait été poussé à tort vers `PlayerWaypointService` dès que
+  `waypointStorage=SERVER` (le défaut). Toutes les routes serveur sont maintenant gatées sur
+  `SOURCE_USER` (`isUserPublic`/`isServerManaged`)._
+  _Limite connue (YAGNI, non gérée) : une bannière nommée placée par la worldgen (structure de
+  village de pillards, manoir des bois...) ou par une commande/un autre mod sans passer par
+  `EntityPlaceEvent` n'est pas détectée — seule la pose PAR UN JOUEUR l'est._
 - [ ] **P3 · ★★★☆☆ — Fuites d'information malgré « me cacher de la carte »** : un joueur caché
   « dessine » sa position par trois vecteurs — blocs cassés/posés (push en direct), nouveaux
   chunks générés (front d'exploration), déverrouillage des bandes CAVE (`CaveTracker`).
@@ -171,10 +211,10 @@ stabilise le modèle._
 
 1. ~~**Clean code du socle** (P2) : nettoyage + classes traductions/constantes, et en fin de
    chantier la **façade API waypoints** (P3).~~ ✔ **fait**.
-2. **Waypoints de bannière** (P3 ★★★★☆) — s'appuie directement sur le pipeline des waypoints
-   publics, et valide l'API de rendu écran. ← **prochain chantier**.
+2. ~~**Waypoints de bannière** (P3 ★★★★☆) — s'appuie directement sur le pipeline des waypoints
+   publics/joueurs.~~ ✔ **fait**.
 3. **Têtes de mobs sur le radar** (P3 ★★★★☆, compatible mods) + quick win : lissage de la
-   caméra du suivi de train (P3 ★★☆☆☆).
+   caméra du suivi de train (P3 ★★☆☆☆). ← **prochain chantier**.
 4. **Fuites d'information** (P3) — gros morceau design (quarantaine), à lancer quand on veut
    un chantier serveur.
 5. **Chantier UI** (quand déparqué) : losange in-world + marqueur joueur + boussole, puis
