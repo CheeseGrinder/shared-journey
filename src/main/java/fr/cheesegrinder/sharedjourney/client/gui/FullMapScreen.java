@@ -81,6 +81,13 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     private static final long DOUBLE_CLICK_MS = 350;
     /** Keyboard pan step (arrows), in blocks — same as JourneyMap. */
     private static final int PAN_STEP_BLOCKS = 16;
+    /**
+     * Fraction of the remaining distance to the followed train the camera
+     * closes each frame: a simple exponential smoothing (snappy enough to
+     * keep up with a moving train, soft enough not to feel like a hard
+     * teleport on every frame).
+     */
+    private static final double TRAIN_FOLLOW_SMOOTHING = 0.15;
 
     /**
      * Zoom scale: powers of 2 displayed like JourneyMap
@@ -926,14 +933,16 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         var mc = Minecraft.getInstance();
-        // Followed train (clicked): keep the view centered on it.
+        // Followed train (clicked): smoothly close in on it every frame,
+        // rather than snapping — a hard copy made the view jitter/teleport
+        // in lockstep with the train's own discrete position updates.
         if (followedTrain != null) {
             Vec3 trainPos = CreateTrainMapBridge.trainPosition(followedTrain);
             if (trainPos == null) {
                 followedTrain = null;
             } else {
-                centerX = trainPos.x;
-                centerZ = trainPos.z;
+                centerX += (trainPos.x - centerX) * TRAIN_FOLLOW_SMOOTHING;
+                centerZ += (trainPos.z - centerZ) * TRAIN_FOLLOW_SMOOTHING;
             }
         }
         renderBackgroundLayers(gg);

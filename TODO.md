@@ -137,8 +137,9 @@ réécrite pour que la passe ne soit pas invalidée par un rework.
   handshake de reconnexion contourne la quarantaine). Drain PROGRESSIF (5-15 min config) —
   un drain d'un coup redessinerait la trajectoire. Alternative radicale en option serveur :
   les joueurs cachés ne contribuent pas du tout à la carte._
-- [ ] **P3 · ★★☆☆☆ — Suivi de train : lisser la caméra** (quick win) : le recentrage est sec
-  (position recopiée chaque frame) ; interpoler la vue vers la position du train.
+- [x] **P3 · ★★☆☆☆ — Suivi de train : lisser la caméra** — **fait** (quick win) : lissage
+  exponentiel (`centerX/Z += (train - center) * 0.15` par frame) au lieu de la recopie
+  directe, dans `FullMapScreen.render`.
 - [ ] **P3 · ★★★★☆ — Têtes de mobs sur le radar** : têtes à la place des points, sur la
   minimap et la carte plein écran. **Compatible mods par construction** : pas de jeu de
   sprites vanilla hardcodé — rendre la tête depuis le modèle/texture de l'entité elle-même
