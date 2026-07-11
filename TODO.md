@@ -145,6 +145,18 @@ réécrite pour que la passe ne soit pas invalidée par un rework.
   sprites vanilla hardcodé — rendre la tête depuis le modèle/texture de l'entité elle-même
   (approche Xaero : le rendu marche pour n'importe quel mob moddé sans intégration), avec
   cache des icônes rendues par type d'entité et fallback point coloré si le rendu échoue.
+  _Tenté et abandonné (2026-07-11) : implémentation via `InventoryScreen`
+  (`renderEntityInInventoryFollowsAngle` puis `renderEntityInInventory` directement, avec un
+  crop/zoom sur le top ~32% de la bounding box). Testé en jeu sur la minimap : illisible en
+  pratique à cette échelle — tête qui pivote/bobine avec l'animation de déplacement du mob,
+  épaules visibles sur certains mobs (le crop vertical fixe ne colle pas à toutes les
+  proportions), et les mobs non-humanoïdes (abeille notamment) totalement méconnaissables.
+  Jugé qualité « v0.0.0 », pas acceptable pour une v1 — code entièrement reverté
+  (`MobIconRenderer` supprimé, retour au point coloré `EntityDots.draw` partout). Pour une
+  reprise future : soit un jeu de silhouettes/icônes fixes par catégorie de mob (lisible,
+  pas de bobbing, mais perd le "compatible mods par construction"), soit une capture
+  statique de la tête (pose figée, pas de rotation live) avec un crop calibré par entité
+  plutôt qu'un pourcentage fixe de bounding box._
 
 ## API publique (tranches restantes)
 
@@ -214,10 +226,11 @@ stabilise le modèle._
    chantier la **façade API waypoints** (P3).~~ ✔ **fait**.
 2. ~~**Waypoints de bannière** (P3 ★★★★☆) — s'appuie directement sur le pipeline des waypoints
    publics/joueurs.~~ ✔ **fait**.
-3. **Têtes de mobs sur le radar** (P3 ★★★★☆, compatible mods) + quick win : lissage de la
-   caméra du suivi de train (P3 ★★☆☆☆). ← **prochain chantier**.
+3. ~~**Têtes de mobs sur le radar** (P3 ★★★★☆, compatible mods)~~ ✘ **tenté, reverté** (voir
+   note dans la section ci-dessus) + ~~quick win : lissage de la caméra du suivi de
+   train (P3 ★★☆☆☆).~~ ✔ **fait**.
 4. **Fuites d'information** (P3) — gros morceau design (quarantaine), à lancer quand on veut
-   un chantier serveur.
+   un chantier serveur. ← **prochain chantier**.
 5. **Chantier UI** (quand déparqué) : losange in-world + marqueur joueur + boussole, puis
    écran de config intégré + éditeur couches/bandes, groupement des overlays, passe textes,
    inventaires, tranche API UI.
