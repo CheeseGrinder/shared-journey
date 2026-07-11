@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.event;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
+import fr.cheesegrinder.sharedjourney.server.service.PlayerWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.PublicWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.RegenService;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
@@ -24,6 +25,7 @@ public final class PlayerEvents {
             SyncService.sendHiddenPlayers(sp);
             RegenService.sendStateTo(sp);
             PublicWaypointService.sendAllTo(sp);
+            PlayerWaypointService.sendAllTo(sp);
         }
     }
 

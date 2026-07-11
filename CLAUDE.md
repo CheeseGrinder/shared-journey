@@ -31,22 +31,22 @@ Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
 | Package          | Contents                                                                                                                                                         |
 |------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | *(root)*         | `@Mod` entry points: `SharedJourney`, `SharedJourneyClient`                                                                                                      |
-| `api`            | Public interfaces: `Waypoint`, `MapLayer`, `ChunkLayerRenderer`, `SharedJourneyConstants`                                                                        |
+| `api`            | Public interfaces: `Waypoint`, `WaypointApi` (CRUD facade, `Hooks` indirection), `MapLayer`, `ChunkLayerRenderer`, `SharedJourneyConstants`                     |
 | `api.event`      | Custom NeoForge events: `LayerRegisterEvent`, `WaypointEvent`                                                                                                    |
 | `api.client`     | Client-only public API: `MapView` (map geometry/conversions)                                                                                                     |
 | `api.client.event` | Client-only events: `MapRenderEvent` (overlay draw hook, minimap + fullscreen), `FullMapScreenEvent`, `MapLayerChangedEvent`                                   |
-| `common.config`  | `CommonConfig`, `ServerConfig` (facade) + per-section `LayersServerConfig`, `EngineServerConfig`, `SyncServerConfig`                                             |
+| `common.config`  | `CommonConfig`, `ServerConfig` (facade) + per-section `LayersServerConfig`, `EngineServerConfig`, `SyncServerConfig`, `WaypointServerConfig`                     |
 | `common.network` | `Payloads` (network packets + `Hooks` indirection)                                                                                                               |
 | `common.region`  | `RegionKey`, `RegionIndex`, `RegionStorage` (disk layout + legacy migration), `HoverRegionData` (hover sidecar format)                                           |
-| `common.util`    | `UndergroundCheck` (shared client/server "is underground" rule)                                                                                                  |
+| `common.util`    | `UndergroundCheck` (shared client/server "is underground" rule), `Lang` (i18n key constants)                                                                     |
 | `server.command` | `MapCommands` (`/sj`, `/sharedjourney`)                                                                                                                          |
 | `server.event`   | `ServerLifecycleEvents`, `PlayerEvents`, `ChunkEvents`, `ConfigEvents`                                                                                           |
 | `server.render`  | `ChunkColorizer` (facade) + per-layer renderers (`SurfaceRenderer`, `TopoRenderer`, `BiomeRenderer`, `CaveRenderer`), `BlockPalette`, `TextureColorExtractor`, `BiomeTints`, `RenderContext`, `ColorUtil` |
-| `server.service` | `MapManager` (async engine), `SyncService` (delta sync), `RegenService` (full regen), `CaveTracker` (cave anti-exploit)                                          |
+| `server.service` | `MapManager` (async engine), `SyncService` (delta sync), `RegenService` (full regen), `CaveTracker` (cave anti-exploit), `PublicWaypointService` (shared waypoints), `PlayerWaypointService` (per-player private waypoints) |
 | `client.command` | `ClientCommands` (`/sj purge`, `/sj cache`, `/sj goto`)                                                                                                          |
-| `client.config`  | `ClientConfig`                                                                                                                                                   |
-| `client.event`   | `ClientSetupEvents` (keys, HUD layer), `ClientInputEvents`, `ClientSessionEvents`                                                                                |
-| `client.gui`     | `FullMapScreen`, `WaypointEditScreen`                                                                                                                            |
+| `client.config`  | `ClientConfig` (facade) + per-section `MinimapClientConfig`, `RadarClientConfig`, `WaypointClientConfig`, `MapClientConfig`                                     |
+| `client.event`   | `ClientSetupEvents` (keys, HUD layer), `ClientInputEvents`, `ClientSessionEvents`, `DeathWaypointEvents`                                                         |
+| `client.gui`     | `FullMapScreen`, `WaypointListScreen`, `WaypointEditScreen`, `ContextMenu`, `ModalScreen`, `UiColors`                                                            |
 | `client.net`     | `ClientNetHandler` (payload handlers)                                                                                                                            |
 | `client.render`  | `MinimapRenderer` (HUD minimap)                                                                                                                                  |
 | `client.service` | `ClientMapCache`, `DiskCache`, `WaypointStore`                                                                                                                   |

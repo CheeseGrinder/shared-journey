@@ -4,6 +4,7 @@ import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.common.config.CommonConfig;
 import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
 import fr.cheesegrinder.sharedjourney.common.config.SyncServerConfig;
+import fr.cheesegrinder.sharedjourney.common.config.WaypointServerConfig;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 
@@ -92,7 +93,9 @@ public final class SyncService {
                 new Payloads.LayerSettingsPayload(
                         map,
                         new ArrayList<>(LayersServerConfig.CAVE_BANDS.get()),
-                        SyncServerConfig.RADAR_MAX_RADIUS.get()));
+                        SyncServerConfig.RADAR_MAX_RADIUS.get(),
+                        WaypointServerConfig.DEATH_WAYPOINTS_ENABLED.get(),
+                        WaypointServerConfig.WAYPOINT_STORAGE.get() == WaypointServerConfig.Storage.SERVER));
     }
 
     public static void broadcastLayerSettings(MinecraftServer server) {

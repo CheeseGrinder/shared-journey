@@ -3,9 +3,8 @@ package fr.cheesegrinder.sharedjourney.client.config;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
- * Map display keys of the client config: bridged plugin overlays, chunk grid,
- * layer selection (default/auto/cave) and the disk cache toggle. Top-level
- * TOML keys (no section) kept for compatibility with existing config files.
+ * "map" section of the client config: bridged plugin overlays, chunk grid,
+ * layer selection (default/auto/cave) and the disk cache toggle.
  */
 public final class MapClientConfig {
 
@@ -28,6 +27,7 @@ public final class MapClientConfig {
     private MapClientConfig() {}
 
     static void define(ModConfigSpec.Builder b) {
+        b.push("map");
         SHOW_TRAIN_OVERLAY = b.comment("Create trains/tracks overlay on the maps (JourneyMap bridge).")
                 .define("showTrainOverlay", true);
         SHOW_DEPOSIT_OVERLAY = b.comment("Create: Rock & Stone deposit overlay (JourneyMap bridge).")
@@ -43,5 +43,6 @@ public final class MapClientConfig {
                 .define("autoLayer", true);
         DISK_CACHE_ENABLED = b.comment("Disk cache of received tiles (.minecraft/sharedjourney_cache/).")
                 .define("diskCache", true);
+        b.pop();
     }
 }

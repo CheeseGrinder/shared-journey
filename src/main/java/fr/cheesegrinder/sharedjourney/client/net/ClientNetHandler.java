@@ -19,6 +19,8 @@ public final class ClientNetHandler {
         ClientMapCache.layersByDim = payload.layersByDim();
         ClientMapCache.caveBands = payload.caveBands();
         ClientMapCache.radarMaxRadius = payload.radarMaxRadius();
+        ClientMapCache.deathWaypointsEnabled = payload.deathWaypointsEnabled();
+        ClientMapCache.serverManagesWaypoints = payload.serverManagesWaypoints();
     }
 
     public static void handleRegionData(Payloads.RegionDataPayload payload) {
@@ -58,5 +60,13 @@ public final class ClientNetHandler {
 
     public static void handlePublicWaypointRemove(Payloads.PublicWaypointRemovePayload payload) {
         WaypointStore.acceptPublicRemove(payload.id());
+    }
+
+    public static void handlePlayerWaypoint(Payloads.PlayerWaypointPayload payload) {
+        WaypointStore.acceptPlayerUpsert(payload);
+    }
+
+    public static void handlePlayerWaypointRemove(Payloads.PlayerWaypointRemovePayload payload) {
+        WaypointStore.acceptPlayerRemove(payload.id());
     }
 }

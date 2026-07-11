@@ -189,6 +189,15 @@
   "sharedjourney.configuration.showVillagers": "Afficher les villageois",
   "sharedjourney.configuration.showVillagers.tooltip": "Afficher les villageois sur le radar.",
 
+  "sharedjourney.configuration.waypoints": "Waypoints",
+  "sharedjourney.configuration.waypoints.tooltip": "Paramètres des waypoints.",
+  "sharedjourney.configuration.waypoints.button": "Configurer",
+
+  "sharedjourney.configuration.deathWaypointsEnabled": "Waypoints de mort autorisés",
+  "sharedjourney.configuration.deathWaypointsEnabled.tooltip": "Autorise les waypoints de mort automatiques. Chaque client a aussi son propre interrupteur.",
+  "sharedjourney.configuration.waypointStorage": "Stockage des waypoints",
+  "sharedjourney.configuration.waypointStorage.tooltip": "Où sont stockés les waypoints propres à chaque joueur : SERVER (persistés par joueur, privés) ou CLIENT (purement local, comportement précédent). Les waypoints temporaires restent toujours locaux ; les waypoints publics passent toujours par le serveur.",
+
   "sharedjourney.configuration.tempWaypointRadius": "Rayon des waypoints temporaires",
   "sharedjourney.configuration.tempWaypointRadius.tooltip": "Distance (blocs) à laquelle un waypoint temporaire est considéré atteint et supprimé.",
 
@@ -200,9 +209,14 @@
   "sharedjourney.configuration.beaconMaxDistance.tooltip": "Au-delà de cette distance (blocs), le beacon est masqué.",
 
   "sharedjourney.configuration.deathWaypoints": "Waypoints de mort",
-  "sharedjourney.configuration.deathWaypoints.tooltip": "Crée automatiquement un waypoint à l'endroit où vous mourez (groupe « deaths »).",
+  "sharedjourney.configuration.deathWaypoints.tooltip": "Crée automatiquement un waypoint à l'endroit où vous mourez (groupe « deaths »). Nécessite aussi l'autorisation du serveur.",
   "sharedjourney.configuration.showWaypointNames": "Nom des waypoints",
   "sharedjourney.configuration.showWaypointNames.tooltip": "Affiche le nom des waypoints sur la carte plein écran et sur les beacons (waystones incluses).",
+
+  "sharedjourney.configuration.map": "Carte",
+  "sharedjourney.configuration.map.tooltip": "Overlays, sélection de couche et cache disque.",
+  "sharedjourney.configuration.map.button": "Configurer",
+
   "sharedjourney.configuration.showTrainOverlay": "Overlay des trains Create",
   "sharedjourney.configuration.showTrainOverlay.tooltip": "Affiche les rails, gares et trains de Create sur les cartes (via le bridge JourneyMap).",
   "sharedjourney.configuration.showDepositOverlay": "Overlay des gisements RNS",

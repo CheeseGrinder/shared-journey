@@ -51,9 +51,13 @@ public final class Payloads {
         public static Consumer<TrainPathPayload> clientTrainPath = p -> {};
         public static Consumer<PublicWaypointPayload> clientPublicWaypoint = p -> {};
         public static Consumer<PublicWaypointRemovePayload> clientPublicWaypointRemove = p -> {};
+        public static Consumer<PlayerWaypointPayload> clientPlayerWaypoint = p -> {};
+        public static Consumer<PlayerWaypointRemovePayload> clientPlayerWaypointRemove = p -> {};
         public static BiConsumer<Player, TrainPathRequestPayload> serverTrainPathRequest = (pl, p) -> {};
         public static BiConsumer<Player, PublicWaypointPayload> serverPublicWaypoint = (pl, p) -> {};
         public static BiConsumer<Player, PublicWaypointRemovePayload> serverPublicWaypointRemove = (pl, p) -> {};
+        public static BiConsumer<Player, PlayerWaypointPayload> serverPlayerWaypoint = (pl, p) -> {};
+        public static BiConsumer<Player, PlayerWaypointRemovePayload> serverPlayerWaypointRemove = (pl, p) -> {};
         public static BiConsumer<Player, RegionRequestPayload> serverRegionRequest = (pl, p) -> {};
         public static BiConsumer<Player, ClientIndexPayload> serverClientIndex = (pl, p) -> {};
         public static BiConsumer<Player, MapVisibilityPayload> serverMapVisibility = (pl, p) -> {};
@@ -65,9 +69,16 @@ public final class Payloads {
 
     // ---------------------------------------------------------------- S2C: active layers
 
-    /** Active layers per dimension + CAVE bands (sent at login and on every reload). */
+    /**
+     * Active layers per dimension + CAVE bands + misc server toggles (sent
+     * at login and on every reload).
+     */
     public record LayerSettingsPayload(
-            Map<ResourceLocation, List<MapLayer>> layersByDim, List<Integer> caveBands, int radarMaxRadius)
+            Map<ResourceLocation, List<MapLayer>> layersByDim,
+            List<Integer> caveBands,
+            int radarMaxRadius,
+            boolean deathWaypointsEnabled,
+            boolean serverManagesWaypoints)
             implements CustomPacketPayload {
         public static final Type<LayerSettingsPayload> TYPE = new Type<>(id("layer_settings"));
 
@@ -82,6 +93,8 @@ public final class Payloads {
                     buf.writeVarInt(p.caveBands.size());
                     p.caveBands.forEach(buf::writeVarInt);
                     buf.writeVarInt(p.radarMaxRadius);
+                    buf.writeBoolean(p.deathWaypointsEnabled);
+                    buf.writeBoolean(p.serverManagesWaypoints);
                 },
                 buf -> {
                     int n = buf.readVarInt();
@@ -102,7 +115,10 @@ public final class Payloads {
                         bands.add(buf.readVarInt());
                     }
 
-                    return new LayerSettingsPayload(map, bands, buf.readVarInt());
+                    int radarMaxRadius = buf.readVarInt();
+                    boolean deathWaypointsEnabled = buf.readBoolean();
+                    return new LayerSettingsPayload(
+                            map, bands, radarMaxRadius, deathWaypointsEnabled, buf.readBoolean());
                 });
 
         @Override
@@ -480,11 +496,68 @@ public final class Payloads {
         }
     }
 
+    // ---------------------------------------------------------------- C2S/S2C: player waypoints
+
+    /**
+     * Private waypoint upsert, server-authoritative (opt-in via
+     * {@code waypoints.waypointStorage=SERVER}, the default): a client
+     * creates or edits one of ITS OWN waypoints (C2S), the server persists
+     * it under that player only and echoes it back (S2C) to that SAME
+     * player — never broadcast to anyone else, unlike
+     * {@link PublicWaypointPayload}. Covers DIMENSION waypoints only:
+     * TEMP ones always stay client-local. Visibility is deliberately
+     * absent, same rationale as public waypoints: a per-client choice.
+     */
+    public record PlayerWaypointPayload(
+            UUID id, String name, ResourceLocation dimension, int x, int y, int z, int colorRgb, String group)
+            implements CustomPacketPayload {
+        public static final Type<PlayerWaypointPayload> TYPE = new Type<>(Payloads.id("player_waypoint"));
+
+        public static final StreamCodec<FriendlyByteBuf, PlayerWaypointPayload> CODEC = StreamCodec.of(
+                (buf, p) -> {
+                    buf.writeUUID(p.id);
+                    buf.writeUtf(p.name, 48);
+                    buf.writeResourceLocation(p.dimension);
+                    buf.writeVarInt(p.x);
+                    buf.writeVarInt(p.y);
+                    buf.writeVarInt(p.z);
+                    buf.writeInt(p.colorRgb);
+                    buf.writeUtf(p.group, 32);
+                },
+                buf -> new PlayerWaypointPayload(
+                        buf.readUUID(),
+                        buf.readUtf(48),
+                        buf.readResourceLocation(),
+                        buf.readVarInt(),
+                        buf.readVarInt(),
+                        buf.readVarInt(),
+                        buf.readInt(),
+                        buf.readUtf(32)));
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** Private waypoint removal (C2S request, S2C echo to the same player). */
+    public record PlayerWaypointRemovePayload(UUID id) implements CustomPacketPayload {
+        public static final Type<PlayerWaypointRemovePayload> TYPE = new Type<>(Payloads.id("player_waypoint_remove"));
+
+        public static final StreamCodec<FriendlyByteBuf, PlayerWaypointRemovePayload> CODEC =
+                StreamCodec.of((buf, p) -> buf.writeUUID(p.id), buf -> new PlayerWaypointRemovePayload(buf.readUUID()));
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     // ---------------------------------------------------------------- registration
 
     public static void register(final RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar =
-                event.registrar(SharedJourneyConstants.MOD_ID).versioned("3");
+                event.registrar(SharedJourneyConstants.MOD_ID).versioned("5");
 
         registrar.playToClient(
                 LayerSettingsPayload.TYPE,
@@ -562,6 +635,30 @@ public final class Payloads {
                         Hooks.serverPublicWaypointRemove.accept(ctx.player(), payload);
                     } else {
                         Hooks.clientPublicWaypointRemove.accept(payload);
+                    }
+                }));
+
+        // Bidirectional: C2S edit request, S2C echo to that same player
+        // only (never broadcast — private per-player waypoints).
+        registrar.playBidirectional(
+                PlayerWaypointPayload.TYPE,
+                PlayerWaypointPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> {
+                    if (ctx.flow().isServerbound()) {
+                        Hooks.serverPlayerWaypoint.accept(ctx.player(), payload);
+                    } else {
+                        Hooks.clientPlayerWaypoint.accept(payload);
+                    }
+                }));
+
+        registrar.playBidirectional(
+                PlayerWaypointRemovePayload.TYPE,
+                PlayerWaypointRemovePayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> {
+                    if (ctx.flow().isServerbound()) {
+                        Hooks.serverPlayerWaypointRemove.accept(ctx.player(), payload);
+                    } else {
+                        Hooks.clientPlayerWaypointRemove.accept(payload);
                     }
                 }));
     }

@@ -3,9 +3,8 @@ package fr.cheesegrinder.sharedjourney.client.config;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
- * Waypoint keys of the client config: temp waypoint removal radius, in-world
- * beacons (beam + distance bounds) and name labels. Top-level TOML keys
- * (no section) kept for compatibility with existing config files.
+ * "waypoints" section of the client config: temp waypoint removal radius,
+ * in-world beacons (beam + distance bounds), name labels and death waypoints.
  */
 public final class WaypointClientConfig {
 
@@ -28,6 +27,7 @@ public final class WaypointClientConfig {
     private WaypointClientConfig() {}
 
     static void define(ModConfigSpec.Builder b) {
+        b.push("waypoints");
         TEMP_WAYPOINT_RADIUS = b.comment("Radius (blocks) at which a temp waypoint is considered reached and removed.")
                 .defineInRange("tempWaypointRadius", 8, 1, 128);
         WAYPOINT_BEACONS = b.comment("Waypoint beacons in the world (vertical beam + name and distance).")
@@ -38,7 +38,9 @@ public final class WaypointClientConfig {
                 .defineInRange("beaconMaxDistance", 512, 16, 4096);
         SHOW_WAYPOINT_NAMES =
                 b.comment("Waypoint names (fullscreen map + beacon labels).").define("showWaypointNames", true);
-        DEATH_WAYPOINTS = b.comment("Automatically create a waypoint where you die (\"deaths\" group).")
+        DEATH_WAYPOINTS = b.comment(
+                        "Automatically create a waypoint where you die (\"deaths\" group). Also requires the server to allow it.")
                 .define("deathWaypoints", true);
+        b.pop();
     }
 }

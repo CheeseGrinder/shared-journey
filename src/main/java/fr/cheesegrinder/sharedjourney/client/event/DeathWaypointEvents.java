@@ -3,6 +3,7 @@ package fr.cheesegrinder.sharedjourney.client.event;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
+import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 
 import net.minecraft.client.Minecraft;
@@ -44,7 +45,7 @@ public final class DeathWaypointEvents {
         }
 
         LocalPlayer player = Minecraft.getInstance().player;
-        if (player == null || !WaypointClientConfig.DEATH_WAYPOINTS.get()) {
+        if (player == null || !WaypointClientConfig.DEATH_WAYPOINTS.get() || !ClientMapCache.deathWaypointsEnabled) {
             return;
         }
 

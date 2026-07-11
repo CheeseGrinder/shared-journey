@@ -5,6 +5,7 @@ import fr.cheesegrinder.sharedjourney.common.config.CommonConfig;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.server.compat.CreateTrainPathService;
+import fr.cheesegrinder.sharedjourney.server.service.PlayerWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.PublicWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
 
@@ -44,6 +45,8 @@ public class SharedJourney {
         Payloads.Hooks.serverTrainPathRequest = CreateTrainPathService::handleRequest;
         Payloads.Hooks.serverPublicWaypoint = PublicWaypointService::handleUpsert;
         Payloads.Hooks.serverPublicWaypointRemove = PublicWaypointService::handleRemove;
+        Payloads.Hooks.serverPlayerWaypoint = PlayerWaypointService::handleUpsert;
+        Payloads.Hooks.serverPlayerWaypointRemove = PlayerWaypointService::handleRemove;
 
         LOGGER.info("SharedJourney initialized");
     }

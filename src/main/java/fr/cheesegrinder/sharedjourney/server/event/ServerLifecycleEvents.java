@@ -5,6 +5,7 @@ import fr.cheesegrinder.sharedjourney.api.event.LayerRegisterEvent;
 import fr.cheesegrinder.sharedjourney.server.command.MapCommands;
 import fr.cheesegrinder.sharedjourney.server.service.CaveTracker;
 import fr.cheesegrinder.sharedjourney.server.service.MapManager;
+import fr.cheesegrinder.sharedjourney.server.service.PlayerWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.PublicWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.RegenService;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
@@ -37,6 +38,7 @@ public final class ServerLifecycleEvents {
         ModLoader.postEvent(layerEvent);
         MapManager.init(event.getServer(), layerEvent.getCustomLayers());
         PublicWaypointService.init(event.getServer());
+        PlayerWaypointService.init(event.getServer());
 
         // Replay chunks loaded before the init (spawn chunks).
         ChunkEvents.replayEarlyChunks(event.getServer());
@@ -46,6 +48,7 @@ public final class ServerLifecycleEvents {
     public static void onServerStopping(ServerStoppingEvent event) {
         RegenService.cancel();
         PublicWaypointService.shutdown();
+        PlayerWaypointService.shutdown();
         MapManager.shutdown();
     }
 

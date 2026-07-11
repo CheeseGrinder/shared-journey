@@ -35,6 +35,47 @@ réécrite pour que la passe ne soit pas invalidée par un rework.
   Les événements `WaypointEvent.Added/Updated/Removed` existaient déjà.
   _Reste à trancher séparément (non fait ici) : format NBT pour les index machine-only._
 
+## Config — organisation + waypoints serveur-autoritaires — fait
+
+- [x] **P3 · ★★★☆☆ — Sections de la config client** — **fait** : `MapClientConfig` et
+  `WaypointClientConfig` étaient en clés top-level (« gardées ainsi pour compatibilité ») alors
+  que `MinimapClientConfig`/`RadarClientConfig` utilisaient déjà des sections `push()`/`pop()` —
+  incohérence source de la confusion. Les deux passent maintenant en sections `map`/`waypoints`
+  (nouvelles clés de lang `sharedjourney.configuration.map`/`.waypoints` + `.tooltip`/`.button`),
+  alignées sur le patron existant. Écran de config généré par NeoForge maintenant groupé de
+  façon cohérente. _Casse potentielle : les valeurs déjà sauvegardées sous les anciennes clés
+  top-level de ces deux sections reviennent à leur défaut (chemin TOML changé) — accepté, le
+  mod n'est pas encore utilisé._
+- [x] **P3 · ★★★★☆ — Waypoints des joueurs : stockage local ou serveur (config serveur)** —
+  **fait**. Nouvelle section serveur `WaypointServerConfig` (« waypoints ») :
+  - `deathWaypointsEnabled` (def. true) : coupe-circuit admin pour les waypoints de mort,
+    en plus du réglage client existant (les deux doivent être vrais). Poussé au client via
+    `LayerSettingsPayload` (même canal que `radarMaxRadius`, envoyé au login et à chaque reload).
+  - `waypointStorage` (enum SERVER/CLIENT, **défaut SERVER**) : les waypoints DIMENSION
+    (persistants, privés) du joueur sont stockés côté serveur — un fichier par joueur
+    (`<monde>/data/sharedjourney/waypoints/<uuid>.json`, jamais partagé, jamais broadcast),
+    synchronisé uniquement à son propriétaire au login et à chaque édition
+    (`PlayerWaypointService`, payloads bidirectionnels `PlayerWaypointPayload`/`Remove`,
+    même patron que les waypoints publics mais point-à-point). CLIENT = comportement
+    précédent (100 % `WaypointStore` local). Portée du toggle **volontairement limitée aux
+    DIMENSION** (décision utilisateur) : les TEMP restent toujours locaux (éphémères,
+    détection « atteint » déjà client-side à chaque tick) ; les PUBLIC passent toujours par
+    le serveur quel que soit ce réglage. Pas de migration automatique des anciens
+    `waypoints.json` locaux (décision utilisateur : mod pas encore utilisé).
+  - Câblage : `PlayerWaypointService` (init/shutdown sur le cycle de vie serveur, `sendAllTo`
+    au login), `ClientMapCache.serverManagesWaypoints` (reçu via `LayerSettingsPayload`),
+    `WaypointStore` route `add`/`update`/`remove` selon `isServerManaged(wp)`
+    (`type == DIMENSION && serverManagesWaypoints`), avec gestion complète des transitions de
+    TYPE via le bouton cycle de l'écran d'édition (DIMENSION↔PUBLIC↔TEMP) : promotion/
+    démotion nettoient bien la copie serveur orpheline dans les deux sens (bug détecté et
+    corrigé en cours de dev — la première version laissait des copies fantômes). `visible`
+    reste un choix 100 % local (`HIDDEN_IDS`, réutilisé de PUBLIC) ; le `source` des waypoints
+    gérés serveur reste `SOURCE_USER` (pas de nouvelle constante) pour que leurs groupes
+    restent éditables par l'utilisateur (`isEditableGroup`). Fix connexe :
+    `WaypointStore.renameGroup` faisait un `WAYPOINTS.put` direct au lieu de passer par
+    `update()`, ce qui aurait laissé le serveur avec l'ancien nom de groupe pour les waypoints
+    gérés serveur — corrigé pour repasser par `update()`. Protocole réseau v5.
+
 ## Features (hors UI)
 
 - [ ] **P3 · ★★★★☆ — Waypoints de bannière** : une bannière NOMMÉE (enclume) posée devient un

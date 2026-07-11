@@ -31,9 +31,16 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Local waypoints (spec §6.2): saved as JSON in the current server's cache
- * folder. Posts the API's WaypointEvents so that other mods (or the
- * JourneyMap bridge) can react/intercept.
+ * Client-side waypoint store (spec §6.2): the in-memory source of truth
+ * for every waypoint this client knows about, regardless of where it is
+ * actually persisted. Purely local waypoints (TEMP always, DIMENSION when
+ * the server does not manage them) are saved as JSON in the current
+ * server's cache folder. PUBLIC and server-managed DIMENSION waypoints are
+ * instead server-authoritative: they are resynchronized fresh every
+ * session and never written to the local file (see the "public"/
+ * "player-managed waypoints" sections below). Posts the API's
+ * WaypointEvents so that other mods (or the JourneyMap bridge) can
+ * react/intercept.
  */
 public final class WaypointStore {
 
@@ -50,9 +57,10 @@ public final class WaypointStore {
      */
     private static final Set<String> KNOWN_GROUPS = ConcurrentHashMap.newKeySet();
     /**
-     * Public waypoints hidden by THIS client. Public waypoints are
-     * server-authoritative and resynchronized at login, so their visible
-     * flag cannot be persisted with them: this local set is.
+     * Waypoints hidden by THIS client, whose canonical record is
+     * server-authoritative and resynchronized at login (PUBLIC waypoints,
+     * and DIMENSION ones when {@code waypoints.waypointStorage=SERVER}):
+     * their visible flag cannot be persisted with them, this local set is.
      */
     private static final Set<UUID> HIDDEN_IDS = ConcurrentHashMap.newKeySet();
 
@@ -185,9 +193,11 @@ public final class WaypointStore {
             return false;
         }
 
+        // Through update(), not a direct WAYPOINTS.put: a renamed group's
+        // waypoints can be server-managed and need the rename pushed too.
         for (Waypoint wp : all()) {
             if (wp.group().equals(from)) {
-                WAYPOINTS.put(wp.id(), wp.withGroup(next));
+                update(wp.withGroup(next));
             }
         }
 
@@ -221,11 +231,19 @@ public final class WaypointStore {
     /**
      * Adds a waypoint. Returns false if a listener cancelled the addition.
      * PUBLIC waypoints are routed to the server, which persists them and
-     * broadcasts them back (the local copy appears with the echo).
+     * broadcasts them back (the local copy appears with the echo). DIMENSION
+     * waypoints are routed the same way (to the player's own, private
+     * storage) when the server manages them; the cancellable event is only
+     * meaningful for the purely local path.
      */
     public static boolean add(Waypoint wp) {
         if (wp.type() == Waypoint.Type.PUBLIC) {
             sendPublicUpsert(wp);
+            return true;
+        }
+
+        if (isServerManaged(wp)) {
+            sendPlayerUpsert(wp);
             return true;
         }
 
@@ -248,9 +266,21 @@ public final class WaypointStore {
             return;
         }
 
+        boolean wasServerManaged = old != null && isServerManaged(old);
+        boolean nowServerManaged = isServerManaged(wp);
+        if (wasServerManaged || nowServerManaged) {
+            updateServerManaged(old, wp, wasServerManaged, nowServerManaged);
+            return;
+        }
+
         WAYPOINTS.put(wp.id(), wp);
         NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
         save();
+    }
+
+    /** DIMENSION waypoints go through the server when it manages them. */
+    private static boolean isServerManaged(Waypoint wp) {
+        return wp.type() == Waypoint.Type.DIMENSION && ClientMapCache.serverManagesWaypoints;
     }
 
     /**
@@ -260,17 +290,25 @@ public final class WaypointStore {
      */
     private static void updatePublic(Waypoint old, Waypoint wp, boolean wasPublic) {
         if (!wasPublic) {
-            // Promoted private → public: publish; the echo re-adds it.
+            // Promoted private → public: publish; the echo re-adds it. If
+            // the old copy was server-managed, drop its private copy too
+            // (otherwise it comes back as a duplicate DIMENSION waypoint on
+            // the next login).
             if (old != null) {
                 WAYPOINTS.remove(wp.id());
                 save();
+                if (isServerManaged(old)) {
+                    sendPlayerRemove(wp.id());
+                }
             }
             sendPublicUpsert(wp);
             return;
         }
 
         if (wp.type() != Waypoint.Type.PUBLIC) {
-            // Demoted public → private: server copy removed, local kept.
+            // Demoted public → private: server copy removed, local kept
+            // (and re-published to the player's own storage if the new
+            // type is itself server-managed).
             sendPublicRemove(wp.id());
             HIDDEN_IDS.remove(wp.id());
             Waypoint local = new Waypoint(
@@ -288,6 +326,9 @@ public final class WaypointStore {
             WAYPOINTS.put(local.id(), local);
             NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(local));
             save();
+            if (isServerManaged(local)) {
+                sendPlayerUpsert(local);
+            }
             return;
         }
 
@@ -309,6 +350,49 @@ public final class WaypointStore {
         }
     }
 
+    /**
+     * Updates a DIMENSION waypoint while it is, was, or becomes
+     * server-managed (PUBLIC already handled above). Whether a waypoint is
+     * server-managed is not itself stored: it is recomputed from its
+     * current type against the server-wide setting, so a TYPE change (the
+     * edit screen's DIMENSION/PUBLIC/TEMP cycle) is the only way old and
+     * new can disagree. Shared fields go through the server; the visible
+     * flag stays local ({@link #HIDDEN_IDS}), same rationale as PUBLIC.
+     */
+    private static void updateServerManaged(
+            Waypoint old, Waypoint wp, boolean wasServerManaged, boolean nowServerManaged) {
+        if (!nowServerManaged) {
+            // Demoted to TEMP: drop the player's server copy, keep local.
+            sendPlayerRemove(wp.id());
+            HIDDEN_IDS.remove(wp.id());
+            WAYPOINTS.put(wp.id(), wp);
+            NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
+            save();
+            return;
+        }
+
+        // Promoted into server management (old was TEMP, or absent): the
+        // shared fields must be pushed even if unchanged from `old`.
+        boolean sharedChanged = !wasServerManaged
+                || old == null
+                || !old.name().equals(wp.name())
+                || !old.dimension().equals(wp.dimension())
+                || old.x() != wp.x()
+                || old.y() != wp.y()
+                || old.z() != wp.z()
+                || old.colorRgb() != wp.colorRgb()
+                || !old.group().equals(wp.group());
+        Waypoint normalized = normalizedPlayerManaged(
+                wp.id(), wp.name(), wp.dimension(), wp.x(), wp.y(), wp.z(), wp.colorRgb(), wp.group(), wp.visible());
+        WAYPOINTS.put(normalized.id(), normalized);
+        setHiddenId(normalized.id(), !normalized.visible());
+        NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(normalized));
+        save();
+        if (sharedChanged) {
+            sendPlayerUpsert(normalized);
+        }
+    }
+
     public static void remove(UUID id) {
         Waypoint wp = WAYPOINTS.remove(id);
         if (wp == null) {
@@ -319,6 +403,9 @@ public final class WaypointStore {
             // Removed locally right away for responsiveness; the server
             // broadcast makes it effective for everyone (echo idempotent).
             sendPublicRemove(id);
+            HIDDEN_IDS.remove(id);
+        } else if (isServerManaged(wp)) {
+            sendPlayerRemove(id);
             HIDDEN_IDS.remove(id);
         }
         NeoForge.EVENT_BUS.post(new WaypointEvent.Removed(wp));
@@ -377,6 +464,50 @@ public final class WaypointStore {
 
     private static void sendPublicRemove(UUID id) {
         PacketDistributor.sendToServer(new Payloads.PublicWaypointRemovePayload(id));
+    }
+
+    // ------------------------------------------------------------------ player-managed waypoints
+
+    /** Server echo: upsert of one of THIS player's own waypoints (login or edit). */
+    public static void acceptPlayerUpsert(Payloads.PlayerWaypointPayload p) {
+        Waypoint wp = normalizedPlayerManaged(
+                p.id(),
+                p.name(),
+                p.dimension(),
+                p.x(),
+                p.y(),
+                p.z(),
+                p.colorRgb(),
+                p.group(),
+                !HIDDEN_IDS.contains(p.id()));
+        WAYPOINTS.put(wp.id(), wp);
+        // Updated (not the cancellable Added) even for new entries: the
+        // server is authoritative, listeners cannot veto the sync.
+        NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
+    }
+
+    /** Server echo: removal of one of THIS player's own waypoints. */
+    public static void acceptPlayerRemove(UUID id) {
+        Waypoint wp = WAYPOINTS.remove(id);
+        HIDDEN_IDS.remove(id);
+        if (wp != null) {
+            NeoForge.EVENT_BUS.post(new WaypointEvent.Removed(wp));
+        }
+    }
+
+    private static Waypoint normalizedPlayerManaged(
+            UUID id, String name, ResourceLocation dim, int x, int y, int z, int color, String group, boolean visible) {
+        return new Waypoint(
+                id, name, dim, x, y, z, color, Waypoint.SOURCE_USER, group, visible, Waypoint.Type.DIMENSION);
+    }
+
+    private static void sendPlayerUpsert(Waypoint wp) {
+        PacketDistributor.sendToServer(new Payloads.PlayerWaypointPayload(
+                wp.id(), wp.name(), wp.dimension(), wp.x(), wp.y(), wp.z(), wp.colorRgb(), wp.group()));
+    }
+
+    private static void sendPlayerRemove(UUID id) {
+        PacketDistributor.sendToServer(new Payloads.PlayerWaypointRemovePayload(id));
     }
 
     /** Forces the visibility of every waypoint of a dimension (+ globals). */
@@ -532,8 +663,14 @@ public final class WaypointStore {
 
         JsonArray arr = new JsonArray();
         for (Waypoint wp : WAYPOINTS.values()) {
-            // Bridged mods' waypoints are volatile (see load()).
+            // Bridged mods' and PUBLIC waypoints are volatile (see load()).
             if (!Waypoint.SOURCE_USER.equals(wp.source())) {
+                continue;
+            }
+
+            // Server-managed DIMENSION waypoints are volatile too: the
+            // server re-syncs them fresh every session (see acceptPlayer*).
+            if (isServerManaged(wp)) {
                 continue;
             }
 

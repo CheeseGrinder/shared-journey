@@ -189,6 +189,15 @@
   "sharedjourney.configuration.showVillagers": "Show Villagers",
   "sharedjourney.configuration.showVillagers.tooltip": "Show villagers on the radar.",
 
+  "sharedjourney.configuration.waypoints": "Waypoints",
+  "sharedjourney.configuration.waypoints.tooltip": "Waypoint settings.",
+  "sharedjourney.configuration.waypoints.button": "Configure",
+
+  "sharedjourney.configuration.deathWaypointsEnabled": "Death Waypoints Allowed",
+  "sharedjourney.configuration.deathWaypointsEnabled.tooltip": "Allow automatic death waypoints. Each client also has its own on/off toggle.",
+  "sharedjourney.configuration.waypointStorage": "Waypoint Storage",
+  "sharedjourney.configuration.waypointStorage.tooltip": "Where players' own waypoints are stored: SERVER (persisted per-player, private) or CLIENT (purely local, previous behavior). Temporary waypoints always stay client-local; public waypoints always go through the server.",
+
   "sharedjourney.configuration.tempWaypointRadius": "Temp Waypoint Radius",
   "sharedjourney.configuration.tempWaypointRadius.tooltip": "Distance (blocks) at which a temporary waypoint is considered reached and deleted.",
 
@@ -200,9 +209,14 @@
   "sharedjourney.configuration.beaconMaxDistance.tooltip": "Beyond this distance (blocks) the beacon is hidden.",
 
   "sharedjourney.configuration.deathWaypoints": "Death Waypoints",
-  "sharedjourney.configuration.deathWaypoints.tooltip": "Automatically create a waypoint where you die (\"deaths\" group).",
+  "sharedjourney.configuration.deathWaypoints.tooltip": "Automatically create a waypoint where you die (\"deaths\" group). Also requires the server to allow it.",
   "sharedjourney.configuration.showWaypointNames": "Waypoint Names",
   "sharedjourney.configuration.showWaypointNames.tooltip": "Show waypoint names on the fullscreen map and on beacons (waystones included).",
+
+  "sharedjourney.configuration.map": "Map",
+  "sharedjourney.configuration.map.tooltip": "Overlays, layer selection and disk cache.",
+  "sharedjourney.configuration.map.button": "Configure",
+
   "sharedjourney.configuration.showTrainOverlay": "Create Train Overlay",
   "sharedjourney.configuration.showTrainOverlay.tooltip": "Show Create tracks, stations and trains on the maps (via the JourneyMap bridge).",
   "sharedjourney.configuration.showDepositOverlay": "RNS Deposit Overlay",

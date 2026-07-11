@@ -39,6 +39,19 @@ public final class ClientMapCache {
     public static volatile Map<ResourceLocation, List<MapLayer>> layersByDim = Map.of();
     public static volatile List<Integer> caveBands = List.of();
     public static volatile int radarMaxRadius = 64;
+    /**
+     * Server admin toggle for death waypoints (defaults to true so behavior
+     * before the first handshake matches a server that allows them).
+     */
+    public static volatile boolean deathWaypointsEnabled = true;
+    /**
+     * True when the server persists this player's DIMENSION waypoints
+     * server-side (default). Routes their CRUD through the network instead
+     * of the local file; see WaypointStore. Defaults to true so a client
+     * connecting before the handshake completes does not briefly write to
+     * its local file.
+     */
+    public static volatile boolean serverManagesWaypoints = true;
     /** Players who asked to be hidden from the map (broadcast by the server). */
     public static volatile Set<UUID> hiddenPlayers = Set.of();
     /** Positions of (non-hidden) players broadcast by the server (~1x/s). */
