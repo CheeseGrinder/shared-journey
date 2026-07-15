@@ -16,6 +16,9 @@ import net.minecraft.world.entity.player.Player;
 
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import com.mojang.logging.LogUtils;
+import org.slf4j.Logger;
+
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -39,6 +42,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 public final class SyncService {
 
+    private static final Logger LOGGER = LogUtils.getLogger();
+
     private static final Map<UUID, PlayerState> STATES = new ConcurrentHashMap<>();
 
     private SyncService() {}
@@ -59,19 +64,42 @@ public final class SyncService {
         STATES.remove(player.getUUID());
     }
 
-    /** Handshake §5.1: seeds the client's known versions from its local index. */
+    /**
+     * Handshake §5.1: seeds the client's known versions from its local
+     * index. Integrity check on the way: an entry whose recomputed file
+     * hash contradicts the server's record for that same version is a
+     * tampered (or corrupted) cache file — it is NOT seeded, so the delta
+     * re-pushes the authoritative bytes.
+     */
     public static void handleClientIndex(Player playerRaw, Payloads.ClientIndexPayload payload) {
         if (!(playerRaw instanceof ServerPlayer player)) {
             return;
         }
 
         PlayerState st = STATES.get(player.getUUID());
-        if (st == null) {
+        MapManager mgr = MapManager.get();
+        if (st == null || mgr == null) {
             return;
         }
 
-        Map<RegionKey, Long> clientIndex = payload.decodeIndex(50_000);
-        st.sentVersions.putAll(clientIndex);
+        Map<RegionKey, Payloads.IndexEntry> clientIndex = payload.decodeIndex(50_000);
+        int tampered = 0;
+        for (Map.Entry<RegionKey, Payloads.IndexEntry> e : clientIndex.entrySet()) {
+            Payloads.IndexEntry entry = e.getValue();
+            if (mgr.isTampered(e.getKey(), entry.version(), entry.sha256())) {
+                tampered++;
+                continue;
+            }
+
+            st.sentVersions.put(e.getKey(), entry.version());
+        }
+        if (tampered > 0) {
+            LOGGER.warn(
+                    "SharedJourney: {} declared {} region(s) with a tampered cache file, re-pushing",
+                    player.getGameProfile().getName(),
+                    tampered);
+        }
+
         st.handshakeEntries = clientIndex.size();
         // Immediately recompute the delta with this knowledge.
         enqueueDelta(player, false);

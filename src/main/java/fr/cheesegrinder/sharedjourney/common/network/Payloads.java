@@ -160,9 +160,19 @@ public final class Payloads {
     // ---------------------------------------------------------------- C2S: index handshake
 
     /**
+     * One handshake entry: the version the client holds for a region, plus
+     * the SHA-256 (lowercase hex) RECOMPUTED from its cached file — never
+     * read from the local index, which a tampering user could edit along
+     * with the file. Empty hash = unknown (server falls back to the
+     * version-only comparison).
+     */
+    public record IndexEntry(long version, String sha256) {}
+
+    /**
      * Handshake (spec §5.1): on connection, the client sends a summary of its
-     * local index.json (keys + timestamps, serialized and GZIPped). The server
-     * computes the delta and only sends what is missing or has changed.
+     * local cache (keys + timestamps + recomputed file hashes, serialized and
+     * GZIPped). The server computes the delta and only sends what is missing,
+     * has changed, or fails the integrity check.
      */
     public record ClientIndexPayload(byte[] gzippedIndex) implements CustomPacketPayload {
         public static final Type<ClientIndexPayload> TYPE = new Type<>(id("client_index"));
@@ -175,11 +185,15 @@ public final class Payloads {
             return TYPE;
         }
 
-        /** Compact serialization: "indexKey=timestamp" lines, GZIPped. */
-        public static byte[] encodeIndex(Map<RegionKey, Long> entries) {
-            StringBuilder sb = new StringBuilder(entries.size() * 48);
-            entries.forEach(
-                    (k, v) -> sb.append(k.indexKey()).append('=').append(v).append('\n'));
+        /** Compact serialization: "indexKey=timestamp:sha256" lines, GZIPped. */
+        public static byte[] encodeIndex(Map<RegionKey, IndexEntry> entries) {
+            StringBuilder sb = new StringBuilder(entries.size() * 112);
+            entries.forEach((k, v) -> sb.append(k.indexKey())
+                    .append('=')
+                    .append(v.version())
+                    .append(':')
+                    .append(v.sha256())
+                    .append('\n'));
 
             try (var bos = new ByteArrayOutputStream();
                     var gz = new GZIPOutputStream(bos)) {
@@ -192,8 +206,8 @@ public final class Payloads {
             }
         }
 
-        public Map<RegionKey, Long> decodeIndex(int maxEntries) {
-            Map<RegionKey, Long> out = new HashMap<>();
+        public Map<RegionKey, IndexEntry> decodeIndex(int maxEntries) {
+            Map<RegionKey, IndexEntry> out = new HashMap<>();
 
             try (var gis = new GZIPInputStream(new ByteArrayInputStream(gzippedIndex))) {
                 String text = new String(gis.readAllBytes(), StandardCharsets.UTF_8);
@@ -202,24 +216,33 @@ public final class Payloads {
                         break;
                     }
 
-                    int eq = line.lastIndexOf('=');
-                    if (eq <= 0) {
-                        continue;
-                    }
-
-                    RegionKey key = RegionKey.fromIndexKey(line.substring(0, eq));
-                    if (key == null) {
-                        continue;
-                    }
-
-                    try {
-                        out.put(key, Long.parseLong(line.substring(eq + 1)));
-                    } catch (NumberFormatException ignored) {
-                    }
+                    decodeLine(line, out);
                 }
             } catch (IOException ignored) {
             }
             return out;
+        }
+
+        private static void decodeLine(String line, Map<RegionKey, IndexEntry> out) {
+            int eq = line.lastIndexOf('=');
+            if (eq <= 0) {
+                return;
+            }
+
+            RegionKey key = RegionKey.fromIndexKey(line.substring(0, eq));
+            if (key == null) {
+                return;
+            }
+
+            String value = line.substring(eq + 1);
+            int colon = value.indexOf(':');
+            String rawVersion = colon < 0 ? value : value.substring(0, colon);
+            String sha256 = colon < 0 ? "" : value.substring(colon + 1);
+
+            try {
+                out.put(key, new IndexEntry(Long.parseLong(rawVersion), sha256));
+            } catch (NumberFormatException ignored) {
+            }
         }
     }
 
@@ -611,7 +634,7 @@ public final class Payloads {
 
     public static void register(final RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar =
-                event.registrar(SharedJourneyConstants.MOD_ID).versioned("6");
+                event.registrar(SharedJourneyConstants.MOD_ID).versioned("7");
 
         registrar.playToClient(
                 LayerSettingsPayload.TYPE,

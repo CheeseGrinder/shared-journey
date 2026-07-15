@@ -8,6 +8,7 @@ import fr.cheesegrinder.sharedjourney.client.service.DiskCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.Level;
 
 import net.neoforged.api.distmarker.Dist;
@@ -28,11 +29,18 @@ public final class ClientSessionEvents {
         ClientMapCache.clear();
         DiskCache.openSession();
         WaypointStore.openSession();
-        // Handshake: send the local index summary. The server will only
-        // send back missing or newer regions.
-        byte[] encoded =
-                Payloads.ClientIndexPayload.encodeIndex(DiskCache.index().snapshot());
-        PacketDistributor.sendToServer(new Payloads.ClientIndexPayload(encoded));
+        // Handshake: send the local index summary, with per-file hashes
+        // recomputed off-thread (server-side integrity check). The server
+        // only sends back missing, newer or tampered regions.
+        DiskCache.hashedIndexSnapshot(entries -> {
+            byte[] encoded = Payloads.ClientIndexPayload.encodeIndex(entries);
+            Minecraft mc = Minecraft.getInstance();
+            mc.execute(() -> {
+                if (mc.getConnection() != null) {
+                    PacketDistributor.sendToServer(new Payloads.ClientIndexPayload(encoded));
+                }
+            });
+        });
 
         // Signal "mapping started" to the bridged JourneyMap plugins
         // (Waystones waits for this event before creating its waypoints).

@@ -296,14 +296,31 @@ stabilise le modèle._
 
 ## Robustesse / perf (P4+)
 
-- [ ] **P4 · ★★★☆☆ — Intégrité du cache client (images de régions)** : un PNG modifié
-  localement n'est pas détecté (le handshake ne compare que les versions). _La sécurité
-  vient du SERVEUR : hash SHA-256 calculé au rendu et stocké dans l'index serveur ; au
-  handshake le client RECALCULE le hash de ses fichiers (pas son index, falsifiable) —
-  même version + hash différent → re-push. En complément : métadonnées dans le PNG
-  (chunk tEXt) pour un index client reconstructible. CRC32 insuffisant (forgeable)._
+- [x] **P4 · ★★★☆☆ — Intégrité du cache client (images de régions)** — **fait
+  (2026-07-15, à valider en jeu)**, design implémenté tel que cadré (hash SHA-256, la
+  sécurité vient du serveur ; CRC32 rejeté car forgeable) :
+  - **Serveur** : registre `RegionHashes` (`hashes.json` à côté d'`index.json`), paires
+    `(version, sha256)` des octets EXACTEMENT servis (PNG des couches + blobs INFO —
+    même pipeline, même vérif), alimenté aux points d'encodage (`dataOf`/`hoverBlobOf`/
+    `saveAll`) — jamais de calcul paresseux au handshake (chargerait toutes les régions
+    en RAM). Hash toujours apparié à SA version : pas de comparaison périmée ; une
+    région pré-feature sans hash enregistré retombe sur la comparaison de versions et
+    se fait couvrir au prochain push/save.
+  - **Client** : au handshake, le hash est RECALCULÉ depuis les fichiers du cache
+    (jamais lu d'un index, falsifiable avec le fichier), en asynchrone sur le thread
+    writer du `DiskCache` (ordre garanti vis-à-vis des `store()`) ; fichier manquant/
+    illisible = entrée non déclarée → re-push (couvre aussi la suppression manuelle).
+    Format handshake `clé=version:hash`, protocole réseau v7.
+  - **Serveur, à la réception** : même version déclarée + hash différent = fichier
+    trafiqué → entrée non seedée dans `sentVersions` → le delta re-pousse les octets
+    autoritaires. Log warn avec le compte par joueur. Variante publique (quarantaine)
+    non suivie par le registre : un joueur non-trusted retombe sur la comparaison de
+    versions (la quarantaine est temporaire, la vérif reprend au drain).
+  _Non fait (complément optionnel du cadrage) : métadonnées tEXt dans le PNG pour un
+  index client reconstructible — YAGNI tant que la perte d'index reste un simple
+  re-téléchargement ; le serveur reste autoritaire._
   _NB : la corruption ACCIDENTELLE du cache est prévenue depuis 2026-07-15 (écritures
-  atomiques + writer mono-thread, voir le résumé Fait) ; cet item ne couvre plus que la
+  atomiques + writer mono-thread, voir le résumé Fait) ; cette passe couvre la
   falsification volontaire._
 - [ ] **P4 · ★★★☆☆ — Overlay des rails Create en souterrain** (recherche) : l'overlay reste
   affiché en surface quand la voie est enterrée et n'apparaît pas sur les couches CAVE.
@@ -331,7 +348,9 @@ stabilise le modèle._
 5. **Chantier UI** (quand déparqué) : losange in-world + marqueur joueur + boussole, puis
    écran de config intégré + éditeur couches/bandes, groupement des overlays, passe textes,
    inventaires, tranche API UI.
-6. **Robustesse** : intégrité du cache (hash), rails souterrains.
+6. **Robustesse** : ~~intégrité du cache (hash)~~ ✔ **fait** (2026-07-15, à valider en
+   jeu — scénario : éditer un PNG du cache client, se reconnecter, vérifier le warn
+   serveur et le re-push), rails souterrains.
 7. **Optimisation** (P4), puis shaders + audit traductions (P5).
 
 ## Fait (résumé — détails dans l'historique git)

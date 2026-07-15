@@ -5,6 +5,7 @@ import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.common.config.EngineServerConfig;
 import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
 import fr.cheesegrinder.sharedjourney.common.region.HoverRegionData;
+import fr.cheesegrinder.sharedjourney.common.region.RegionHashes;
 import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
@@ -79,6 +80,9 @@ public final class MapManager {
     private final MinecraftServer server;
     private final Path root;
     private final RegionIndex index = new RegionIndex();
+    /** Served-bytes hashes, for the client cache integrity check (handshake). */
+    private final RegionHashes hashes = new RegionHashes();
+
     private final Map<RegionKey, RegionImage> regions = new ConcurrentHashMap<>();
     /** Hover sidecars (INFO pseudo-layer), keyed like the image regions. */
     private final Map<RegionKey, HoverRegion> hoverRegions = new ConcurrentHashMap<>();
@@ -110,6 +114,7 @@ public final class MapManager {
         this.root = server.getWorldPath(LevelResource.ROOT).resolve("data").resolve("sharedjourney");
         RegionStorage.migrateLegacyCaveFolders(root);
         this.index.load(root.resolve(RegionIndex.FILE_NAME));
+        this.hashes.load(root.resolve(RegionHashes.FILE_NAME));
 
         // Allocation formula from spec §4: min(cores-2, config), floor 1.
         // Math.clamp would throw on machines with <= 2 cores (min > max).
@@ -643,6 +648,23 @@ public final class MapManager {
         }
     }
 
+    /**
+     * Client cache integrity (handshake): true when the client declares a
+     * region version for which the server recorded the served-bytes hash,
+     * but the hash the client RECOMPUTED from its cached file differs — the
+     * file was modified locally and must be re-pushed. Any other combination
+     * (no recorded hash, hash unknown client-side, other version) falls back
+     * to the plain version comparison.
+     */
+    public boolean isTampered(RegionKey key, long clientVersion, String clientSha256) {
+        if (clientSha256 == null || clientSha256.isEmpty()) {
+            return false;
+        }
+
+        String expected = hashes.hashFor(key, clientVersion);
+        return expected != null && !expected.equalsIgnoreCase(clientSha256);
+    }
+
     /** Version of a region: index (truth) > file (mtime) > -1. */
     public long versionOf(RegionKey key) {
         long fromIndex = index.get(key);
@@ -739,13 +761,18 @@ public final class MapManager {
         }
 
         synchronized (img) {
-            if (img.cachedPng != null) {
-                return img.cachedPng;
+            if (img.cachedPng == null) {
+                img.cachedPng = encodePng(img.pixels);
             }
 
-            byte[] png = encodePng(img.pixels);
-            img.cachedPng = png;
-            return png;
+            if (img.cachedPng != null) {
+                // Recorded even when the PNG was already cached: a version
+                // bump without a pixel change (quarantine drain) must refresh
+                // the (version, hash) pair too.
+                hashes.ensure(key, img.version, img.cachedPng);
+            }
+
+            return img.cachedPng;
         }
     }
 
@@ -756,13 +783,12 @@ public final class MapManager {
         }
 
         synchronized (region) {
-            if (region.cachedBlob != null) {
-                return region.cachedBlob;
+            if (region.cachedBlob == null) {
+                region.cachedBlob = region.data.serialize();
             }
 
-            byte[] blob = region.data.serialize();
-            region.cachedBlob = blob;
-            return blob;
+            hashes.ensure(key, region.version, region.cachedBlob);
+            return region.cachedBlob;
         }
     }
 
@@ -920,6 +946,7 @@ public final class MapManager {
                 continue;
             }
 
+            hashes.ensure(e.getKey(), version, png);
             Path file = pathOf(e.getKey());
             try {
                 RegionStorage.writeAtomically(file, png);
@@ -1004,6 +1031,7 @@ public final class MapManager {
                 version = region.version;
                 region.dirty = false;
             }
+            hashes.ensure(e.getKey(), version, blob);
             Path file = pathOf(e.getKey());
             try {
                 RegionStorage.writeAtomically(file, blob);
@@ -1020,6 +1048,11 @@ public final class MapManager {
             index.save(root.resolve(RegionIndex.FILE_NAME));
         } catch (IOException ex) {
             LOGGER.error("Failed to save the index", ex);
+        }
+        try {
+            hashes.save(root.resolve(RegionHashes.FILE_NAME));
+        } catch (IOException ex) {
+            LOGGER.error("Failed to save the hash registry", ex);
         }
         if (saved > 0) {
             LOGGER.info("SharedJourney: {} region(s) saved", saved);

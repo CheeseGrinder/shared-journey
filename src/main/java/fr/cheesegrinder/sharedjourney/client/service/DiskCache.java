@@ -1,9 +1,11 @@
 package fr.cheesegrinder.sharedjourney.client.service;
 
 import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
+import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
+import fr.cheesegrinder.sharedjourney.common.util.Hashing;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
@@ -15,9 +17,12 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 /**
  * Client local cache (spec §3.2):
@@ -141,6 +146,36 @@ public final class DiskCache {
         return currentRoot == null ? -1 : index.get(key);
     }
 
+    /**
+     * Builds the handshake summary asynchronously: for every indexed region,
+     * the version paired with the SHA-256 RECOMPUTED from the cached file —
+     * never read from the index, which a tampering user could edit along
+     * with the file. Regions whose file is missing or unreadable are left
+     * out entirely: declared "not owned", the server re-pushes them. Runs on
+     * the single writer thread so no store() interleaves with the reads.
+     */
+    public static void hashedIndexSnapshot(Consumer<Map<RegionKey, Payloads.IndexEntry>> callback) {
+        Path root = currentRoot;
+        if (root == null) {
+            callback.accept(Map.of());
+            return;
+        }
+
+        Map<RegionKey, Long> snapshot = index.snapshot();
+        WRITER.execute(() -> {
+            Map<RegionKey, Payloads.IndexEntry> out = new HashMap<>(snapshot.size());
+            snapshot.forEach((key, version) -> {
+                try {
+                    byte[] bytes = Files.readAllBytes(pathOf(root, key));
+                    out.put(key, new Payloads.IndexEntry(version, Hashing.sha256Hex(bytes)));
+                } catch (IOException ignored) {
+                    // Missing or unreadable file: left out, re-pushed.
+                }
+            });
+            callback.accept(out);
+        });
+    }
+
     public static void flushIndex() {
         if (currentRoot == null) {
             return;
@@ -184,12 +219,14 @@ public final class DiskCache {
     }
 
     private static Path pathOf(RegionKey key) {
+        return pathOf(currentRoot, key);
+    }
+
+    /** Root passed explicitly: async jobs must survive a logout mid-run. */
+    private static Path pathOf(Path root, RegionKey key) {
         String dim = key.dimension().location().getNamespace().equals("minecraft")
                 ? key.dimension().location().getPath()
                 : key.dimension().location().toString().replace(':', '_');
-        return currentRoot
-                .resolve(dim)
-                .resolve(key.layer().folderName(key.caveBand()))
-                .resolve(key.fileName());
+        return root.resolve(dim).resolve(key.layer().folderName(key.caveBand())).resolve(key.fileName());
     }
 }
