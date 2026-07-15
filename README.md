@@ -18,7 +18,8 @@ becomes a collective achievement instead of a per-player minimap dump.
 > - Maintaining this mod is **not my job**. Using it creates **no obligation and no
 >   accountability** on my part toward users.
 > - It is open source: the most effective way to get something changed is a well-scoped
->   **pull request**, reviewed under the same terms.
+>   **pull request**, reviewed under the same terms — see the
+>   [contribution guidelines](CONTRIBUTING.md).
 
 ---
 
@@ -143,6 +144,11 @@ Requirements: JDK 21. Then:
 ```
 
 Codebase architecture and conventions are documented in [CLAUDE.md](CLAUDE.md).
+
+## License
+
+[MIT](LICENSE) — do whatever you want with it, including forking and redistributing;
+just keep the copyright notice.
 
 ## Known limitations
 

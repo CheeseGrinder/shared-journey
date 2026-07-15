@@ -1,0 +1,77 @@
+name: Bug report
+description: Something in Shared Journey is broken or behaves incorrectly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: this is a hobby project (see the [support policy](../../README.md)) —
+        no guaranteed response time. Reports without logs or reproduction steps are likely
+        to be closed without action, since they usually can't be acted on.
+
+  - type: input
+    id: mod-version
+    attributes:
+      label: Shared Journey version
+      placeholder: e.g. 1.0.0 (jar file name or /sj stats output)
+    validations:
+      required: true
+
+  - type: input
+    id: mc-version
+    attributes:
+      label: Minecraft / NeoForge version
+      placeholder: e.g. 1.21.1 / NeoForge 21.1.77
+    validations:
+      required: true
+
+  - type: dropdown
+    id: side
+    attributes:
+      label: Where does it happen?
+      options:
+        - Dedicated server + client
+        - LAN / single-player world
+        - Client only (rendering, GUI)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps. Mention whether it still happens with ONLY Shared Journey installed.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / crash report
+      description: Paste the relevant part of logs/latest.log (client and/or server), or the full crash report. Use a code block or a paste site link.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-mods
+    attributes:
+      label: Other mods involved (if any)
+      description: Name + exact version of any other mod relevant to the bug (e.g. JourneyMap, Waystones, Create).
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots / anything else

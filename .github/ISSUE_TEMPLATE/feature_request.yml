@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an addition or a change to Shared Journey.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: this is a hobby project (see the [support policy](../../README.md)).
+        Requests are read, but there's no roadmap and no guarantee a request gets built —
+        the fastest path is usually a pull request (see
+        [CONTRIBUTING.md](../../CONTRIBUTING.md)).
+
+        Shared Journey's design compass: **the server owns the map, and the map never
+        shows a player more than they're entitled to see** (radar radius caps, cave
+        unlocking, client-local hover data). Requests that fight that model — client-side
+        rendering, unrestricted radar, seeing through unexplored terrain — will be
+        declined regardless of how they're written up.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation/limitation, not just the desired feature.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

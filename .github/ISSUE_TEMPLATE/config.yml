@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/CheeseGrinder/shared-journey/security/advisories/new
+    about: Do NOT open a public issue for a security vulnerability — use private reporting instead (see SECURITY.md).
+  - name: Question / support policy
+    url: https://github.com/CheeseGrinder/shared-journey#%EF%B8%8F-support-policy--read-before-opening-an-issue
+    about: General questions aren't tracked as issues — read the support policy in the README first.
