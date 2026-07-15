@@ -1,178 +1,154 @@
 # Shared Journey
 
-Mod de cartographie **serveur-autoritaire** pour Minecraft **1.21.1** / NeoForge **21.1.x** (Java 21).
-Le serveur calcule et détient la carte (source de vérité) ; les clients la téléchargent et l'affichent.
-Tous les joueurs partagent donc exactement la même carte, y compris ce qui a été exploré par les autres.
+**One world, one map — shared by everyone.**
 
-> ⚠️ **Note de version** : le template fourni ciblait Minecraft 26.1.1 (Java 25). Conformément à la
-> spécification — et parce que l'écosystème JourneyMap/Waystones vit sur 1.21.1 — ce projet cible
-> **1.21.1**. Les conventions du template (package `fr.cheesegrinder.sharedjourney`, modid
-> `sharedjourney`, métadonnées via `src/main/templates`) sont conservées. Pour re-cibler plus tard :
-> `gradle.properties` (3 valeurs) + adaptation des APIs.
+Shared Journey is a **server-authoritative** mapping mod for Minecraft **1.21.1** (NeoForge, Java 21).
+The server renders, owns, and distributes the map; clients simply display what the server pushes.
+Every player sees the exact same explored world, including what was explored by others — the map
+becomes a collective achievement instead of a per-player minimap dump.
 
-## Build
+> ## ⚠️ Support policy — read before opening an issue
+>
+> Shared Journey is a **hobby project**, maintained on free time and provided **as-is**.
+>
+> - Issues and feature requests are welcome and will be read — and handled **if and when**
+>   time and motivation allow.
+> - There is **no guaranteed response time, no roadmap, and no promise** that a report leads
+>   to a fix or that a request leads to a feature.
+> - Maintaining this mod is **not my job**. Using it creates **no obligation and no
+>   accountability** on my part toward users.
+> - It is open source: the most effective way to get something changed is a well-scoped
+>   **pull request**, reviewed under the same terms.
+
+---
+
+## Why server-authoritative?
+
+Classic mapping mods compute the map on each client, which makes them blind to what teammates
+explored and trivially abusable (radar and cave views reveal things the player never saw).
+Shared Journey flips the model:
+
+- **The server is the single source of truth.** Chunks are rendered server-side into 512×512
+  PNG regions and streamed to clients through a delta sync with a per-player bandwidth cap.
+- **Everyone shares the same map.** New players joining an established server instantly
+  receive everything the community has already explored.
+- **Anti-cheat by design.** The entity radar radius is capped by the server; cave layers are
+  only painted where a player has actually been underground; the fullscreen map's hover data
+  is precomputed server-side, so the client never loads chunks on demand (no timing attacks).
+
+## Features
+
+### Shared world map
+- Five layers rendered server-side: **Day**, **Night**, **Topographic**, **Biome**, and
+  **Cave** (with vertical bands every 16 blocks).
+- JourneyMap-like colors derived from the actual block **textures** — including **modded
+  blocks**, whose colors are extracted automatically from their mod jars at runtime, with
+  per-block config overrides when needed.
+- The map lives inside the world save (`world/data/sharedjourney/`), so it is part of your
+  regular backups. Clients keep a per-server disk cache to avoid re-downloading.
+
+### Minimap
+- Round or square, optional **dynamic rotation**, keyboard zoom, cardinal points, and
+  time / biome / coordinates labels.
+- **Entity radar** with per-category filters (players, hostiles, passives, pets, villagers)
+  and a **server-enforced radius cap**.
+- Mobs are drawn as **flat head icons rendered live from their own entity model** — no
+  hardcoded sprite set, so modded mobs work out of the box. Other players appear as their
+  skin face.
+
+### Fullscreen map (`M`)
+- Mouse pan, wheel zoom, layer and cave-band switching, position search, follow-me mode —
+  and click a **Create train** to smoothly follow it across the network.
+- **Hover info**: height, surface block, and biome under the cursor — fully client-local.
+- Right-click **context menu**: waypoints (private, temporary, or public), teleport (OP),
+  and posting the position in chat as a clickable link that opens the map for others.
+- Works while the chat is open, and can be opened centered anywhere via clickable chat
+  messages (`/sj goto`).
+
+### Waypoints
+- Personal waypoints with **server synchronization** (they follow you across machines),
+  plus **public waypoints** shared with the whole server.
+- **Banner waypoints**: place a *named* banner and it becomes a map marker; break it and the
+  marker disappears — vanilla-style, no GUI required.
+- Automatic **death waypoints**, a waypoint list screen (`U`), quick creation (`B`), and
+  full editing (name, color, visibility) from the map.
+
+### Mod compatibility
+- **JourneyMap plugin bridge**: mods that integrate with JourneyMap's client API (Waystones,
+  Create add-ons, resource-deposit mods…) work without JourneyMap installed. Shared Journey
+  scans for JourneyMap plugins and feeds them a runtime proxy — zero compile-time
+  dependency: their waypoints land in the waypoint store and their overlays (rails, trains,
+  deposits…) render on both the minimap and the fullscreen map. An optional companion jar
+  (`jmshim`) declares the `journeymap` mod id for mods that check `ModList` before enabling
+  their integration (never install it alongside the real JourneyMap).
+- Modded **blocks** get map colors automatically (texture extraction); modded **mobs** get
+  radar icons automatically (model-based rendering).
+- A public API for other mods: waypoint CRUD + cancellable events, map render events for
+  custom overlays (minimap and fullscreen), and a custom layer registration hook.
+
+### Performance
+- Fully **asynchronous render engine**: the server tick only resolves chunks; pixel work,
+  PNG encoding, and disk I/O happen on worker threads with an in-flight cap.
+- **Delta sync**: only regions newer than what the client already has are sent, batched
+  under a configurable KB/s per-player budget.
+
+## Controls (rebindable)
+
+| Key | Action |
+|-----|--------|
+| `M` | Open the fullscreen map |
+| `N` | Toggle the minimap |
+| `,` | Cycle map layer |
+| `+` / `-` | Minimap zoom |
+| `U` | Waypoint list |
+| `B` | Create a waypoint at your position |
+
+## Commands
+
+Root: `/sj` (alias `/sharedjourney`).
+
+| Command | Side | Permission |
+|---------|------|------------|
+| `/sj stats [player]` | server | everyone (own stats) / OP (engine + everyone) |
+| `/sj tp <x> <z>` | server | OP — teleport from the map, Y resolved server-side |
+| `/sj purge <layer\|all>` | client | — deletes the local cache of a layer |
+| `/sj cache` | client | — local cache status |
+| `/sj goto <x> <z>` | client | — opens the map centered on a position |
+| `/sj admin sync force <players\|all> [rx rz]` | server | OP — forced resend, ignores the index |
+| `/sj admin rerender <chunkRadius>` | server | OP — re-render around you |
+| `/sj admin regen full` / `cancel` | server | OP — full map regeneration |
+| `/sj admin layer <dim> <layer> <bool>` | server | OP — toggle layers per dimension, hot |
+| `/sj admin save` | server | OP — flush to disk |
+
+## Configuration
+
+Standard NeoForge three-tier configuration, editable in-game (config screen) with hot reload:
+
+- **Client** (`config/sharedjourney-client.toml`): minimap shape/position/rotation, radar
+  filters and mob head icons, waypoint display, map behavior.
+- **Common** (`config/sharedjourney-common.toml`).
+- **Server**: defaults in `defaultconfigs/sharedjourney-server.toml`, overridable per world
+  in `world/serverconfig/sharedjourney-server.toml` — engine threads, sync rate and
+  bandwidth caps, active layers, radar radius cap, waypoint rules, block color overrides.
+
+## Building from source
+
+Requirements: JDK 21. Then:
 
 ```bash
-./gradlew :mod:build          # jar final : mod/build/libs/sharedjourney-1.0.0.jar
-./gradlew :mod:runClient      # client de dev
-./gradlew :mod:runServer      # serveur dédié de dev
-./gradlew :jmshim:build       # (optionnel) shim "journeymap" — voir §Bridge
+./gradlew build               # mod jar → build/libs/
+./gradlew runClient_1         # dev client (a second one: runClient_2)
+./gradlew runServer           # dedicated dev server
+./gradlew :jmshim:build       # optional JourneyMap shim jar
 ```
 
-> Le code est livré tel quel, sans avoir pu être compilé ici (pas d'accès à maven.neoforged.net
-> depuis cet environnement). Attendez-vous à quelques ajustements mineurs de signatures au premier
-> `gradlew build`.
+Codebase architecture and conventions are documented in [CLAUDE.md](CLAUDE.md).
 
-## Architecture (spec §2) — 4 modules Gradle + assemblage
+## Known limitations
 
-| Module   | Contenu                                                                                                                                                                                                 |
-|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `api`    | Interfaces publiques : `Waypoint`, `MapLayer`, `ChunkLayerRenderer`, événements `WaypointEvent` (annulable) et `LayerRegisterEvent`. Aucune logique métier.                                             |
-| `common` | `RegionKey`, `RegionIndex` (index.json), `Payloads` (paquets réseau + handshake), configs SERVER/COMMON. Ne dépend ni du client ni du serveur : les handlers réseau sont injectés via `Payloads.Hooks`. |
-| `server` | `ChunkColorizer` (rendu des 5 couches), `MapManager` (moteur asynchrone + disque + index), `SyncService` (files d'envoi par joueur), `ServerEvents`, `MapCommands`.                                     |
-| `client` | `DiskCache` (cache local par serveur), `ClientMapCache` (textures), minimap (rotation + radar), carte plein écran (waypoints), `WaypointStore`, commandes client, **bridge JourneyMap**.                |
-| `mod`    | Assemblage : classes `@Mod`, métadonnées, runs de dev ; le jar final fusionne les sorties des 4 modules.                                                                                                |
-| `jmshim` | (Optionnel) mod `lowcodefml` déclarant le modId `journeymap` — voir §Bridge.                                                                                                                            |
-
-## Stockage (spec §3)
-
-**Serveur** (dans la sauvegarde du monde, donc inclus dans les backups) :
-```
-world/data/sharedjourney/
-├── index.json                      # Map<RegionKey, Timestamp> (registre RAM sérialisé)
-└── overworld/
-    ├── day/  night/  topo/  biome/  cave_0/ cave_1/ ...
-    │   └── region_X_Z.png          # 512x512 px, 1 px = 1 bloc
-```
-
-**Client** :
-```
-.minecraft/sharedjourney_cache/
-└── [ip_serveur | sp_nom_du_monde]/
-    ├── index.json                  # ce que le client possède
-    ├── waypoints.json              # waypoints locaux (spec §6.2)
-    └── [dimension]/[layer]/region_X_Z.png
-```
-
-## Moteur asynchrone (spec §4)
-
-- Pool `ExecutorService` dimensionné `max(1, min(cœurs - 2, maxWorkerThreads))`.
-- Le tick serveur ne fait que **résoudre les chunks** (obligatoirement sur le main thread via
-  `getChunkNow`) puis soumettre les tâches ; pixels, encodage PNG et écritures disque se font
-  sur les workers. Plafond de tâches en vol pour ne pas inonder le pool.
-- **Dirty marking** : pose/casse de bloc → le chunk 16×16 est remis en file (dédupliquée),
-  seule la zone du chunk est réécrite dans la région RAM, le timestamp de la région est mis à
-  jour dans l'index. Le PNG disque est flushé de façon asynchrone (sauvegarde du monde, arrêt,
-  `/map admin save`).
-- Limite connue : la lecture du chunk par les workers est en lecture seule mais non verrouillée ;
-  en cas de course extrême le chunk sera re-rendu au prochain marquage dirty.
-
-## Protocole réseau (spec §5)
-
-1. **Handshake** : à la connexion, le client envoie son `index.json` local (lignes
-   `clé=timestamp`, GZIP) via `ClientIndexPayload`. Le serveur en déduit ce que le client possède.
-2. **Delta** : périodiquement (`syncRateTicks`, déphasé par joueur), les régions du rayon
-   `pushRadiusRegions` dont la version serveur est plus récente sont ajoutées à une
-   `ConcurrentLinkedQueue` par joueur.
-3. **Batching + bande passante** : chaque tick, la file est dépilée dans la limite de
-   `maxKbPerSecondPerPlayer` (converti en octets/tick), en fragments de `fragmentSize` octets
-   (PNG = déjà compressé). Le client assemble, upload la texture, et écrit dans son cache disque.
-4. La carte plein écran peut demander des régions hors rayon (`RegionRequestPayload`,
-   désactivable côté serveur, throttlé et borné).
-
-## Interface (spec §6)
-
-- **Minimap** : overlay NeoForge (`RegisterGuiLayersEvent`), position/taille configurables,
-  **rotation dynamique** optionnelle (rendu via matrices de pose), **radar** d'entités filtrable
-  (joueurs / hostiles / passifs) dont le rayon est **plafonné par le serveur**
-  (`radarMaxRadius`, 64 par défaut — anti-triche), waypoints, libellé de couche + coordonnées.
-- **Plein écran** (touche `M`) : pan à la souris, zoom molette, changement de couche et de
-  bande CAVE, **clic droit = créer un waypoint**, clic sur un marqueur = éditer
-  (nom, couleur, visibilité, suppression). Waypoints sauvegardés en JSON local.
-- Touches : `M` carte, `N` minimap on/off, `,` couche suivante (configurables).
-
-## Commandes (spec §7) — racine unique `/map`
-
-| Commande                                       | Côté       | Permission                                                          |
-|------------------------------------------------|------------|---------------------------------------------------------------------|
-| `/map stats`                                   | serveur    | niveau 0 : ses stats ; niveau 2 : moteur + tous les joueurs         |
-| `/map stats <joueur>`                          | serveur    | OP                                                                  |
-| `/map purge <layer\|all>`                      | **client** | — (supprime le cache local du calque)                               |
-| `/map cache`                                   | **client** | — (état du cache local)                                             |
-| `/map admin sync force <joueurs\|all> [rx rz]` | serveur    | OP — renvoi forcé, ignore l'index ; filtre optionnel sur une région |
-| `/map admin rerender <rayonChunks>`            | serveur    | OP                                                                  |
-| `/map admin layer <dim> <couche> <bool>`       | serveur    | OP                                                                  |
-| `/map admin save`                              | serveur    | OP                                                                  |
-
-Le dispatcher client intercepte `purge`/`cache` ; tout autre `/map …` part au serveur.
-
-## Configuration (spec §8)
-
-La hiérarchie demandée (globale puis écrasée par le monde) est celle de NeoForge :
-- **Globale** : `defaultconfigs/sharedjourney-server.toml` (copiée dans chaque nouveau monde)
-- **Par monde** : `world/serverconfig/sharedjourney-server.toml` (écrase la globale)
-- Client : `config/sharedjourney-client.toml` — Common : `config/sharedjourney-common.toml`
-- Écran de config en jeu (NeoForge `ConfigurationScreen`), rechargement à chaud pris en compte
-  (les couches actives sont re-broadcastées aux clients).
-
-## Bridge JourneyMap (spec §9) — Waystones & co sans modification
-
-Fichier : `client/.../compat/JourneyMapBridge.java`.
-
-- **Si le vrai JourneyMap est installé** : le bridge se désactive (détection par classes
-  `journeymap.common.Journeymap` / `journeymap.client.JourneymapClient`, pas seulement le modId).
-- Sinon, SharedJourney **fait le travail de JourneyMap** : scan des données d'annotations FML de
-  tous les mods à la recherche de `@journeymap.api.v2.client.JourneyMapPlugin` (et de l'annotation
-  legacy v1), instanciation de chaque plugin, puis appel de `initialize(IClientAPI)` avec un
-  **proxy dynamique** (`java.lang.reflect.Proxy`). Aucune dépendance de compilation vers l'API :
-  le bridge tolère les variations de signatures entre versions.
-- Traduction : `addWaypoint`/`show(waypoint)` → `WaypointStore` (source = modId du plugin,
-  suppression fiable via GUID → UUID stable) ; `playerAccepts` → `true` ;
-  overlays/événements (`show(MarkerOverlay)`, `subscribe`, …) → ignorés proprement avec un log
-  unique par méthode.
-
-**Deux conditions pour une transition "painless" :**
-
-1. **Les classes de l'API JourneyMap doivent exister au runtime** (les classes plugin des mods
-   tiers y font référence). Deux options :
-    - déposer le jar `journeymap-api-neoforge` dans `mods/` ;
-    - ou l'embarquer en jarJar dans `:client` (dépendance `info.journeymap:journeymap-api-neoforge:2.0.0-1.21.1-SNAPSHOT`,
-      dépôts déjà déclarés dans le build). **Vérifiez la licence du dépôt TeamJM/journeymap-api
-      avant de redistribuer** ; la dépendance est laissée commentée dans `client/build.gradle`.
-2. Certains mods ne chargent leur intégration que si `ModList.isLoaded("journeymap")` est vrai.
-   Pour eux, installez le **shim** `sharedjourney-jmshim.jar` (module `jmshim`) : un mod
-   `lowcodefml` vide qui déclare le modId `journeymap`. **Ne jamais l'installer avec le vrai
-   JourneyMap** (conflit de modId, c'est voulu).
-
-Limites actuelles du bridge : waypoints ✔ ; overlays (marqueurs/polygones/images), événements de
-mapping et thèmes ✘ (journalisés). Waystones utilise principalement les waypoints → OK.
-
-## API pour les autres mods (module `api`)
-
-- `WaypointEvent.Added` (annulable) / `Removed` / `Updated` sur `NeoForge.EVENT_BUS` (client).
-- `LayerRegisterEvent` sur le bus MOD au démarrage serveur pour déclarer des couches custom
-  (`ChunkLayerRenderer`). **Limite** : l'événement est collecté mais le pipeline de
-  stockage/synchronisation des couches custom n'est pas encore branché (les couches intégrées
-  DAY/NIGHT/TOPO/BIOME/CAVE sont, elles, complètes).
-
-## Tests de compatibilité (dev)
-
-`mod/build.gradle` déclare en `localRuntime` (runs de dev uniquement, jamais publiés) :
-**Waystones 21.1.30** + **Balm 21.0.59** (waypoints via l'API JourneyMap → teste la voie
-"waypoints" du bridge) et **Create: Rock & Stone 1.0.2** (overlay de gisements → teste la voie
-"overlays", actuellement journalisée mais non rendue). La chaîne complète de Create 6.0.10 (jar slim + Ponder + Flywheel + Registrate) est
-déclarée depuis le Maven officiel de Create, conformément au wiki
-(https://wiki.createmod.net/developers/depend-on-create/neoforge-1.21.1) ; les versions
-sont centralisées dans `gradle.properties`.
-
-Résultat attendu dans les logs au lancement du client de dev SANS le vrai JourneyMap :
-`[Bridge JM] N plugin(s) JourneyMap initialisé(s)...` puis, en jeu, les waystones activées
-apparaissent comme waypoints (source `waystones`). Pour le scénario A/B AVEC le vrai
-JourneyMap, décommenter la ligne correspondante : le bridge doit logger qu'il se désactive.
-
-## Autres limites connues
-
-- Modifications du monde par pistons/fluides/explosions : partiellement couvertes (le rendu se
-  rafraîchit au prochain chargement/marquage du chunk).
-- La minimap en rotation reste carrée (pas de masque circulaire).
-- `/map stats` niveau 0 nécessite d'être un joueur (pas la console).
+- Custom layers registered through the API are collected, but their storage/sync pipeline
+  is not wired yet — the five built-in layers are fully operational.
+- The JourneyMap bridge covers waypoints and the overlay types used by common integrations;
+  exotic API surfaces (themes, mapping events…) are acknowledged and ignored.
+- World edits from pistons/fluids/explosions are partially covered: affected chunks refresh
+  on their next dirty-marking or load.
