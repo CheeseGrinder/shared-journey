@@ -14,6 +14,7 @@ import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientSetupEvents;
 import fr.cheesegrinder.sharedjourney.client.render.EntityDots;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
+import fr.cheesegrinder.sharedjourney.client.render.MobHeadIcons;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
@@ -1257,7 +1258,13 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                     continue;
                 }
 
-                EntityDots.draw(gg, sx, sy, color);
+                boolean head = false;
+                if (RadarClientConfig.RADAR_MOB_HEADS.get()) {
+                    head = MobHeadIcons.draw(gg, e, sx, sy, MobHeadIcons.ICON_SIZE);
+                }
+                if (!head) {
+                    EntityDots.draw(gg, sx, sy, color);
+                }
             }
         }
 

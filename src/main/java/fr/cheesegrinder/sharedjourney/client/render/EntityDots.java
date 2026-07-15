@@ -8,8 +8,8 @@ import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.TamableAnimal;
-import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.npc.AbstractVillager;
 import net.minecraft.world.entity.player.Player;
@@ -43,6 +43,9 @@ public final class EntityDots {
     /**
      * Dot color for an entity, or null if its category is hidden.
      * Order: player > tamed animal (pet) > villager > hostile > passive.
+     * Passive is any other mob: golems and water animals (squid,
+     * fish...) are neither Animal nor Enemy and were invisible with a
+     * narrower rule.
      */
     public static Integer colorFor(Entity e) {
         if (e instanceof Player) {
@@ -59,7 +62,7 @@ public final class EntityDots {
         if (e instanceof Enemy) {
             return RadarClientConfig.RADAR_HOSTILE.get() ? COLOR_HOSTILE : null;
         }
-        if (e instanceof Animal) {
+        if (e instanceof Mob) {
             return RadarClientConfig.RADAR_PASSIVE.get() ? COLOR_PASSIVE : null;
         }
         return null;

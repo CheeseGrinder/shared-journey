@@ -11,6 +11,8 @@ public final class RadarClientConfig {
     public static ModConfigSpec.BooleanValue RADAR_ENABLED;
     /** Desired radius — capped by the server (radarMaxRadius). */
     public static ModConfigSpec.IntValue RADAR_RADIUS;
+    /** Mobs drawn as head icons from their own model (dot fallback). */
+    public static ModConfigSpec.BooleanValue RADAR_MOB_HEADS;
 
     public static ModConfigSpec.BooleanValue RADAR_PLAYERS;
     /** Asks the server to be hidden from the OTHER players' map. */
@@ -28,6 +30,9 @@ public final class RadarClientConfig {
         RADAR_ENABLED = b.define("enabled", true);
         RADAR_RADIUS =
                 b.comment("Radar radius in blocks (capped by the server).").defineInRange("radius", 48, 8, 128);
+        RADAR_MOB_HEADS = b.comment(
+                        "Draw mobs as flat head icons rendered from their own model (colored dot fallback).")
+                .define("mobHeads", true);
         RADAR_PLAYERS = b.define("showPlayers", true);
         HIDE_FROM_MAP = b.comment("Asks the server to be hidden from the other players' map.")
                 .define("hideFromMap", false);

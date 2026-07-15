@@ -8,6 +8,7 @@ import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.world.level.storage.LevelResource;
 
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
@@ -42,7 +43,18 @@ public final class DiskCache {
         if (server != null) {
             id = sanitize(server.ip);
         } else if (mc.getSingleplayerServer() != null) {
-            id = "sp_" + sanitize(mc.getSingleplayerServer().getWorldData().getLevelName());
+            // The world's FOLDER name, not the level.dat display name:
+            // creating a second world called "New World" keeps the same
+            // display name and only renames the folder ("New World (1)").
+            // Keying on the name made both worlds share one cache folder
+            // and blend their maps — and the handshake then reported the
+            // blended index as owned, so the server never re-pushed the
+            // right regions.
+            Path worldDir = mc.getSingleplayerServer()
+                    .getWorldPath(LevelResource.ROOT)
+                    .toAbsolutePath()
+                    .normalize();
+            id = "sp_" + sanitize(worldDir.getFileName().toString());
         } else {
             id = "unknown";
         }

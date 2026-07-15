@@ -39,6 +39,7 @@ import com.mojang.math.Axis;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -55,6 +56,8 @@ public final class MinimapRenderer {
     private static final float ZOOM_MIN = 0.25f;
     private static final float ZOOM_MAX = 4.0f;
     private static final int CIRCLE_SEGMENTS = 64;
+    /** Width (px) of the alpha ramp antialiasing the circle edges. */
+    private static final float FEATHER = 0.75f;
     /** Dark gray (Discord-style) visible under chunks not yet received. */
     public static final int BACKGROUND = 0xFF36393F;
     /** Violet veil over chunks not yet re-rendered by a running server regen. */
@@ -338,7 +341,23 @@ public final class MinimapRenderer {
                     continue;
                 }
 
-                EntityDots.draw(gg, (int) Math.floor(e.getX()), (int) Math.floor(e.getZ()), color);
+                // Head icon at constant screen size, kept upright: the
+                // content pose is zoom-scaled (and rotated in rotate
+                // mode), so both are countered locally. Dot fallback.
+                boolean head = false;
+                if (RadarClientConfig.RADAR_MOB_HEADS.get()) {
+                    gg.pose().pushPose();
+                    gg.pose().translate((float) e.getX(), (float) e.getZ(), 0f);
+                    if (rotate) {
+                        gg.pose().mulPose(Axis.ZP.rotationDegrees(yaw + 180f));
+                    }
+                    gg.pose().scale(1f / zoom, 1f / zoom, 1f);
+                    head = MobHeadIcons.draw(gg, e, 0f, 0f, MobHeadIcons.ICON_SIZE);
+                    gg.pose().popPose();
+                }
+                if (!head) {
+                    EntityDots.draw(gg, (int) Math.floor(e.getX()), (int) Math.floor(e.getZ()), color);
+                }
             }
         }
 
@@ -376,7 +395,7 @@ public final class MinimapRenderer {
             // the corners' depth so it doesn't interfere with later layers.
             gg.flush();
             resetDepth(gg, x - 2, y - 2, x + size + 2, y + size + 2);
-            drawRing(gg, cx, cy, half, half + 1.5f, 0xFF202020);
+            drawMapBorder(gg, cx, cy, half);
         }
 
         // ---- Waypoints in screen space: constant size, and pinned ON the
@@ -455,8 +474,9 @@ public final class MinimapRenderer {
         // the border), following the map's rotation.
         drawCardinals(gg, mc, cx, cy, half - 8, rotate ? -yaw - 180f : 0f);
 
-        // Labels (reduced scale): time + period above the map, biome and
-        // coordinates below (or stacked above if the map is bottom-anchored).
+        // Labels (reduced scale) on translucent black pills: time +
+        // period above the map, biome and coordinates below (or stacked
+        // above if the map is bottom-anchored).
         drawSmallCentered(gg, mc, timeText(mc.level), cx, y - 9, 0xFFFFFF);
         String biome = mc.level == null
                 ? ""
@@ -472,14 +492,14 @@ public final class MinimapRenderer {
                 + player.blockPosition().getY() + ", "
                 + player.blockPosition().getZ();
         if (topAnchored) {
-            drawSmallCentered(gg, mc, biome, cx, y + size + 4, 0xC0C0FF);
+            drawSmallCentered(gg, mc, biome, cx, y + size + 4, 0xFFFFFF);
             if (MinimapClientConfig.SHOW_COORDS.get()) {
-                drawSmallCentered(gg, mc, coords, cx, y + size + 13, 0xAAAAAA);
+                drawSmallCentered(gg, mc, coords, cx, y + size + 13, 0xCCCCCC);
             }
         } else {
-            drawSmallCentered(gg, mc, biome, cx, y - 18, 0xC0C0FF);
+            drawSmallCentered(gg, mc, biome, cx, y - 18, 0xFFFFFF);
             if (MinimapClientConfig.SHOW_COORDS.get()) {
-                drawSmallCentered(gg, mc, coords, cx, y - 27, 0xAAAAAA);
+                drawSmallCentered(gg, mc, coords, cx, y - 27, 0xCCCCCC);
             }
         }
     }
@@ -521,9 +541,13 @@ public final class MinimapRenderer {
         }
     }
 
+    /** Translucent black background shared by every minimap label. */
+    private static final int LABEL_BG = 0xA0101010;
+
     /**
-     * Centered text at reduced scale (full-size labels eat up the screen),
-     * on a translucent background to stay readable regardless of the backdrop.
+     * Centered text at reduced scale (full-size labels eat up the
+     * screen) on a translucent black rounded pill, so it stays readable
+     * on any backdrop.
      */
     private static void drawSmallCentered(GuiGraphics gg, Minecraft mc, String text, int cx, int y, int color) {
         if (text.isEmpty()) {
@@ -533,10 +557,86 @@ public final class MinimapRenderer {
         gg.pose().pushPose();
         gg.pose().translate(cx, y, 0);
         gg.pose().scale(0.75f, 0.75f, 1f);
-        int w = mc.font.width(text);
-        gg.fill(-w / 2 - 2, -2, w / 2 + 2, 9, 0xA0101010);
+        float halfW = mc.font.width(text) / 2f + 1f;
+        drawPill(gg, -halfW, halfW, 3.5f, 6f, LABEL_BG);
         gg.drawCenteredString(mc.font, text, 0, 0, color);
         gg.pose().popPose();
+    }
+
+    /**
+     * Stadium ("pill") between the two end centers (xL, cy) and
+     * (xR, cy) with the given end radius: solid convex fan up to
+     * r - FEATHER/2, then a rim fading to transparent at r + FEATHER/2
+     * (an offset stadium is a stadium with a bigger radius, so the rim
+     * feathers the straight edges too).
+     */
+    private static void drawPill(GuiGraphics gg, float xL, float xR, float cy, float r, int argb) {
+        Matrix4f mat = gg.pose().last().pose();
+        prepareShapeState();
+        float solid = Math.max(0f, r - FEATHER / 2f);
+        List<float[]> inner = pillOutline(xL, xR, cy, solid);
+        List<float[]> outer = pillOutline(xL, xR, cy, r + FEATHER / 2f);
+
+        BufferBuilder fan =
+                Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
+        fan.addVertex(mat, (xL + xR) / 2f, cy, 0).setColor(argb);
+        for (float[] p : inner) {
+            fan.addVertex(mat, p[0], p[1], 0).setColor(argb);
+        }
+        BufferUploader.drawWithShader(fan.buildOrThrow());
+
+        int transparent = argb & 0x00FFFFFF;
+        BufferBuilder rim =
+                Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        for (int i = 0; i < inner.size(); i++) {
+            rim.addVertex(mat, outer.get(i)[0], outer.get(i)[1], 0).setColor(transparent);
+            rim.addVertex(mat, inner.get(i)[0], inner.get(i)[1], 0).setColor(argb);
+        }
+        BufferUploader.drawWithShader(rim.buildOrThrow());
+        endShapeState();
+    }
+
+    /**
+     * Neutral GL state for the immediate translucent shapes. Everything
+     * is set explicitly: a leftover shader tint, an altered blend
+     * function or a disabled blend from a previous render (bridged
+     * plugin overlays, RenderType teardowns) silently turns the
+     * translucent backgrounds opaque or invisible otherwise.
+     *
+     * <p>Face culling is DISABLED while shapes draw ({@link
+     * #endShapeState} restores it): the fans/strips here are wound
+     * clockwise on screen, which GL treats as back-facing (vanilla GUI
+     * quads are counter-clockwise) — with culling on, the pill interior
+     * was discarded while its feather rim drew, leaving an outline with
+     * no background.
+     */
+    private static void prepareShapeState() {
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
+        RenderSystem.disableCull();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+    }
+
+    /** Restores the GUI's default culling after a shape draw. */
+    private static void endShapeState() {
+        RenderSystem.enableCull();
+    }
+
+    /** Closed stadium outline: right arc, left arc, first point repeated. */
+    private static List<float[]> pillOutline(float xL, float xR, float cy, float r) {
+        int arcSegments = 16;
+        List<float[]> out = new ArrayList<>();
+        for (int i = 0; i <= arcSegments; i++) {
+            double a = -Math.PI / 2 + Math.PI * i / arcSegments;
+            out.add(new float[] {xR + (float) (Math.cos(a) * r), cy + (float) (Math.sin(a) * r)});
+        }
+        for (int i = 0; i <= arcSegments; i++) {
+            double a = Math.PI / 2 + Math.PI * i / arcSegments;
+            out.add(new float[] {xL + (float) (Math.cos(a) * r), cy + (float) (Math.sin(a) * r)});
+        }
+        out.add(out.get(0).clone());
+        return out;
     }
 
     /** Formatted world time (no seconds) + period (day, sunset, night, sunrise). */
@@ -608,8 +708,9 @@ public final class MinimapRenderer {
     private static void drawCardinal(GuiGraphics gg, Minecraft mc, String letter, float x, float y) {
         int ix = Math.round(x);
         int iy = Math.round(y);
+        // Translucent badge behind the letter (feathered disc), letter at
+        // reduced scale to fit inside it.
         fillCircle(gg, ix, iy, 5f, 0xB0101010);
-        // Letter at reduced scale to fit inside the badge.
         gg.pose().pushPose();
         gg.pose().translate(ix, iy, 0);
         gg.pose().scale(0.75f, 0.75f, 1f);
@@ -619,38 +720,67 @@ public final class MinimapRenderer {
 
     // ------------------------------------------------------------------ shapes (round mode)
 
-    /** Solid disc (triangle fan), drawn immediately. */
+    /**
+     * Solid disc (triangle fan), drawn immediately, with an antialiased
+     * rim: the disc is opaque up to radius - FEATHER/2 and fades to
+     * transparent at radius + FEATHER/2 (the perceived radius stays
+     * {@code radius}) — hard polygon edges are what made the round
+     * minimap look jagged.
+     */
     private static void fillCircle(GuiGraphics gg, float cx, float cy, float radius, int argb) {
         Matrix4f mat = gg.pose().last().pose();
-        RenderSystem.enableBlend();
-        // The global blend func may have been altered by a previous render
-        // (the badges' alpha was vanishing): restore it.
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        prepareShapeState();
+        float solid = Math.max(0f, radius - FEATHER / 2f);
         BufferBuilder buf =
                 Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
         buf.addVertex(mat, cx, cy, 0).setColor(argb);
         for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
             double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
-            buf.addVertex(mat, cx + (float) (Math.cos(a) * radius), cy + (float) (Math.sin(a) * radius), 0)
+            buf.addVertex(mat, cx + (float) (Math.cos(a) * solid), cy + (float) (Math.sin(a) * solid), 0)
                     .setColor(argb);
         }
         BufferUploader.drawWithShader(buf.buildOrThrow());
+        ringBand(mat, cx, cy, solid, argb, radius + FEATHER / 2f, argb & 0x00FFFFFF);
+        endShapeState();
     }
 
-    /** Ring (circle border), drawn immediately. */
-    private static void drawRing(GuiGraphics gg, float cx, float cy, float rIn, float rOut, int argb) {
+    /**
+     * Two-tone map border: a 1 px black liner on the map side, then a
+     * gray band outside, every edge feathered (alpha or color ramps
+     * interpolated per-pixel by the position/color shader — a cheap
+     * antialias with no framebuffer or MSAA involved). The black liner
+     * starts a quarter px INSIDE the mask radius so the per-pixel jagged
+     * depth-mask cut of the content hides under it.
+     */
+    private static void drawMapBorder(GuiGraphics gg, float cx, float cy, float half) {
         Matrix4f mat = gg.pose().last().pose();
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        prepareShapeState();
+        int black = 0xFF141414;
+        int gray = 0xFFA8A8A8;
+        float rIn = half - 0.25f;
+        float rMid = half + 0.25f;
+        float rOut = half + 1.5f;
+        ringBand(mat, cx, cy, rIn - FEATHER, black & 0x00FFFFFF, rIn, black);
+        ringBand(mat, cx, cy, rIn, black, rMid - 0.25f, black);
+        ringBand(mat, cx, cy, rMid - 0.25f, black, rMid + 0.25f, gray);
+        ringBand(mat, cx, cy, rMid + 0.25f, gray, rOut, gray);
+        ringBand(mat, cx, cy, rOut, gray, rOut + FEATHER, gray & 0x00FFFFFF);
+        endShapeState();
+    }
+
+    /**
+     * One circular band from (r0, argb0) to (r1, argb1), colors
+     * interpolated across the band — the antialias workhorse of the
+     * round shapes. Shader and blend state come from the caller.
+     */
+    private static void ringBand(Matrix4f mat, float cx, float cy, float r0, int argb0, float r1, int argb1) {
         BufferBuilder buf =
                 Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
         for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
             double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
             float c = (float) Math.cos(a), s = (float) Math.sin(a);
-            buf.addVertex(mat, cx + c * rOut, cy + s * rOut, 0).setColor(argb);
-            buf.addVertex(mat, cx + c * rIn, cy + s * rIn, 0).setColor(argb);
+            buf.addVertex(mat, cx + c * r1, cy + s * r1, 0).setColor(argb1);
+            buf.addVertex(mat, cx + c * r0, cy + s * r0, 0).setColor(argb0);
         }
         BufferUploader.drawWithShader(buf.buildOrThrow());
     }

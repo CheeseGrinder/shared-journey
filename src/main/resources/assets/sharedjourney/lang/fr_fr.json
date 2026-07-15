@@ -173,6 +173,9 @@
   "sharedjourney.configuration.radius": "Rayon",
   "sharedjourney.configuration.radius.tooltip": "Portée du radar en blocs (plafonnée par le radarMaxRadius du serveur).",
 
+  "sharedjourney.configuration.mobHeads": "Icônes de tête des mobs",
+  "sharedjourney.configuration.mobHeads.tooltip": "Affiche les mobs sous forme de petites têtes issues de leur propre modèle. Repli sur les points colorés si le modèle est illisible.",
+
   "sharedjourney.configuration.showPlayers": "Afficher les joueurs",
   "sharedjourney.configuration.showPlayers.tooltip": "Afficher les autres joueurs sur le radar.",
 

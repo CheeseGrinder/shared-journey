@@ -173,6 +173,9 @@
   "sharedjourney.configuration.radius": "Radius",
   "sharedjourney.configuration.radius.tooltip": "Radar range in blocks (capped by the server's radarMaxRadius).",
 
+  "sharedjourney.configuration.mobHeads": "Mob Head Icons",
+  "sharedjourney.configuration.mobHeads.tooltip": "Draw mobs as small head icons rendered from their own model. Falls back to colored dots when a model cannot be read.",
+
   "sharedjourney.configuration.showPlayers": "Show Players",
   "sharedjourney.configuration.showPlayers.tooltip": "Show other players on the radar.",
 

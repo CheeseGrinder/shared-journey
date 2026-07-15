@@ -140,23 +140,81 @@ réécrite pour que la passe ne soit pas invalidée par un rework.
 - [x] **P3 · ★★☆☆☆ — Suivi de train : lisser la caméra** — **fait** (quick win) : lissage
   exponentiel (`centerX/Z += (train - center) * 0.15` par frame) au lieu de la recopie
   directe, dans `FullMapScreen.render`.
-- [ ] **P3 · ★★★★☆ — Têtes de mobs sur le radar** : têtes à la place des points, sur la
-  minimap et la carte plein écran. **Compatible mods par construction** : pas de jeu de
-  sprites vanilla hardcodé — rendre la tête depuis le modèle/texture de l'entité elle-même
-  (approche Xaero : le rendu marche pour n'importe quel mob moddé sans intégration), avec
-  cache des icônes rendues par type d'entité et fallback point coloré si le rendu échoue.
-  _Tenté et abandonné (2026-07-11) : implémentation via `InventoryScreen`
+- [x] **P3 · ★★★★☆ — Têtes de mobs sur le radar** — **fait (v3, 2026-07-15 — à valider en
+  jeu)** : têtes à la place des points, minimap + carte plein écran, **compatible mods par
+  construction** (aucun jeu de sprites hardcodé). `client.render.MobHeadIcons` (+
+  `MobIconCreator`, `MobIconAtlas`) :
+  - **Tête isolée, pas de crop** : on rend uniquement la `ModelPart` tête du modèle de
+    l'entité, localisée via `HeadedModel#getHead` (humanoïdes, villageois...), puis
+    `AgeableListModel#headParts` (quadrupèdes — méthode protected, accès par réflexion,
+    mappings officiels donc stable en prod), puis
+    `HierarchicalModel#getAnyDescendantWithName("head")` (creeper, warden...). Cadrage
+    automatique depuis les bounds réels des cubes de la part (`ModelPart#visit`, coins
+    transformés par la pose) — règle le « crop fixe qui ne colle pas aux proportions » de
+    la V1.
+  - **Pas de bobbing** : pose neutre re-figée avant chaque draw (`setupAnim` avec tous les
+    paramètres à zéro sur le modèle partagé, `young`/`riding`/`attackTime` remis à zéro).
+  - **Rendu direct en espace GUI** (même principe que `InventoryScreen.
+    renderEntityInInventory` : pas de framebuffer, pas de capture/readback), vue de face,
+    Z écrasé (×0.001) pour que la géométrie écrive la profondeur du plan GUI (pas de trous
+    dans les draws suivants) — la visibilité des faces vient du back-face culling de
+    `RenderType.entityCutout` (X inversé avec Z pour garder le winding correct), pas du
+    depth buffer. Résultat : icône plate face caméra, style Xaero.
+  - **Fallbacks** : mob sans tête identifiable (abeille : `headParts()` vide — c'était le
+    cas « méconnaissable » de la V1) → rendu corps entier de face auto-cadré ; résolution/
+    rendu en échec → point coloré existant (`EntityDots.draw`), type empoisonné en cache
+    pour la session. Cache par `EntityType`, invalidé si l'instance de modèle change
+    (resource reload).
+  - Sur la minimap, contre-transformation locale (anti-rotation + 1/zoom) : icône droite et
+    à taille d'écran constante (8 px) quel que soit le zoom/mode rotation. Config client
+    `radar.mobHeads` (défaut true) + clés lang en/fr.
+  _Limites acceptées : couches de rendu non dessinées (laine du mouton, collier...) — base
+  model + texture de base seulement ; variantes par texture (chat, cheval) correctes car la
+  texture est résolue par entité à chaque frame, mais les bounds sont cachés par TYPE (première
+  entité vue) ; icône = pose de référence, pas d'orientation live (voulu)._
+  _Round 2 (retours in-game du 2026-07-15) : mobs invisibles (golems, poissons, squid,
+  tadpole) = trou de classification dans `EntityDots.colorFor` (ni `Animal` ni `Enemy`) —
+  dernière branche passée en attrape-tout `Mob`. Cou rendu avec la tête (chevaux, camel...) :
+  les parts « head » vanilla contiennent le cou dans leurs propres cubes — cadrage remplacé
+  par l'union des GROS cubes du TIERS AVANT de la part (le visage est devant), cubes plats
+  (ailes) et petits (cornes, antennes) exclus du cadre. Débordements (piques du guardian,
+  cou résiduel, oreilles) coupés par un scissor à la boîte de l'icône. Lama (`EntityModel`
+  brut) : stratégie supplémentaire de scan réflexif des champs `ModelPart` nommés « head » ;
+  wither (`center_head`) : re-scan des noms de parts contenant « head ». Tête minuscule
+  (parrot, frog, poissons) → rendu corps entier ; forme bien plus profonde que large
+  (poissons, tadpole) → vue de PROFIL (rotation 90° avant l'écrasement Z). Bee agrandie
+  gratuitement (les ailes plates ne comptent plus dans le cadre). Taille d'icône 8 → 10 px._
+  _Round 3 (analyse comparative du code décompilé de Xaero, 2026-07-15) : adopté — contour
+  noir 1 px par dilatation de silhouette (8 passes géométrie décalées d'1 px teintées en noir
+  via le paramètre `color` de `ModelPart.render`, puis passe normale par-dessus ; équivalent
+  de la dilatation alpha de Xaero mais sans framebuffer, le scissor est élargi d'1 px) et
+  `HumanoidModel` → head + hat (la couche « hat » des zombies/squelettes était perdue via
+  `HeadedModel#getHead` seul). Rejeté sciemment : render-to-texture + atlas + budget
+  1 icône/frame (nécessaire chez Xaero car leur génération est chère ; notre rendu live est
+  trivial et résout la texture PAR ENTITÉ à chaque frame → variantes gratuites, sans clés de
+  cache par variante/armure), tracing mixin des RenderTypes/layers réels (lourd ; laine du
+  mouton = limite acceptée), table de tweaks par mob codés en dur + overrides JSON (contre la
+  philosophie « compatible par construction » ; nos heuristiques couvrent ces cas)._
+  _Round 4 (v3, 2026-07-15) : migration vers le **render-to-texture + atlas** finalement
+  (décision revenant sur le rejet du round 3, sur la base du rapport
+  `assets/RAPPORT_RENDU_TETES_MOBS.md`) : le rendu v2 coûtait 9 passes de géométrie + un
+  `flush`/scissor **par entité et par frame**. Désormais chaque icône est rendue UNE fois
+  off-screen (`MobIconCreator` : FBO 256² supersamplé 8×, projection ortho, vrai depth test,
+  mipmaps pour le downscale, contour par dilatation de silhouette composé directement dans la
+  cellule) puis copiée dans un atlas GL (`MobIconAtlas`, cellules 32 px, pages ≤ 1024²) ; le
+  dessin par frame = un quad texturé. Cache par `(EntityType, texture)` — les variantes par
+  texture (chevaux, chats) restent gratuites —, budget de création 1 icône / 15 ms (point
+  coloré en attendant), sentinelle FAILED, reset complet (cache + atlas) au premier modèle
+  périmé après un resource reload. Heuristiques de cadrage/résolution de tête de la v2
+  conservées telles quelles (validées en jeu) ; toujours **zéro mixin** : pas de tracing des
+  layers, fidélité inchangée (texture de base via `RenderType.entityCutout`). Restauration
+  scrupuleuse de l'état GL (projection + vertex sorting, modelview, framebuffer, viewport,
+  scissor, blend, depth, lights) — checklist §1.6 du rapport._
+  _Historique (V1 abandonnée le 2026-07-11) : implémentation via `InventoryScreen`
   (`renderEntityInInventoryFollowsAngle` puis `renderEntityInInventory` directement, avec un
-  crop/zoom sur le top ~32% de la bounding box). Testé en jeu sur la minimap : illisible en
-  pratique à cette échelle — tête qui pivote/bobine avec l'animation de déplacement du mob,
-  épaules visibles sur certains mobs (le crop vertical fixe ne colle pas à toutes les
-  proportions), et les mobs non-humanoïdes (abeille notamment) totalement méconnaissables.
-  Jugé qualité « v0.0.0 », pas acceptable pour une v1 — code entièrement reverté
-  (`MobIconRenderer` supprimé, retour au point coloré `EntityDots.draw` partout). Pour une
-  reprise future : soit un jeu de silhouettes/icônes fixes par catégorie de mob (lisible,
-  pas de bobbing, mais perd le "compatible mods par construction"), soit une capture
-  statique de la tête (pose figée, pas de rotation live) avec un crop calibré par entité
-  plutôt qu'un pourcentage fixe de bounding box._
+  crop/zoom sur le top ~32% de la bounding box). Illisible en jeu — bobbing de l'animation de
+  marche, épaules visibles (crop fixe), mobs non-humanoïdes méconnaissables — entièrement
+  revertée. La V2 ci-dessus adresse ces trois causes une par une._
 
 ## API publique (tranches restantes)
 
@@ -226,8 +284,9 @@ stabilise le modèle._
    chantier la **façade API waypoints** (P3).~~ ✔ **fait**.
 2. ~~**Waypoints de bannière** (P3 ★★★★☆) — s'appuie directement sur le pipeline des waypoints
    publics/joueurs.~~ ✔ **fait**.
-3. ~~**Têtes de mobs sur le radar** (P3 ★★★★☆, compatible mods)~~ ✘ **tenté, reverté** (voir
-   note dans la section ci-dessus) + ~~quick win : lissage de la caméra du suivi de
+3. ~~**Têtes de mobs sur le radar** (P3 ★★★★☆, compatible mods)~~ ✔ **fait en v2** (rendu
+   direct de la ModelPart tête, pose figée — voir la note dans la section ci-dessus ; V1
+   revertée le 2026-07-11) + ~~quick win : lissage de la caméra du suivi de
    train (P3 ★★☆☆☆).~~ ✔ **fait**.
 4. **Fuites d'information** (P3) — gros morceau design (quarantaine), à lancer quand on veut
    un chantier serveur. ← **prochain chantier**.
@@ -238,6 +297,15 @@ stabilise le modèle._
 7. **Optimisation** (P4), puis shaders + audit traductions (P5).
 
 ## Fait (résumé — détails dans l'historique git)
+
+- **BUG P0 — mélange de maps entre mondes solo homonymes** : la clé du cache client
+  (`DiskCache.openSession`) était le nom `level.dat` du monde — identique entre « New World »
+  et « New World (1) » (Minecraft ne renomme que le DOSSIER lors d'une collision de noms).
+  Les deux mondes partageaient `sharedjourney_cache/sp_new_world/` : régions et index
+  mélangés, et le handshake déclarait au serveur des versions issues de l'index mélangé,
+  donc pas de re-push correctif. Corrigé : la clé est maintenant le nom du DOSSIER du monde
+  (`getWorldPath(LevelResource.ROOT)`), unique par construction. Pas de migration des
+  anciens dossiers `sp_<nom>` : le serveur est autoritaire, le cache se re-télécharge.
 
 - **Marqueur du joueur local** : winding des triangles corrigé + `disableCull` (l'asset
   texture suivra avec le chantier UI).
