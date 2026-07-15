@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>Shared Journey</title>
+
+  <!--
+    Concept: the icon IS the minimap, not a separate logo — same two-tone
+    border (black liner + gray band, MinimapRenderer#drawMapBorder), the
+    same player arrow shape/colors (EntityDots#drawPlayerArrow), and the
+    same radar dot colors (EntityDots.COLOR_*) as the actual HUD. Anyone
+    who has used the mod should recognize it instantly.
+  -->
+
+  <defs>
+    <radialGradient id="terrain" cx="35%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#6FA85A" />
+      <stop offset="55%" stop-color="#4C7A3D" />
+      <stop offset="100%" stop-color="#375A2C" />
+    </radialGradient>
+    <clipPath id="disc">
+      <circle cx="128" cy="128" r="100" />
+    </clipPath>
+  </defs>
+
+  <!-- Badge background -->
+  <rect x="4" y="4" width="248" height="248" rx="52" fill="#171B22" />
+
+  <!-- Terrain disc (the "minimap" itself) -->
+  <circle cx="128" cy="128" r="100" fill="url(#terrain)" />
+  <g clip-path="url(#disc)" opacity="0.5">
+    <!-- A river crossing the disc, echoing water tiles on the real map -->
+    <path d="M -20 190 Q 90 140 130 170 T 300 110" stroke="#3E6EA8" stroke-width="26" fill="none" />
+  </g>
+  <g clip-path="url(#disc)" stroke="#000000" stroke-opacity="0.12" stroke-width="1.5">
+    <!-- Faint chunk grid, same spirit as the in-game grid overlay -->
+    <line x1="28" y1="28" x2="228" y2="28" /><line x1="28" y1="61" x2="228" y2="61" />
+    <line x1="28" y1="94" x2="228" y2="94" /><line x1="28" y1="128" x2="228" y2="128" />
+    <line x1="28" y1="161" x2="228" y2="161" /><line x1="28" y1="194" x2="228" y2="194" />
+    <line x1="28" y1="227" x2="228" y2="227" />
+    <line x1="28" y1="28" x2="28" y2="228" /><line x1="61" y1="28" x2="61" y2="228" />
+    <line x1="94" y1="28" x2="94" y2="228" /><line x1="128" y1="28" x2="128" y2="228" />
+    <line x1="161" y1="28" x2="161" y2="228" /><line x1="194" y1="28" x2="194" y2="228" />
+    <line x1="227" y1="28" x2="227" y2="228" />
+  </g>
+
+  <!-- Two-tone border: black liner then gray band (drawMapBorder) -->
+  <circle cx="128" cy="128" r="101" fill="none" stroke="#141414" stroke-width="3" />
+  <circle cx="128" cy="128" r="106" fill="none" stroke="#A8A8A8" stroke-width="6" />
+
+  <!-- Cardinal tick (north) -->
+  <rect x="124" y="16" width="8" height="14" rx="2" fill="#EDEDED" />
+
+  <!-- Radar dots: pet, villager, hostile, passive (EntityDots.COLOR_*) -->
+  <circle cx="76" cy="84" r="8" fill="#000000" /><circle cx="76" cy="84" r="6" fill="#3B82F6" />
+  <circle cx="182" cy="90" r="8" fill="#000000" /><circle cx="182" cy="90" r="6" fill="#7CD97C" />
+  <circle cx="188" cy="176" r="8" fill="#000000" /><circle cx="188" cy="176" r="6" fill="#FF4040" />
+  <circle cx="70" cy="178" r="8" fill="#000000" /><circle cx="70" cy="178" r="6" fill="#C8C8C8" />
+
+  <!-- Player arrow, centered (EntityDots#drawPlayerArrow proportions ×8) -->
+  <g transform="translate(128 128)">
+    <polygon points="0,-56 -44,48 44,48" fill="#2653C1" />
+    <polygon points="0,-36 -28.8,36.8 28.8,36.8" fill="#FFFFFF" />
+    <polygon points="0,12 -22.4,48 22.4,48" fill="#2653C1" />
+  </g>
+</svg>

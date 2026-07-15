@@ -1,3 +1,7 @@
+<div style="text-align: center">
+  <img src="docs/branding/icon.svg" width="96" height="96" alt="Shared Journey icon" />
+</div>
+
 # Shared Journey
 
 **One world, one map — shared by everyone.**
@@ -93,33 +97,46 @@ Shared Journey flips the model:
 - **Delta sync**: only regions newer than what the client already has are sent, batched
   under a configurable KB/s per-player budget.
 
+## Screenshots
+
+<!-- See docs/images/README.md for the full shot list and capture guidelines. -->
+
+|                                                                     |                                                                       |
+|---------------------------------------------------------------------|-----------------------------------------------------------------------|
+| ![Round minimap with entity radar](docs/images/minimap.png)         | ![Minimap in rotation mode](docs/images/minimap-rotate.png)           |
+| Round minimap — radar, mob head icons, time/biome/coords labels     | Dynamic rotation mode                                                 |
+| ![Fullscreen map context menu](docs/images/fullmap-contextmenu.png) | ![Waypoints on the fullscreen map](docs/images/fullmap-waypoints.png) |
+| Right-click context menu                                            | Waypoints, including a banner waypoint                                |
+| ![Cave layer](docs/images/cave-layer.png)                           | ![Waypoint list screen](docs/images/waypoint-list.png)                |
+| Cave layer (anti-exploit unlocking)                                 | Waypoint list screen                                                  |
+
 ## Controls (rebindable)
 
-| Key | Action |
-|-----|--------|
-| `M` | Open the fullscreen map |
-| `N` | Toggle the minimap |
-| `,` | Cycle map layer |
-| `+` / `-` | Minimap zoom |
-| `U` | Waypoint list |
-| `B` | Create a waypoint at your position |
+| Key       | Action                             |
+|-----------|------------------------------------|
+| `M`       | Open the fullscreen map            |
+| `N`       | Toggle the minimap                 |
+| `,`       | Cycle map layer                    |
+| `+` / `-` | Minimap zoom                       |
+| `U`       | Waypoint list                      |
+| `B`       | Create a waypoint at your position |
 
 ## Commands
 
 Root: `/sj` (alias `/sharedjourney`).
 
-| Command | Side | Permission |
-|---------|------|------------|
-| `/sj stats [player]` | server | everyone (own stats) / OP (engine + everyone) |
-| `/sj tp <x> <z>` | server | OP — teleport from the map, Y resolved server-side |
-| `/sj purge <layer\|all>` | client | — deletes the local cache of a layer |
-| `/sj cache` | client | — local cache status |
-| `/sj goto <x> <z>` | client | — opens the map centered on a position |
-| `/sj admin sync force <players\|all> [rx rz]` | server | OP — forced resend, ignores the index |
-| `/sj admin rerender <chunkRadius>` | server | OP — re-render around you |
-| `/sj admin regen full` / `cancel` | server | OP — full map regeneration |
-| `/sj admin layer <dim> <layer> <bool>` | server | OP — toggle layers per dimension, hot |
-| `/sj admin save` | server | OP — flush to disk |
+| Command                                       | Side   | Permission                                         |
+|-----------------------------------------------|--------|----------------------------------------------------|
+| `/sj stats [player]`                          | server | everyone (own stats) / OP (engine + everyone)      |
+| `/sj tp <x> <z>`                              | server | OP — teleport from the map, Y resolved server-side |
+| `/sj purge <layer\|all>`                      | client | — deletes the local cache of a layer               |
+| `/sj cache`                                   | client | — local cache status                               |
+| `/sj goto <x> <z>`                            | client | — opens the map centered on a position             |
+| `/sj admin sync force <players\|all> [rx rz]` | server | OP — forced resend, ignores the index              |
+| `/sj admin rerender <chunkRadius>`            | server | OP — re-render around you                          |
+| `/sj admin regen full` / `cancel`             | server | OP — full map regeneration                         |
+| `/sj admin layer <dim> <layer> <bool>`        | server | OP — toggle layers per dimension, hot              |
+| `/sj admin save`                              | server | OP — flush to disk                                 |
 
 ## Configuration
 
