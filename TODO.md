@@ -125,22 +125,57 @@ réécrite pour que la passe ne soit pas invalidée par un rework.
   _Limite connue (YAGNI, non gérée) : une bannière nommée placée par la worldgen (structure de
   village de pillards, manoir des bois...) ou par une commande/un autre mod sans passer par
   `EntityPlaceEvent` n'est pas détectée — seule la pose PAR UN JOUEUR l'est._
-- [ ] **P3 · ★★★☆☆ — Fuites d'information malgré « me cacher de la carte »** : un joueur caché
-  « dessine » sa position par trois vecteurs — blocs cassés/posés (push en direct), nouveaux
-  chunks générés (front d'exploration), déverrouillage des bandes CAVE (`CaveTracker`).
-  _Design proposé : file de QUARANTAINE côté serveur qui gate la DIFFUSION (le rendu PNG se
-  fait normalement). Attribution exacte impossible → heuristique de proximité (tout chunk
-  dirty/nouveau/unlock à moins de N chunks d'un joueur caché part en quarantaine). Indexée
-  par CHUNK (pas de propriétaire ; au drain on ré-évalue la proximité). Push immédiat pour
-  le joueur caché et les joueurs assez proches (le jeu leur streame déjà la zone) ; différé
-  pour les autres. Version « publique » par région distincte de la réelle (sinon le
-  handshake de reconnexion contourne la quarantaine). Drain PROGRESSIF (5-15 min config) —
-  un drain d'un coup redessinerait la trajectoire. Alternative radicale en option serveur :
-  les joueurs cachés ne contribuent pas du tout à la carte._
+- [x] **P3 · ★★★☆☆ — Fuites d'information malgré « me cacher de la carte »** — **fait
+  (2026-07-15 — à valider en jeu)**, design de quarantaine du cadrage implémenté tel quel.
+  Un joueur caché « dessinait » sa position par trois vecteurs — blocs cassés/posés (push en
+  direct), nouveaux chunks générés (front d'exploration), déverrouillage des bandes CAVE
+  (`CaveTracker`). Le gate s'applique à la DIFFUSION, pas au rendu, en un point unique :
+  tous les chemins de rendu (exploration, dirty, unlock CAVE, regen) convergent vers la
+  résolution de chunk sur le main thread (`MapManager.tick`/`renderNow`) → verdict
+  `QuarantineService.evaluate` (RENDER/QUARANTINE/DROP), positions joueurs lisibles.
+  - **`QuarantineService`** (server.service) : `PENDING` chunk → deadline + index secondaire
+    par région. Heuristique de proximité (attribution impossible) : tout chunk résolu à
+    ≤ `quarantineRadiusChunks` d'un joueur caché part en quarantaine, quel qu'en soit
+    l'auteur. Drain par chunk toutes les 5 s (cap 64/scan), deadline
+    `quarantineDrainMinutes` **avec jitter ±25 %** (un drain ordonné rejouerait la
+    trajectoire, juste différée) ; au drain, proximité ré-évaluée (joueur caché encore
+    proche → réarmé) ; nouvelle activité dans un chunk pending réarme aussi. Persistance
+    `quarantine.json` (à côté d'index.json), restaurée au démarrage.
+  - **Variante « publique » par région** (`MapManager`) : au premier write quarantainé,
+    clone des pixels (et du sidecar hover INFO — les hauteurs/blocs fuient aussi) figé
+    pré-quarantaine, avec **version publique distincte** (sinon le handshake de reconnexion
+    contourne la quarantaine). Writes normaux dans la même région : appliqués aux deux
+    (miroir). Drain d'un chunk : copie rect réel→public toutes couches + INFO
+    (`HoverRegionData.copyChunkTo`) + bump version publique ; dernier chunk de la région :
+    variante droppée (public == réel) + **bump de la version réelle** (des versions
+    réelle/publique nées la même milliseconde empêcheraient le re-push). Persistance
+    sidecars `region_X_Z.pub.png`/`.pub.bin` (mtime = version publique), rechargés au
+    démarrage, supprimés si orphelins.
+  - **Service par joueur** (`SyncService`) : `isTrusted` (proximité d'un chunk pending de la
+    région) décide la variante dans `maybeQueue`/`drainQueue`/`handleRegionRequest` — le
+    joueur caché et les joueurs proches reçoivent le réel immédiatement (le jeu leur streame
+    déjà la zone), les autres la publique. Trust ré-évalué à l'envoi ; un désaccord queue/
+    envoi s'auto-corrige au delta suivant. Client inchangé (aucun nouveau payload, pas de
+    bump protocole).
+  - **Config serveur** section `privacy` (`PrivacyServerConfig`) : `hiddenAreaPolicy`
+    OFF / **QUARANTINE (défaut)** / EXCLUDE (radical : chunks près d'un joueur caché pas
+    rendus du tout — la zone se met à jour plus tard via un joueur visible),
+    `quarantineRadiusChunks` (déf. 8, **toujours planché à la view distance serveur + 1** —
+    détecté au premier test in-game : le front d'exploration génère et diffuse jusqu'à la
+    view distance, un rayon plus petit diffusait un anneau peint avec un trou révélateur
+    pile sur le joueur caché), `quarantineDrainMinutes` (déf. 10). Compteur dans
+    `/sj stats` (ligne engine). Clés lang en/fr.
+  _Limites ACCEPTÉES (documentées dans le Javadoc de `QuarantineService`) : (1) trust à la
+  région entière dès qu'on est proche d'UN chunk pending — deux spots quarantainés distincts
+  dans la même région se cross-révèlent aux joueurs collés à l'un des deux (tout est à
+  < 512 blocs de toute façon ; exiger la proximité de TOUS priverait le joueur caché des
+  mises à jour de sa propre traînée) ; (2) crash avant une sauvegarde monde = sidecars .pub
+  perdus → fallback réel (révélation anticipée, pas de casse) ; (3) les waypoints de
+  bannière posés par un joueur caché sont broadcast normalement (hors scope)._
 - [x] **P3 · ★★☆☆☆ — Suivi de train : lisser la caméra** — **fait** (quick win) : lissage
   exponentiel (`centerX/Z += (train - center) * 0.15` par frame) au lieu de la recopie
   directe, dans `FullMapScreen.render`.
-- [x] **P3 · ★★★★☆ — Têtes de mobs sur le radar** — **fait (v3, 2026-07-15 — à valider en
+- [x] **P3 · ★★★★☆ — Têtes de mobs sur le radar** — **fait (v3, 2026-07-15 — validé en
   jeu)** : têtes à la place des points, minimap + carte plein écran, **compatible mods par
   construction** (aucun jeu de sprites hardcodé). `client.render.MobHeadIcons` (+
   `MobIconCreator`, `MobIconAtlas`) :
@@ -267,6 +302,9 @@ stabilise le modèle._
   handshake le client RECALCULE le hash de ses fichiers (pas son index, falsifiable) —
   même version + hash différent → re-push. En complément : métadonnées dans le PNG
   (chunk tEXt) pour un index client reconstructible. CRC32 insuffisant (forgeable)._
+  _NB : la corruption ACCIDENTELLE du cache est prévenue depuis 2026-07-15 (écritures
+  atomiques + writer mono-thread, voir le résumé Fait) ; cet item ne couvre plus que la
+  falsification volontaire._
 - [ ] **P4 · ★★★☆☆ — Overlay des rails Create en souterrain** (recherche) : l'overlay reste
   affiché en surface quand la voie est enterrée et n'apparaît pas sur les couches CAVE.
   Corréler les pixels du `TrainMapRenderer` avec la couche affichée et les hauteurs
@@ -284,12 +322,12 @@ stabilise le modèle._
    chantier la **façade API waypoints** (P3).~~ ✔ **fait**.
 2. ~~**Waypoints de bannière** (P3 ★★★★☆) — s'appuie directement sur le pipeline des waypoints
    publics/joueurs.~~ ✔ **fait**.
-3. ~~**Têtes de mobs sur le radar** (P3 ★★★★☆, compatible mods)~~ ✔ **fait en v2** (rendu
-   direct de la ModelPart tête, pose figée — voir la note dans la section ci-dessus ; V1
-   revertée le 2026-07-11) + ~~quick win : lissage de la caméra du suivi de
-   train (P3 ★★☆☆☆).~~ ✔ **fait**.
-4. **Fuites d'information** (P3) — gros morceau design (quarantaine), à lancer quand on veut
-   un chantier serveur. ← **prochain chantier**.
+3. ~~**Têtes de mobs sur le radar** (P3 ★★★★☆, compatible mods)~~ ✔ **fait en v3**
+   (render-to-texture + atlas, validé en jeu le 2026-07-15 ; V1 revertée le 2026-07-11) +
+   ~~quick win : lissage de la caméra du suivi de train (P3 ★★☆☆☆).~~ ✔ **fait**.
+4. ~~**Fuites d'information** (P3) — quarantaine à la diffusion~~ ✔ **fait** (2026-07-15,
+   à valider en jeu — scénario : deux clients dev, l'un caché qui casse des blocs/explore,
+   vérifier que l'autre ne voit rien avant le délai puis voit tout après).
 5. **Chantier UI** (quand déparqué) : losange in-world + marqueur joueur + boussole, puis
    écran de config intégré + éditeur couches/bandes, groupement des overlays, passe textes,
    inventaires, tranche API UI.
@@ -297,6 +335,21 @@ stabilise le modèle._
 7. **Optimisation** (P4), puis shaders + audit traductions (P5).
 
 ## Fait (résumé — détails dans l'historique git)
+
+- **BUG — lignes de pixels décalées aux frontières de régions (2026-07-15, à valider en
+  jeu)** : problème de RENDU (diagnostic utilisateur — les PNG du cache étaient sains), pas
+  de données. Les textures de régions (`DynamicTexture`) gardaient le wrap GL par défaut
+  **GL_REPEAT** ; les quads sont dessinés bord à bord sous un transform zoom/pan
+  fractionnaire → en bord de quad, la précision flottante fait parfois échantillonner pile
+  u/v = 1.0, qui wrappe sur la rangée/colonne OPPOSÉE de la même région → ligne d'1 px de
+  pixels « décalés » le long des frontières de régions, dépendante du zoom/pan (« parfois »).
+  Corrigé : `CLAMP_TO_EDGE` posé à l'upload (`ClientMapCache.uploadTexture`) — même
+  protection que `MobIconAtlas` avait déjà. _Durcissement connexe fait en enquêtant (pas la
+  cause, mais réel) : écritures disque atomiques partout (`RegionStorage.writeAtomically` :
+  tmp + rename) + writer client MONO-thread dans `DiskCache` (avant : `Util.ioPool()`
+  multi-thread sans ordre garanti + `Files.write` non atomique = deux pushes rapprochés de
+  la même région pouvaient entrelacer le fichier, et l'index à jour aurait masqué la
+  corruption à jamais)._
 
 - **BUG P0 — mélange de maps entre mondes solo homonymes** : la clé du cache client
   (`DiskCache.openSession`) était le nom `level.dat` du monde — identique entre « New World »

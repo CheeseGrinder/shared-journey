@@ -6,8 +6,8 @@ import com.google.gson.reflect.TypeToken;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.io.Writer;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -93,12 +93,8 @@ public final class RegionIndex {
     }
 
     public synchronized void save(Path file) throws IOException {
-        Files.createDirectories(file.getParent());
         Map<String, Long> raw = new HashMap<>();
         entries.forEach((k, v) -> raw.put(k.indexKey(), v));
-
-        try (Writer w = Files.newBufferedWriter(file)) {
-            GSON.toJson(raw, MAP_TYPE, w);
-        }
+        RegionStorage.writeAtomically(file, GSON.toJson(raw, MAP_TYPE).getBytes(StandardCharsets.UTF_8));
     }
 }

@@ -189,7 +189,14 @@ public final class MapManager {
                 continue;
             }
 
-            submitRender(level, chunk);
+            // Hidden-player gate: every render path converges here (or on
+            // renderNow), on the main thread — player positions readable.
+            QuarantineService.Verdict verdict = QuarantineService.evaluate(level, q.cx(), q.cz());
+            if (verdict == QuarantineService.Verdict.DROP) {
+                continue;
+            }
+
+            submitRender(level, chunk, verdict == QuarantineService.Verdict.QUARANTINE);
         }
     }
 
@@ -203,15 +210,21 @@ public final class MapManager {
      * chunks in memory.
      */
     public void renderNow(ServerLevel level, ChunkAccess chunk) {
+        QuarantineService.Verdict verdict = QuarantineService.evaluate(level, chunk.getPos().x, chunk.getPos().z);
+        if (verdict == QuarantineService.Verdict.DROP) {
+            return;
+        }
+
         if (tasksInFlight.get() < workerCount * 8) {
-            submitRender(level, chunk);
+            submitRender(level, chunk, verdict == QuarantineService.Verdict.QUARANTINE);
         } else {
+            // Re-evaluated at resolution time on the next ticks.
             enqueueChunk(level, chunk.getPos().x, chunk.getPos().z);
         }
     }
 
     /** Submits the render of a resolved chunk to the worker pool. */
-    private void submitRender(ServerLevel level, ChunkAccess chunk) {
+    private void submitRender(ServerLevel level, ChunkAccess chunk, boolean quarantined) {
         // 3x3 neighborhood (biomes only, BIOMES status is enough, never any
         // generation): the game's biome zoom reads up to one cell beyond the
         // chunk, so neighbors are needed for faithful borders up to the
@@ -231,7 +244,7 @@ public final class MapManager {
         try {
             workers.submit(() -> {
                 try {
-                    renderChunk(level, chunk, neighbors);
+                    renderChunk(level, chunk, neighbors, quarantined);
                 } catch (Throwable t) {
                     LOGGER.error(
                             "Failed to render chunk {},{} in {}",
@@ -248,8 +261,13 @@ public final class MapManager {
         }
     }
 
-    /** Renders every active layer of a chunk (runs on a worker). */
-    private void renderChunk(ServerLevel level, ChunkAccess chunk, ChunkAccess[] neighbors) {
+    /**
+     * Renders every active layer of a chunk (runs on a worker). A
+     * quarantined chunk (near a hidden player) is written to the real region
+     * only; the public variant served to distant players stays frozen until
+     * the QuarantineService drain.
+     */
+    private void renderChunk(ServerLevel level, ChunkAccess chunk, ChunkAccess[] neighbors, boolean quarantined) {
         EnumSet<MapLayer> layers = LayersServerConfig.layersFor(level.dimension());
         ChunkPos cp = chunk.getPos();
         List<RegionKey> touched = new ArrayList<>(layers.size() + 4);
@@ -266,14 +284,14 @@ public final class MapManager {
                     }
 
                     int[] pixels = ChunkColorizer.render(level, chunk, neighbors, layer, band);
-                    writeChunk(key, cp.x, cp.z, pixels);
+                    writeChunk(key, cp.x, cp.z, pixels, quarantined);
                     touched.add(key);
                     caveUnlocks.remove(unlock);
                 }
             } else {
                 int[] pixels = ChunkColorizer.render(level, chunk, neighbors, layer, 0);
                 RegionKey key = RegionKey.of(level.dimension(), layer, 0, cp.x, cp.z);
-                writeChunk(key, cp.x, cp.z, pixels);
+                writeChunk(key, cp.x, cp.z, pixels, quarantined);
                 touched.add(key);
             }
         }
@@ -281,7 +299,7 @@ public final class MapManager {
         // is in hand — the fullscreen hover info then works fully
         // client-side, with no on-demand chunk loading (anti timing-attack).
         if (!layers.isEmpty()) {
-            touched.add(writeHoverChunk(level, chunk));
+            touched.add(writeHoverChunk(level, chunk, quarantined));
         }
         // Immediate push to affected players (without waiting for the periodic delta).
         SyncService.pushRegionUpdates(server, touched);
@@ -346,22 +364,143 @@ public final class MapManager {
         return bands.isEmpty() ? 0 : bands.getFirst();
     }
 
+    // ------------------------------------------------------------------ quarantine publication
+
+    /**
+     * Publishes a drained quarantined chunk (QuarantineService): copies its
+     * pixels/hover data from the real region into the public variant on
+     * every layer. When the region has no pending chunk left, the variant is
+     * dropped entirely (public == real again) and the real version is bumped
+     * — a distant player may hold a public version equal to the real one
+     * (same-millisecond writes), the bump forces the re-push. Main thread.
+     * Returns the touched keys, for the sync push.
+     */
+    public List<RegionKey> publishChunk(ResourceKey<Level> dim, int cx, int cz, boolean regionClean) {
+        List<RegionKey> touched = new ArrayList<>();
+        for (MapLayer layer : LayersServerConfig.layersFor(dim)) {
+            if (layer == MapLayer.CAVE) {
+                for (int band : LayersServerConfig.CAVE_BANDS.get()) {
+                    publishImageChunk(RegionKey.of(dim, layer, band, cx, cz), cx, cz, regionClean, touched);
+                }
+            } else {
+                publishImageChunk(RegionKey.of(dim, layer, 0, cx, cz), cx, cz, regionClean, touched);
+            }
+        }
+        publishHoverChunk(RegionKey.of(dim, MapLayer.INFO, 0, cx, cz), cx, cz, regionClean, touched);
+        return touched;
+    }
+
+    private void publishImageChunk(RegionKey key, int cx, int cz, boolean regionClean, List<RegionKey> touched) {
+        RegionImage img = getOrLoad(key, false);
+        if (img == null) {
+            return;
+        }
+
+        int ox = Math.floorMod(cx, RegionKey.REGION_CHUNKS) * 16;
+        int oz = Math.floorMod(cz, RegionKey.REGION_CHUNKS) * 16;
+        synchronized (img) {
+            if (img.publicPixels == null) {
+                return;
+            }
+
+            if (regionClean) {
+                // Last pending chunk of the region: real == public once
+                // dropped, no need to copy.
+                img.publicPixels = null;
+                img.publicDirty = false;
+                img.cachedPublicPng = null;
+                img.version = Math.max(img.version + 1, System.currentTimeMillis());
+                img.dirty = true;
+                index.put(key, img.version);
+            } else {
+                for (int z = 0; z < 16; z++) {
+                    System.arraycopy(
+                            img.pixels,
+                            ox + (oz + z) * RegionKey.REGION_BLOCKS,
+                            img.publicPixels,
+                            ox + (oz + z) * RegionKey.REGION_BLOCKS,
+                            16);
+                }
+                img.publicVersion = Math.max(img.publicVersion + 1, System.currentTimeMillis());
+                img.publicDirty = true;
+                img.cachedPublicPng = null;
+            }
+        }
+        if (regionClean) {
+            deletePubFile(key);
+        }
+        touched.add(key);
+    }
+
+    private void publishHoverChunk(RegionKey key, int cx, int cz, boolean regionClean, List<RegionKey> touched) {
+        HoverRegion region = hoverRegion(key, false);
+        if (region == null) {
+            return;
+        }
+
+        synchronized (region) {
+            if (region.publicData == null) {
+                return;
+            }
+
+            if (regionClean) {
+                region.publicData = null;
+                region.publicDirty = false;
+                region.cachedPublicBlob = null;
+                region.version = Math.max(region.version + 1, System.currentTimeMillis());
+                region.dirty = true;
+                index.put(key, region.version);
+            } else {
+                region.data.copyChunkTo(
+                        region.publicData,
+                        Math.floorMod(cx, RegionKey.REGION_CHUNKS),
+                        Math.floorMod(cz, RegionKey.REGION_CHUNKS));
+                region.publicVersion = Math.max(region.publicVersion + 1, System.currentTimeMillis());
+                region.publicDirty = true;
+                region.cachedPublicBlob = null;
+            }
+        }
+        if (regionClean) {
+            deletePubFile(key);
+        }
+        touched.add(key);
+    }
+
     // ------------------------------------------------------------------ writes (workers)
 
-    private void writeChunk(RegionKey key, int cx, int cz, int[] chunkPixels) {
+    private void writeChunk(RegionKey key, int cx, int cz, int[] chunkPixels, boolean quarantined) {
         RegionImage img = getOrLoad(key, true);
         int ox = Math.floorMod(cx, RegionKey.REGION_CHUNKS) * 16;
         int oz = Math.floorMod(cz, RegionKey.REGION_CHUNKS) * 16;
         long version;
 
         synchronized (Objects.requireNonNull(img)) {
+            if (quarantined && img.publicPixels == null) {
+                // Freeze the pre-quarantine state: distant players keep
+                // being served this snapshot until the chunks drain.
+                img.publicPixels = img.pixels.clone();
+                img.publicVersion = img.version;
+                img.publicDirty = true;
+                img.cachedPublicPng = null;
+            }
             for (int z = 0; z < 16; z++) {
                 System.arraycopy(chunkPixels, z * 16, img.pixels, ox + (oz + z) * RegionKey.REGION_BLOCKS, 16);
+                if (!quarantined && img.publicPixels != null) {
+                    // Normal write while the region holds a public variant
+                    // (another chunk is quarantined): mirror it.
+                    System.arraycopy(
+                            chunkPixels, z * 16, img.publicPixels, ox + (oz + z) * RegionKey.REGION_BLOCKS, 16);
+                }
             }
             img.version = Math.max(img.version + 1, System.currentTimeMillis());
             img.dirty = true;
             img.cachedPng = null;
             version = img.version;
+            if (!quarantined && img.publicPixels != null) {
+                img.publicVersion = Math.max(img.publicVersion + 1, System.currentTimeMillis());
+                img.publicDirty = true;
+                img.cachedPublicPng = null;
+            }
         }
         index.put(key, version); // RAM registry; serialized by saveAll()
     }
@@ -371,7 +510,7 @@ public final class MapManager {
      * biomes) into its region sidecar. Runs on a worker, read-only chunk
      * access like the layer renderers. Returns the touched INFO region key.
      */
-    private RegionKey writeHoverChunk(ServerLevel level, ChunkAccess chunk) {
+    private RegionKey writeHoverChunk(ServerLevel level, ChunkAccess chunk, boolean quarantined) {
         ChunkPos cp = chunk.getPos();
         short[] heights = new short[HoverRegionData.COLUMNS];
         String[] blockIds = new String[HoverRegionData.COLUMNS];
@@ -406,17 +545,29 @@ public final class MapManager {
         RegionKey key = RegionKey.of(level.dimension(), MapLayer.INFO, 0, cp.x, cp.z);
         HoverRegion region = hoverRegion(key, true);
         long version;
+        int localCx = Math.floorMod(cp.x, RegionKey.REGION_CHUNKS);
+        int localCz = Math.floorMod(cp.z, RegionKey.REGION_CHUNKS);
         synchronized (Objects.requireNonNull(region)) {
-            region.data.putChunk(
-                    Math.floorMod(cp.x, RegionKey.REGION_CHUNKS),
-                    Math.floorMod(cp.z, RegionKey.REGION_CHUNKS),
-                    heights,
-                    blockIds,
-                    biomeIds);
+            if (quarantined && region.publicData == null) {
+                // Freeze the pre-quarantine hover data (same rule as the
+                // region images: heights/blocks would leak the activity).
+                HoverRegionData copy = HoverRegionData.deserialize(region.data.serialize());
+                region.publicData = copy != null ? copy : new HoverRegionData();
+                region.publicVersion = region.version;
+                region.publicDirty = true;
+                region.cachedPublicBlob = null;
+            }
+            region.data.putChunk(localCx, localCz, heights, blockIds, biomeIds);
             region.version = Math.max(region.version + 1, System.currentTimeMillis());
             region.dirty = true;
             region.cachedBlob = null;
             version = region.version;
+            if (!quarantined && region.publicData != null) {
+                region.publicData.putChunk(localCx, localCz, heights, blockIds, biomeIds);
+                region.publicVersion = Math.max(region.publicVersion + 1, System.currentTimeMillis());
+                region.publicDirty = true;
+                region.cachedPublicBlob = null;
+            }
         }
         index.put(key, version);
         return key;
@@ -437,6 +588,7 @@ public final class MapManager {
                     long v = index.get(key);
                     loaded.version =
                             v >= 0 ? v : Files.getLastModifiedTime(file).toMillis();
+                    loadPublicHover(key, loaded);
                     HoverRegion prev = hoverRegions.putIfAbsent(key, loaded);
                     return prev != null ? prev : loaded;
                 }
@@ -454,6 +606,42 @@ public final class MapManager {
     }
 
     // ------------------------------------------------------------------ reads / versions
+
+    /**
+     * Version served to a player: the public variant's when the region is
+     * under quarantine and the player is not trusted for it, the real one
+     * otherwise.
+     */
+    public long versionOf(RegionKey key, boolean trusted) {
+        if (!trusted && QuarantineService.hasPending(key.dimension(), key.rx(), key.rz())) {
+            return publicVersionOf(key);
+        }
+
+        return versionOf(key);
+    }
+
+    private long publicVersionOf(RegionKey key) {
+        if (key.layer() == MapLayer.INFO) {
+            HoverRegion region = hoverRegion(key, false);
+            if (region == null) {
+                return -1;
+            }
+
+            synchronized (region) {
+                // No variant: no quarantined write hit this layer, public == real.
+                return region.publicData != null ? region.publicVersion : region.version;
+            }
+        }
+
+        RegionImage img = getOrLoad(key, false);
+        if (img == null) {
+            return -1;
+        }
+
+        synchronized (img) {
+            return img.publicPixels != null ? img.publicVersion : img.version;
+        }
+    }
 
     /** Version of a region: index (truth) > file (mtime) > -1. */
     public long versionOf(RegionKey key) {
@@ -485,6 +673,55 @@ public final class MapManager {
             }
         }
         return -1;
+    }
+
+    /**
+     * Serialized bytes served to a player: the public variant when the
+     * region is under quarantine and the player is not trusted for it, the
+     * real data otherwise.
+     */
+    public byte[] dataOf(RegionKey key, boolean trusted) {
+        if (!trusted && QuarantineService.hasPending(key.dimension(), key.rx(), key.rz())) {
+            return publicDataOf(key);
+        }
+
+        return dataOf(key);
+    }
+
+    private byte[] publicDataOf(RegionKey key) {
+        if (key.layer() == MapLayer.INFO) {
+            HoverRegion region = hoverRegion(key, false);
+            if (region == null) {
+                return null;
+            }
+
+            synchronized (region) {
+                if (region.publicData == null) {
+                    return hoverBlobOf(key);
+                }
+
+                if (region.cachedPublicBlob == null) {
+                    region.cachedPublicBlob = region.publicData.serialize();
+                }
+                return region.cachedPublicBlob;
+            }
+        }
+
+        RegionImage img = getOrLoad(key, false);
+        if (img == null) {
+            return null;
+        }
+
+        synchronized (img) {
+            if (img.publicPixels != null) {
+                if (img.cachedPublicPng == null) {
+                    img.cachedPublicPng = encodePng(img.publicPixels);
+                }
+                return img.cachedPublicPng;
+            }
+        }
+        // No variant on this layer: public == real.
+        return dataOf(key);
     }
 
     /**
@@ -564,6 +801,7 @@ public final class MapManager {
                         RegionKey.REGION_BLOCKS);
                 long v = index.get(key);
                 loaded.version = v >= 0 ? v : Files.getLastModifiedTime(file).toMillis();
+                loadPublicImage(key, loaded);
                 RegionImage prev = regions.putIfAbsent(key, loaded);
                 return prev != null ? prev : loaded;
             } catch (IOException e) {
@@ -585,6 +823,74 @@ public final class MapManager {
             dim = key.dimension().location().toString().replace(':', '_');
         }
         return root.resolve(dim).resolve(key.layer().folderName(key.caveBand())).resolve(key.fileName());
+    }
+
+    /** Sidecar of the public variant: region_X_Z.pub.png / region_X_Z.pub.bin. */
+    private Path pubPathOf(RegionKey key) {
+        Path real = pathOf(key);
+        String name = real.getFileName().toString();
+        int dot = name.lastIndexOf('.');
+        return real.resolveSibling(name.substring(0, dot) + ".pub" + name.substring(dot));
+    }
+
+    private void deletePubFile(RegionKey key) {
+        try {
+            Files.deleteIfExists(pubPathOf(key));
+        } catch (IOException e) {
+            LOGGER.error("Failed to delete {}", pubPathOf(key), e);
+        }
+    }
+
+    /**
+     * Restores the public variant of a region image from its sidecar (server
+     * restart with pending quarantine). A sidecar whose region has no
+     * pending chunk anymore is stale: deleted. NB: the reverse case (pending
+     * chunks but sidecar lost, e.g. crash before a save) falls back to the
+     * real data — accepted residual risk.
+     */
+    private void loadPublicImage(RegionKey key, RegionImage img) {
+        Path pub = pubPathOf(key);
+        if (!Files.exists(pub)) {
+            return;
+        }
+
+        if (!QuarantineService.hasPending(key.dimension(), key.rx(), key.rz())) {
+            deletePubFile(key);
+            return;
+        }
+
+        try {
+            BufferedImage bi = ImageIO.read(pub.toFile());
+            int[] pixels = new int[RegionKey.REGION_BLOCKS * RegionKey.REGION_BLOCKS];
+            bi.getRGB(0, 0, RegionKey.REGION_BLOCKS, RegionKey.REGION_BLOCKS, pixels, 0, RegionKey.REGION_BLOCKS);
+            img.publicPixels = pixels;
+            img.publicVersion = Files.getLastModifiedTime(pub).toMillis();
+        } catch (IOException e) {
+            LOGGER.error("Failed to read {}", pub, e);
+        }
+    }
+
+    /** Same as {@link #loadPublicImage} for the hover sidecars. */
+    private void loadPublicHover(RegionKey key, HoverRegion region) {
+        Path pub = pubPathOf(key);
+        if (!Files.exists(pub)) {
+            return;
+        }
+
+        if (!QuarantineService.hasPending(key.dimension(), key.rx(), key.rz())) {
+            deletePubFile(key);
+            return;
+        }
+
+        try {
+            HoverRegionData data = HoverRegionData.deserialize(Files.readAllBytes(pub));
+            if (data != null) {
+                region.publicData = data;
+                region.publicVersion = Files.getLastModifiedTime(pub).toMillis();
+            }
+        } catch (IOException e) {
+            LOGGER.error("Failed to read {}", pub, e);
+        }
     }
 
     // ------------------------------------------------------------------ persistence
@@ -616,14 +922,71 @@ public final class MapManager {
 
             Path file = pathOf(e.getKey());
             try {
-                Files.createDirectories(file.getParent());
-                Files.write(file, png);
+                RegionStorage.writeAtomically(file, png);
                 Files.setLastModifiedTime(file, FileTime.fromMillis(version));
                 saved++;
             } catch (IOException ex) {
                 LOGGER.error("Failed to save {}", file, ex);
                 synchronized (img) {
                     img.dirty = true;
+                }
+            }
+        }
+        // Public variants (hidden-player quarantine): .pub sidecars, mtime =
+        // public version (the version source on restart).
+        for (Map.Entry<RegionKey, RegionImage> e : regions.entrySet()) {
+            RegionImage img = e.getValue();
+            byte[] png;
+            long version;
+            synchronized (img) {
+                if (!img.publicDirty || img.publicPixels == null) {
+                    continue;
+                }
+
+                png = img.cachedPublicPng != null ? img.cachedPublicPng : encodePng(img.publicPixels);
+                img.cachedPublicPng = png;
+                version = img.publicVersion;
+                img.publicDirty = false;
+            }
+            if (png == null) {
+                continue;
+            }
+
+            Path file = pubPathOf(e.getKey());
+            try {
+                RegionStorage.writeAtomically(file, png);
+                Files.setLastModifiedTime(file, FileTime.fromMillis(version));
+                saved++;
+            } catch (IOException ex) {
+                LOGGER.error("Failed to save {}", file, ex);
+                synchronized (img) {
+                    img.publicDirty = true;
+                }
+            }
+        }
+        for (Map.Entry<RegionKey, HoverRegion> e : hoverRegions.entrySet()) {
+            HoverRegion region = e.getValue();
+            byte[] blob;
+            long version;
+            synchronized (region) {
+                if (!region.publicDirty || region.publicData == null) {
+                    continue;
+                }
+
+                blob = region.cachedPublicBlob != null ? region.cachedPublicBlob : region.publicData.serialize();
+                region.cachedPublicBlob = blob;
+                version = region.publicVersion;
+                region.publicDirty = false;
+            }
+            Path file = pubPathOf(e.getKey());
+            try {
+                RegionStorage.writeAtomically(file, blob);
+                Files.setLastModifiedTime(file, FileTime.fromMillis(version));
+                saved++;
+            } catch (IOException ex) {
+                LOGGER.error("Failed to save {}", file, ex);
+                synchronized (region) {
+                    region.publicDirty = true;
                 }
             }
         }
@@ -643,8 +1006,7 @@ public final class MapManager {
             }
             Path file = pathOf(e.getKey());
             try {
-                Files.createDirectories(file.getParent());
-                Files.write(file, blob);
+                RegionStorage.writeAtomically(file, blob);
                 Files.setLastModifiedTime(file, FileTime.fromMillis(version));
                 saved++;
             } catch (IOException ex) {
@@ -672,7 +1034,8 @@ public final class MapManager {
         long ramMb = regions.size() * (long) RegionKey.REGION_BLOCKS * RegionKey.REGION_BLOCKS * 4 / (1024 * 1024);
         return "Engine: " + workerCount + " thread(s), " + tasksInFlight.get() + " task(s) in flight | "
                 + "RAM regions: " + regions.size() + " (~" + ramMb + " MB, " + dirty + " dirty) | "
-                + "Index: " + index.size() + " entries | Render queue: " + queueSize() + " chunk(s)";
+                + "Index: " + index.size() + " entries | Render queue: " + queueSize() + " chunk(s) | "
+                + "Quarantine: " + QuarantineService.pendingCount() + " chunk(s)";
     }
 
     private static final class RegionImage {
@@ -680,6 +1043,18 @@ public final class MapManager {
         long version = System.currentTimeMillis();
         boolean dirty = false;
         byte[] cachedPng = null;
+
+        /**
+         * "Public" variant served to players not trusted for the region
+         * (hidden-player quarantine): pixels frozen before the quarantined
+         * writes, with their own version. Null when the region is clean
+         * (public == real). Persisted as a .pub.png sidecar.
+         */
+        int[] publicPixels = null;
+
+        long publicVersion = 0;
+        boolean publicDirty = false;
+        byte[] cachedPublicPng = null;
     }
 
     /** Hover sidecar of a region, with the same lifecycle as RegionImage. */
@@ -688,6 +1063,13 @@ public final class MapManager {
         long version = System.currentTimeMillis();
         boolean dirty = false;
         byte[] cachedBlob = null;
+
+        /** Public variant (hidden-player quarantine) — see RegionImage. */
+        HoverRegionData publicData = null;
+
+        long publicVersion = 0;
+        boolean publicDirty = false;
+        byte[] cachedPublicBlob = null;
 
         HoverRegion(HoverRegionData data) {
             this.data = data;

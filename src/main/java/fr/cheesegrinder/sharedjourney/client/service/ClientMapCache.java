@@ -10,8 +10,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
 
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.logging.LogUtils;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 import org.slf4j.Logger;
 
 import java.io.ByteArrayInputStream;
@@ -273,7 +276,17 @@ public final class ClientMapCache {
         try {
             NativeImage image = NativeImage.read(new ByteArrayInputStream(png));
             ResourceLocation rl = textureId(key);
-            Minecraft.getInstance().getTextureManager().register(rl, new DynamicTexture(image));
+            DynamicTexture texture = new DynamicTexture(image);
+            // Region quads are drawn edge to edge under a fractional
+            // zoom/pan transform; with the GL default REPEAT wrap, edge
+            // samples occasionally land on exactly u/v = 1.0 (float
+            // precision) and wrap to the OPPOSITE row/column of the same
+            // region — a 1px line of shifted pixels along region borders.
+            GlStateManager._bindTexture(texture.getId());
+            GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+            GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+            GlStateManager._bindTexture(0);
+            Minecraft.getInstance().getTextureManager().register(rl, texture);
             REGIONS.put(key, new Region(version, rl));
             DISK_MISSES.remove(key);
         } catch (IOException e) {

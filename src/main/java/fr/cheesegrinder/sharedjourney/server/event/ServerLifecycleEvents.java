@@ -8,6 +8,7 @@ import fr.cheesegrinder.sharedjourney.server.service.CaveTracker;
 import fr.cheesegrinder.sharedjourney.server.service.MapManager;
 import fr.cheesegrinder.sharedjourney.server.service.PlayerWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.PublicWaypointService;
+import fr.cheesegrinder.sharedjourney.server.service.QuarantineService;
 import fr.cheesegrinder.sharedjourney.server.service.RegenService;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
 
@@ -37,6 +38,8 @@ public final class ServerLifecycleEvents {
         // Collect custom layers declared by other mods (MOD bus).
         LayerRegisterEvent layerEvent = new LayerRegisterEvent();
         ModLoader.postEvent(layerEvent);
+        // Before MapManager: region loads consult the pending quarantine set.
+        QuarantineService.init(event.getServer());
         MapManager.init(event.getServer(), layerEvent.getCustomLayers());
         PublicWaypointService.init(event.getServer());
         PlayerWaypointService.init(event.getServer());
@@ -53,6 +56,7 @@ public final class ServerLifecycleEvents {
         PlayerWaypointService.shutdown();
         BannerWaypointService.shutdown();
         MapManager.shutdown();
+        QuarantineService.shutdown();
     }
 
     @SubscribeEvent
@@ -62,12 +66,14 @@ public final class ServerLifecycleEvents {
             if (mgr != null) {
                 mgr.saveAllAsync();
             }
+            QuarantineService.save();
         }
     }
 
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         CaveTracker.tick(event.getServer());
+        QuarantineService.tick(event.getServer());
         RegenService.tick(event.getServer());
         SyncService.tick(event.getServer());
     }

@@ -144,6 +144,19 @@
   "sharedjourney.configuration.sync.tooltip": "Paramètres de synchronisation de la carte entre le serveur et les clients.",
   "sharedjourney.configuration.sync.button": "Configurer",
 
+  "sharedjourney.configuration.privacy": "Confidentialité",
+  "sharedjourney.configuration.privacy.tooltip": "Sort des mises à jour de la carte causées près des joueurs cachés de la carte.",
+  "sharedjourney.configuration.privacy.button": "Configurer",
+
+  "sharedjourney.configuration.hiddenAreaPolicy": "Zones des joueurs cachés",
+  "sharedjourney.configuration.hiddenAreaPolicy.tooltip": "Mises à jour de la carte près d'un joueur caché : OFF (aucun filtrage), QUARANTINE (rendues normalement, diffusion aux joueurs éloignés différée), EXCLUDE (pas rendues du tout tant qu'un joueur visible ne les déclenche pas).",
+
+  "sharedjourney.configuration.quarantineRadiusChunks": "Rayon de quarantaine (chunks)",
+  "sharedjourney.configuration.quarantineRadiusChunks.tooltip": "Rayon autour d'un joueur caché dans lequel les mises à jour de la carte sont mises en quarantaine/exclues. Toujours planché à la view distance du serveur + 1 (un rayon plus petit diffuserait un anneau avec un trou révélateur). Les joueurs dans ce rayon d'un chunk en quarantaine reçoivent quand même la carte réelle immédiatement.",
+
+  "sharedjourney.configuration.quarantineDrainMinutes": "Délai de quarantaine (minutes)",
+  "sharedjourney.configuration.quarantineDrainMinutes.tooltip": "Délai avant qu'un chunk en quarantaine soit diffusé aux joueurs éloignés. Aléatoire par chunk (±25 %) pour que la révélation ne rejoue pas la trajectoire du joueur caché.",
+
   "sharedjourney.configuration.minimap": "Minimap",
   "sharedjourney.configuration.minimap.tooltip": "Paramètres de l'affichage minimap.",
   "sharedjourney.configuration.minimap.button": "Configurer",

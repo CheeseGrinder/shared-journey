@@ -84,6 +84,29 @@ public final class HoverRegionData {
         presence[slot >> 6] |= 1L << (slot & 63);
     }
 
+    /**
+     * Copies one chunk's data into another region (hidden-player quarantine
+     * drain: real -> public variant). Ids are re-resolved through the target's
+     * own palettes. No-op if the chunk is absent here.
+     */
+    public void copyChunkTo(HoverRegionData target, int localCx, int localCz) {
+        int slot = localCz * RegionKey.REGION_CHUNKS + localCx;
+        if ((presence[slot >> 6] & (1L << (slot & 63))) == 0) {
+            return;
+        }
+
+        String[] blockIds = new String[COLUMNS];
+        for (int i = 0; i < COLUMNS; i++) {
+            blockIds[i] = paletteValue(blockPalette, blocks[slot][i]);
+        }
+
+        String[] biomeIds = new String[BIOME_CELLS];
+        for (int i = 0; i < BIOME_CELLS; i++) {
+            biomeIds[i] = paletteValue(biomePalette, biomes[slot][i]);
+        }
+        target.putChunk(localCx, localCz, heights[slot], blockIds, biomeIds);
+    }
+
     /** Hover info of a column (region-local block coords 0..511), or null if the chunk is absent. */
     public HoverColumn at(int localX, int localZ) {
         int slot = (localZ >> 4) * RegionKey.REGION_CHUNKS + (localX >> 4);

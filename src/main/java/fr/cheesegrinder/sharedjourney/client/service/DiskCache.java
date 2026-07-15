@@ -5,7 +5,6 @@ import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
 
-import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.world.level.storage.LevelResource;
@@ -17,16 +16,31 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Client local cache (spec §3.2):
  * .minecraft/sharedjourney_cache/[serverId]/[dimension]/[layer]/region_X_Z.png
  * + index.json (what the client owns). serverId = server IP, or
- * "sp_<world>" in singleplayer. Writes happen on Minecraft's IO pool.
+ * "sp_<world>" in singleplayer. Writes happen on a dedicated single-thread
+ * executor: submission order = write order, so a region pushed twice in a
+ * row can never land older-content-last (the ioPool ran the tasks unordered
+ * and Files.write is not atomic — two concurrent writers interleaved the
+ * same file into a corrupted PNG that STB then decoded as shifted pixel
+ * rows, undetected forever since the index still declared the right version
+ * to the handshake).
  */
 public final class DiskCache {
 
     private static final Logger LOGGER = LogUtils.getLogger();
+
+    /** Single writer: keeps per-file write order and avoids concurrent writes. */
+    private static final ExecutorService WRITER = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "SharedJourney-DiskCache");
+        t.setDaemon(true);
+        return t;
+    });
 
     private static Path currentRoot;
     private static final RegionIndex index = new RegionIndex();
@@ -96,10 +110,9 @@ public final class DiskCache {
 
         index.put(key, version);
         Path file = pathOf(key);
-        Util.ioPool().execute(() -> {
+        WRITER.execute(() -> {
             try {
-                Files.createDirectories(file.getParent());
-                Files.write(file, png);
+                RegionStorage.writeAtomically(file, png);
             } catch (IOException e) {
                 LOGGER.error("Failed to write cache {}", file, e);
             }

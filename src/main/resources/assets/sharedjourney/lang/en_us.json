@@ -144,6 +144,19 @@
   "sharedjourney.configuration.sync.tooltip": "Map synchronisation settings between server and clients.",
   "sharedjourney.configuration.sync.button": "Configure",
 
+  "sharedjourney.configuration.privacy": "Privacy",
+  "sharedjourney.configuration.privacy.tooltip": "What happens to map updates caused near players hidden from the map.",
+  "sharedjourney.configuration.privacy.button": "Configure",
+
+  "sharedjourney.configuration.hiddenAreaPolicy": "Hidden Area Policy",
+  "sharedjourney.configuration.hiddenAreaPolicy.tooltip": "Map updates near a hidden player: OFF (no gating), QUARANTINE (rendered normally, broadcast to distant players delayed), EXCLUDE (not rendered at all until a visible player triggers it).",
+
+  "sharedjourney.configuration.quarantineRadiusChunks": "Quarantine Radius (chunks)",
+  "sharedjourney.configuration.quarantineRadiusChunks.tooltip": "Radius around a hidden player within which map updates are quarantined/excluded. Always floored to the server view distance + 1 (a smaller radius would broadcast a ring with a tell-tale hole). Players within this radius of a quarantined chunk still receive the real map immediately.",
+
+  "sharedjourney.configuration.quarantineDrainMinutes": "Quarantine Delay (minutes)",
+  "sharedjourney.configuration.quarantineDrainMinutes.tooltip": "Delay before a quarantined chunk is broadcast to distant players. Randomized per chunk (+/-25%) so the reveal does not replay the hidden player's trajectory.",
+
   "sharedjourney.configuration.minimap": "Minimap",
   "sharedjourney.configuration.minimap.tooltip": "Minimap HUD settings.",
   "sharedjourney.configuration.minimap.button": "Configure",

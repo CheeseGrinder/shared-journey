@@ -152,14 +152,14 @@ public final class SyncService {
                 for (MapLayer layer : layers) {
                     if (layer == MapLayer.CAVE) {
                         for (int band : LayersServerConfig.CAVE_BANDS.get()) {
-                            maybeQueue(st, mgr, new RegionKey(dim, layer, band, rx, rz), force);
+                            maybeQueue(player, st, mgr, new RegionKey(dim, layer, band, rx, rz), force);
                         }
                     } else {
-                        maybeQueue(st, mgr, new RegionKey(dim, layer, 0, rx, rz), force);
+                        maybeQueue(player, st, mgr, new RegionKey(dim, layer, 0, rx, rz), force);
                     }
                 }
                 // Hover sidecar (INFO): synced like any region.
-                maybeQueue(st, mgr, new RegionKey(dim, MapLayer.INFO, 0, rx, rz), force);
+                maybeQueue(player, st, mgr, new RegionKey(dim, MapLayer.INFO, 0, rx, rz), force);
             }
         }
     }
@@ -190,15 +190,18 @@ public final class SyncService {
                 var dim = p.level().dimension();
                 for (RegionKey key : keys) {
                     if (key.dimension().equals(dim)) {
-                        maybeQueue(st, mgr, key, false);
+                        maybeQueue(p, st, mgr, key, false);
                     }
                 }
             }
         });
     }
 
-    private static void maybeQueue(PlayerState st, MapManager mgr, RegionKey key, boolean force) {
-        long serverVersion = mgr.versionOf(key);
+    private static void maybeQueue(ServerPlayer player, PlayerState st, MapManager mgr, RegionKey key, boolean force) {
+        // Hidden-player quarantine: a non-trusted player is compared against
+        // (and later served) the region's public variant.
+        boolean trusted = QuarantineService.isTrusted(player, key);
+        long serverVersion = mgr.versionOf(key, trusted);
         if (serverVersion < 0) {
             return;
         }
@@ -227,14 +230,18 @@ public final class SyncService {
                     return;
                 }
 
-                byte[] data = mgr.dataOf(next);
+                // Trust re-evaluated at send time (the player may have moved
+                // since the queueing); a mismatch self-corrects on the next
+                // delta.
+                boolean trusted = QuarantineService.isTrusted(player, next);
+                byte[] data = mgr.dataOf(next, trusted);
                 if (data == null) {
                     continue;
                 }
 
                 st.currentKey = next;
                 st.currentData = data;
-                st.currentVersion = mgr.versionOf(next);
+                st.currentVersion = mgr.versionOf(next, trusted);
                 st.currentOffset = 0;
             }
 
@@ -292,7 +299,7 @@ public final class SyncService {
                 continue;
             }
 
-            long serverVersion = mgr.versionOf(key);
+            long serverVersion = mgr.versionOf(key, QuarantineService.isTrusted(player, key));
             if (serverVersion > payload.knownVersions().get(i)) {
                 st.enqueue(key);
             }
@@ -307,6 +314,11 @@ public final class SyncService {
 
     /** Players who asked to be hidden from the other players' map. */
     private static final Set<UUID> HIDDEN_PLAYERS = ConcurrentHashMap.newKeySet();
+
+    /** Is this player hidden from the map? (Also drives the QuarantineService gate.) */
+    public static boolean isHidden(UUID id) {
+        return HIDDEN_PLAYERS.contains(id);
+    }
 
     /** Broadcasts the position (dimension, x, z) of every non-hidden player. */
     private static void broadcastPlayerPositions(MinecraftServer server) {
@@ -377,17 +389,17 @@ public final class SyncService {
                     for (int band : LayersServerConfig.CAVE_BANDS.get()) {
                         RegionKey key = new RegionKey(dim, layer, band, regionFilter[0], regionFilter[1]);
                         st.sentVersions.remove(key);
-                        maybeQueue(st, mgr, key, true);
+                        maybeQueue(player, st, mgr, key, true);
                     }
                 } else {
                     RegionKey key = new RegionKey(dim, layer, 0, regionFilter[0], regionFilter[1]);
                     st.sentVersions.remove(key);
-                    maybeQueue(st, mgr, key, true);
+                    maybeQueue(player, st, mgr, key, true);
                 }
             }
             RegionKey infoKey = new RegionKey(dim, MapLayer.INFO, 0, regionFilter[0], regionFilter[1]);
             st.sentVersions.remove(infoKey);
-            maybeQueue(st, mgr, infoKey, true);
+            maybeQueue(player, st, mgr, infoKey, true);
         } else {
             if (full) {
                 st.sentVersions.clear();
