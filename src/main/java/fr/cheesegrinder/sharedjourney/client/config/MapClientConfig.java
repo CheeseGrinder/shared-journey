@@ -15,12 +15,16 @@ public final class MapClientConfig {
 
     /** Chunk grid overlaid on the minimap and the fullscreen map. */
     public static ModConfigSpec.BooleanValue SHOW_GRID;
+    /** Global waypoint overlay toggle (minimap + fullscreen map). */
+    public static ModConfigSpec.BooleanValue SHOW_WAYPOINTS;
     /** Allows the auto-switch to CAVE layers when the player is underground. */
     public static ModConfigSpec.BooleanValue SHOW_CAVE;
 
     public static ModConfigSpec.ConfigValue<String> DEFAULT_LAYER;
     /** Automatic minimap layer selection (day/night, caves underground). */
     public static ModConfigSpec.BooleanValue AUTO_LAYER;
+    /** Fullscreen map reopens on its last layer instead of the minimap's. */
+    public static ModConfigSpec.BooleanValue REMEMBER_LAYER;
 
     public static ModConfigSpec.BooleanValue DISK_CACHE_ENABLED;
 
@@ -34,6 +38,8 @@ public final class MapClientConfig {
                 .define("showDepositOverlay", true);
         SHOW_GRID = b.comment("Chunk grid overlaid on the minimap and the fullscreen map.")
                 .define("showGrid", false);
+        SHOW_WAYPOINTS = b.comment("Waypoints drawn on the minimap and the fullscreen map.")
+                .define("showWaypoints", true);
         SHOW_CAVE = b.comment("Auto-switch to CAVE layers when the player is underground.")
                 .define("showCave", true);
 
@@ -41,6 +47,8 @@ public final class MapClientConfig {
                 .define("defaultLayer", "DAY");
         AUTO_LAYER = b.comment("Automatic minimap switching: day/night by time of day, caves underground.")
                 .define("autoLayer", true);
+        REMEMBER_LAYER = b.comment("Reopen the fullscreen map on its last layer instead of the minimap's.")
+                .define("rememberLayer", false);
         DISK_CACHE_ENABLED = b.comment("Disk cache of received tiles (.minecraft/sharedjourney_cache/).")
                 .define("diskCache", true);
         b.pop();

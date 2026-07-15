@@ -55,6 +55,12 @@ public final class ClientMapCache {
      * its local file.
      */
     public static volatile boolean serverManagesWaypoints = true;
+    /**
+     * Last server config snapshot received for the ops tab of the settings
+     * screen (null until the server answers an OpsConfigRequestPayload —
+     * i.e. for every non-op player).
+     */
+    public static volatile Payloads.OpsConfigPayload opsConfig;
     /** Players who asked to be hidden from the map (broadcast by the server). */
     public static volatile Set<UUID> hiddenPlayers = Set.of();
     /** Positions of (non-hidden) players broadcast by the server (~1x/s). */

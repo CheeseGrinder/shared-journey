@@ -77,4 +77,8 @@ public final class ClientNetHandler {
     public static void handleBannerWaypointRemove(Payloads.BannerWaypointRemovePayload payload) {
         WaypointStore.acceptBannerRemove(payload.id());
     }
+
+    public static void handleOpsConfig(Payloads.OpsConfigPayload payload) {
+        ClientMapCache.opsConfig = payload;
+    }
 }

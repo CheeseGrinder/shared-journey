@@ -17,6 +17,9 @@ public final class MinimapClientConfig {
 
     public static ModConfigSpec.BooleanValue SHOW_COORDS;
 
+    /** Zoom (screen pixels per block) the minimap starts each session with. */
+    public static ModConfigSpec.DoubleValue MINIMAP_ZOOM_DEFAULT;
+
     /** Screen corner the HUD minimap is anchored to. */
     public enum Corner {
         TOP_LEFT,
@@ -42,6 +45,8 @@ public final class MinimapClientConfig {
         MINIMAP_ROTATE = b.comment("The map rotates with the player (otherwise fixed north).")
                 .define("rotateWithPlayer", false);
         SHOW_COORDS = b.define("showCoordinates", true);
+        MINIMAP_ZOOM_DEFAULT = b.comment("Minimap zoom (screen pixels per block) at the start of a session.")
+                .defineInRange("zoomDefault", 1.0, 0.25, 4.0);
         b.pop();
     }
 }

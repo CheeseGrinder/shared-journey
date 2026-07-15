@@ -9,6 +9,7 @@ import fr.cheesegrinder.sharedjourney.client.compat.CreateTrainMapBridge;
 import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapFullscreenBridge;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientSetupEvents;
@@ -102,6 +103,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     /** Key legend (Show Keys), kept for the duration of the session. */
     private static boolean showKeys = false;
 
+    /** Last layer shown fullscreen, restored on reopen when rememberLayer is on. */
+    private static MapLayer lastLayer;
+
     private double centerX;
     private double centerZ;
     private float zoom = 1.0f; // screen pixels per block
@@ -153,10 +157,16 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             centerZ = player.getZ();
         }
         layer = MinimapRenderer.displayedLayer();
+        if (MapClientConfig.REMEMBER_LAYER.get() && lastLayer != null) {
+            layer = lastLayer;
+        }
+
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
         if (!allowed.isEmpty() && !allowed.contains(layer)) {
             layer = allowed.getFirst();
         }
+
+        lastLayer = layer;
 
         bandIndex = Math.max(0, ClientMapCache.caveBands.indexOf(MinimapRenderer.currentCaveBand()));
     }
@@ -194,13 +204,16 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
     // ------------------------------------------------------------------ action bars
 
-    /** Top bar: layers, display toggles, and Close on the right. */
+    /** Top bar: layers, display toggles, overlay group, and Close on the right. */
     private void buildTopToolbar() {
         layerIcons.clear();
         toggleIcons.clear();
         int size = 20;
         int step = size + 2;
-        int total = 5 * step + 6 + 8 * step - 2;
+        // Overlay group: grid + waypoints + players. The bridged plugin
+        // overlays (Create trains, RNS deposits) keep their own on-map
+        // toggles; their configs live in the settings screen (Addons tab).
+        int total = 5 * step + 6 + 8 * step + 6 + 3 * step - 2;
         int x = (width - total) / 2;
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
 
@@ -216,7 +229,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         x = addToggleIcon(x, step, Items.PORKCHOP, Lang.ACTION_SHOW_ANIMALS, RadarClientConfig.RADAR_PASSIVE);
         x = addToggleIcon(x, step, Items.BONE, Lang.ACTION_SHOW_PETS, RadarClientConfig.RADAR_PETS);
         x = addToggleIcon(x, step, Items.EMERALD, Lang.ACTION_SHOW_VILLAGERS, RadarClientConfig.RADAR_VILLAGERS);
-        x = addToggleIcon(x, step, Items.IRON_BARS, Lang.ACTION_SHOW_GRID, MapClientConfig.SHOW_GRID);
+        // Compass: minimap orientation (player-facing vs north up). The
+        // fullscreen map itself stays north up by construction.
+        x = addToggleIcon(x, step, Items.RECOVERY_COMPASS, Lang.ACTION_ROTATE_MAP, MinimapClientConfig.MINIMAP_ROTATE);
         x = addToggleIcon(x, step, Items.PLAYER_HEAD, Lang.ACTION_HIDE_FROM_MAP, RadarClientConfig.HIDE_FROM_MAP);
 
         IconButton keys = addIcon(x, 6, Items.WRITABLE_BOOK, Lang.ACTION_SHOW_KEYS, b -> {
@@ -224,6 +239,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             refreshToolbar();
         });
         toggleIcons.put(keys, () -> showKeys);
+        x += step + 6;
+
+        x = addToggleIcon(x, step, Items.IRON_BARS, Lang.ACTION_SHOW_GRID, MapClientConfig.SHOW_GRID);
+        x = addToggleIcon(x, step, Items.AMETHYST_SHARD, Lang.ACTION_SHOW_WAYPOINTS, MapClientConfig.SHOW_WAYPOINTS);
+        x = addToggleIcon(x, step, Items.ARMOR_STAND, Lang.ACTION_SHOW_PLAYERS, RadarClientConfig.RADAR_PLAYERS);
 
         addIcon(width - 26, 6, Items.BARRIER, Lang.ACTION_CLOSE, b -> onClose());
     }
@@ -261,6 +281,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 .build());
         addIcon(6, y + 88, Items.NAME_TAG, Lang.ACTION_WAYPOINTS, b -> Minecraft.getInstance()
                 .setScreen(new WaypointListScreen(this)));
+        addIcon(6, y + 110, Items.COMPARATOR, Lang.ACTION_SETTINGS, b -> Minecraft.getInstance()
+                .setScreen(new MapSettingsScreen(this)));
     }
 
     private IconButton addIcon(int x, int y, Item icon, String tooltipKey, Button.OnPress press) {
@@ -299,6 +321,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
      */
     private void selectLayer(MapLayer target) {
         layer = target;
+        lastLayer = target;
         updateBandButtons();
         refreshToolbar();
         NeoForge.EVENT_BUS.post(new MapLayerChangedEvent(target, false));
@@ -1191,7 +1214,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         // Waypoints on top, in screen coordinates (constant size regardless of zoom)
         for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
-            if (!WaypointStore.isShown(wp)) {
+            if (!MapClientConfig.SHOW_WAYPOINTS.get() || !WaypointStore.isShown(wp)) {
                 continue;
             }
 

@@ -14,6 +14,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 
+import net.neoforged.fml.ModList;
+
 import com.mojang.logging.LogUtils;
 import com.mojang.math.Axis;
 import org.slf4j.Logger;
@@ -21,6 +23,7 @@ import org.slf4j.Logger;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -175,12 +178,49 @@ public final class JourneyMapFullscreenBridge {
             MAP_TYPES.put(MapLayer.TOPO, enumConstant(mapTypeClass, "Topo"));
             MAP_TYPES.put(MapLayer.BIOME, enumConstant(mapTypeClass, "Biome"));
             MAP_TYPES.put(MapLayer.CAVE, enumConstant(mapTypeClass, "Underground"));
+            relocateRnsToggle();
             available = true;
         } catch (Throwable t) {
             LOGGER.info("[Bridge JM] JourneyMap fullscreen API unavailable: {}", t.toString());
             available = false;
         }
         return available;
+    }
+
+    /**
+     * RNS anchors its fullscreen toggle widget to the CENTER of the left
+     * edge — on OUR fullscreen map that lands right on the left toolbar.
+     * Its render AND click paths both resolve the position from the same
+     * {@code ToggleLocation.JOURNEY} constant, so relocating that constant
+     * moves the widget and its hitbox consistently: top-left, next to
+     * Create's train map widget (drawn at (3, 30), ~55 px wide) when
+     * Create is present. Deep reflection on final instance fields — legal
+     * here because RNS ships no module-info (open automatic module); on
+     * failure the widget just stays where RNS puts it.
+     */
+    private static void relocateRnsToggle() {
+        if (!ModList.get().isLoaded("create_rns")) {
+            return;
+        }
+
+        try {
+            Class<?> location = Class.forName("com.bmaster.createrns.compat.map.RNSMapToggleRenderer$ToggleLocation");
+            Class<?> anchor = Class.forName("com.bmaster.createrns.compat.map.RNSMapToggleRenderer$Anchor");
+            Object journey = enumConstant(location, "JOURNEY");
+            int x = ModList.get().isLoaded("create") ? 70 : 7;
+            setFinalField(location, journey, "x", x);
+            setFinalField(location, journey, "y", 30);
+            setFinalField(location, journey, "yAnchor", enumConstant(anchor, "TOP"));
+        } catch (Throwable t) {
+            LOGGER.info("[Bridge JM] RNS toggle widget relocation failed (left at RNS's position): {}", t.toString());
+        }
+    }
+
+    private static void setFinalField(Class<?> owner, Object instance, String name, Object value)
+            throws ReflectiveOperationException {
+        Field field = owner.getField(name);
+        field.setAccessible(true);
+        field.set(instance, value);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

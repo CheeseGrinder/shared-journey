@@ -66,7 +66,8 @@ public final class MinimapRenderer {
     private static MapLayer currentLayer = null; // null = not yet initialized from config
     private static Boolean autoMode = null; // null = not yet initialized from config
     private static int caveBandIndex = 0;
-    private static float zoom = 1.0f; // screen pixels per block
+    /** Screen pixels per block; negative = not yet seeded from zoomDefault. */
+    private static float zoom = -1f;
 
     public static MapLayer currentLayer() {
         if (currentLayer == null) {
@@ -159,12 +160,21 @@ public final class MinimapRenderer {
         NeoForge.EVENT_BUS.post(new MapLayerChangedEvent(layer, true));
     }
 
+    /** Current minimap zoom, seeded from the zoomDefault config on first use. */
+    private static float currentZoom() {
+        if (zoom < 0f) {
+            zoom = MinimapClientConfig.MINIMAP_ZOOM_DEFAULT.get().floatValue();
+        }
+
+        return zoom;
+    }
+
     public static void zoomIn() {
-        zoom = Math.min(ZOOM_MAX, zoom * 1.25f);
+        zoom = Math.min(ZOOM_MAX, currentZoom() * 1.25f);
     }
 
     public static void zoomOut() {
-        zoom = Math.max(ZOOM_MIN, zoom / 1.25f);
+        zoom = Math.max(ZOOM_MIN, currentZoom() / 1.25f);
     }
 
     public static int currentCaveBand() {
@@ -265,7 +275,7 @@ public final class MinimapRenderer {
             gg.pose().mulPose(Axis.ZP.rotationDegrees(-yaw - 180f));
             gg.pose().translate(-cx, -cy, 0);
         }
-        if (zoom != 1.0f) {
+        if (currentZoom() != 1.0f) {
             // Keyboard zoom: scale around the center (1 screen px = zoom blocks).
             gg.pose().translate(cx, cy, 0);
             gg.pose().scale(zoom, zoom, 1f);
@@ -405,7 +415,7 @@ public final class MinimapRenderer {
         double sinT = Math.sin(theta);
         float maxR = half;
         for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
-            if (!WaypointStore.isShown(wp)) {
+            if (!MapClientConfig.SHOW_WAYPOINTS.get() || !WaypointStore.isShown(wp)) {
                 continue;
             }
 

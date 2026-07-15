@@ -46,6 +46,7 @@ public class SharedJourneyClient {
         Payloads.Hooks.clientPlayerWaypointRemove = ClientNetHandler::handlePlayerWaypointRemove;
         Payloads.Hooks.clientBannerWaypoint = ClientNetHandler::handleBannerWaypoint;
         Payloads.Hooks.clientBannerWaypointRemove = ClientNetHandler::handleBannerWaypointRemove;
+        Payloads.Hooks.clientOpsConfig = ClientNetHandler::handleOpsConfig;
 
         // Public API facade (spec: published once the waypoint model is stable).
         WaypointApi.Hooks.all = WaypointStore::all;

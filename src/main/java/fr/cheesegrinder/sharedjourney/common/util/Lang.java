@@ -35,6 +35,11 @@ public final class Lang {
     public static final String ACTION_SHOW_PETS = action("show_pets");
     public static final String ACTION_SHOW_VILLAGERS = action("show_villagers");
     public static final String ACTION_SHOW_GRID = action("show_grid");
+    public static final String ACTION_SHOW_WAYPOINTS = action("show_waypoints");
+    public static final String ACTION_SHOW_PLAYERS = action("show_players");
+    public static final String ACTION_SHOW_TRAINS = action("show_trains");
+    public static final String ACTION_SHOW_DEPOSITS = action("show_deposits");
+    public static final String ACTION_ROTATE_MAP = action("rotate_map");
     public static final String ACTION_HIDE_FROM_MAP = action("hide_from_map");
     public static final String ACTION_SHOW_KEYS = action("show_keys");
     public static final String ACTION_CLOSE = action("close");
@@ -43,10 +48,84 @@ public final class Lang {
     public static final String ACTION_ZOOM_IN = action("zoom_in");
     public static final String ACTION_ZOOM_OUT = action("zoom_out");
     public static final String ACTION_WAYPOINTS = action("waypoints");
+    public static final String ACTION_SETTINGS = action("settings");
 
     /** Layer button tooltip ("sharedjourney.action.day", ".cave"...). */
     public static String actionLayer(String layerName) {
         return action(layerName.toLowerCase(Locale.ROOT));
+    }
+
+    /** Short layer display name ("sharedjourney.layer.day"...). */
+    public static String layerName(String layerName) {
+        return key("layer." + layerName.toLowerCase(Locale.ROOT));
+    }
+
+    // ------------------------------------------------------------------ settings screen
+
+    public static final String SETTINGS_TITLE = key("settings.title");
+    public static final String SETTINGS_ON = key("settings.on");
+    public static final String SETTINGS_OFF = key("settings.off");
+    public static final String SETTINGS_APPLY = key("settings.apply");
+    public static final String SETTINGS_WAITING = key("settings.waiting");
+
+    public static final String SETTINGS_MINIMAP_ENABLED = key("settings.minimap.enabled");
+    public static final String SETTINGS_MINIMAP_SIZE = key("settings.minimap.size");
+    public static final String SETTINGS_MINIMAP_CORNER = key("settings.minimap.corner");
+    public static final String SETTINGS_MINIMAP_SHAPE = key("settings.minimap.shape");
+    public static final String SETTINGS_MINIMAP_COORDS = key("settings.minimap.coords");
+    public static final String SETTINGS_MINIMAP_ZOOM = key("settings.minimap.zoom_default");
+
+    public static final String SETTINGS_RADAR_ENABLED = key("settings.radar.enabled");
+    public static final String SETTINGS_RADAR_RADIUS = key("settings.radar.radius");
+    public static final String SETTINGS_RADAR_HEADS = key("settings.radar.mob_heads");
+
+    public static final String SETTINGS_MAP_DEFAULT_LAYER = key("settings.map.default_layer");
+    public static final String SETTINGS_MAP_AUTO_LAYER = key("settings.map.auto_layer");
+    public static final String SETTINGS_MAP_REMEMBER_LAYER = key("settings.map.remember_layer");
+    public static final String SETTINGS_MAP_DISK_CACHE = key("settings.map.disk_cache");
+
+    public static final String SETTINGS_WAYPOINT_NAMES = key("settings.waypoints.names");
+    public static final String SETTINGS_WAYPOINT_TEMP_RADIUS = key("settings.waypoints.temp_radius");
+    public static final String SETTINGS_WAYPOINT_BEACONS = key("settings.waypoints.beacons");
+    public static final String SETTINGS_WAYPOINT_BEACON_MIN = key("settings.waypoints.beacon_min");
+    public static final String SETTINGS_WAYPOINT_BEACON_MAX = key("settings.waypoints.beacon_max");
+    public static final String SETTINGS_WAYPOINT_DEATH = key("settings.waypoints.death");
+
+    public static final String SETTINGS_SERVER_LAYERS = key("settings.server.layers");
+    public static final String SETTINGS_SERVER_DEFAULT_LAYERS = key("settings.server.default_layers");
+    public static final String SETTINGS_SERVER_BANDS = key("settings.server.cave_bands");
+    public static final String SETTINGS_SERVER_BAND_MIN = key("settings.server.band_min");
+    public static final String SETTINGS_SERVER_BAND_MAX = key("settings.server.band_max");
+    public static final String SETTINGS_SERVER_SYNC = key("settings.server.sync");
+    public static final String SETTINGS_SERVER_PUSH_RADIUS = key("settings.server.push_radius");
+    public static final String SETTINGS_SERVER_MAX_KB = key("settings.server.max_kb");
+    public static final String SETTINGS_SERVER_SYNC_RATE = key("settings.server.sync_rate");
+    public static final String SETTINGS_SERVER_ON_DEMAND = key("settings.server.on_demand");
+    public static final String SETTINGS_SERVER_RADAR_CAP = key("settings.server.radar_cap");
+    public static final String SETTINGS_SERVER_WAYPOINTS = key("settings.server.waypoints");
+    public static final String SETTINGS_SERVER_DEATH = key("settings.server.death_waypoints");
+    public static final String SETTINGS_SERVER_STORAGE = key("settings.server.waypoint_storage");
+    public static final String SETTINGS_SERVER_PRIVACY = key("settings.server.privacy");
+    public static final String SETTINGS_SERVER_POLICY = key("settings.server.hidden_policy");
+    public static final String SETTINGS_SERVER_QUAR_RADIUS = key("settings.server.quarantine_radius");
+    public static final String SETTINGS_SERVER_QUAR_DRAIN = key("settings.server.quarantine_drain");
+
+    /** Settings tab label ("sharedjourney.settings.tab.minimap"...). */
+    public static String settingsTab(String name) {
+        return key("settings.tab." + name.toLowerCase(Locale.ROOT));
+    }
+
+    /** Enum value label ("sharedjourney.settings.value.top_left"...). */
+    public static String settingsValue(String name) {
+        return key("settings.value." + name.toLowerCase(Locale.ROOT));
+    }
+
+    /**
+     * Tooltip of a config entry, shared with the NeoForge config screen
+     * ("sharedjourney.configuration.&lt;key&gt;.tooltip").
+     */
+    public static String configTooltip(String configKey) {
+        return key("configuration." + configKey + ".tooltip");
     }
 
     // ------------------------------------------------------------------ fullscreen map: context menu

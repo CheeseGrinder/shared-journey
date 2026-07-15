@@ -124,7 +124,8 @@ public final class LayersServerConfig {
         return set;
     }
 
-    private static boolean isValidLayer(Object o) {
+    /** Valid display layer name ("DAY"... — INFO is never configurable). */
+    public static boolean isValidLayer(Object o) {
         if (!(o instanceof String s)) {
             return false;
         }
@@ -136,7 +137,8 @@ public final class LayersServerConfig {
         }
     }
 
-    private static boolean isValidMapping(Object o) {
+    /** Valid "namespace:dimension=LAYER1,LAYER2" sharedLayers entry. */
+    public static boolean isValidMapping(Object o) {
         if (!(o instanceof String s) || !s.contains("=")) {
             return false;
         }
@@ -144,6 +146,12 @@ public final class LayersServerConfig {
         String[] parts = s.split("=", 2);
         if (ResourceLocation.tryParse(parts[0].trim()) == null) {
             return false;
+        }
+
+        // Empty layer list = every layer disabled for that dimension
+        // (producible by setLayer and by the in-game layer editor).
+        if (parts[1].isBlank()) {
+            return true;
         }
 
         for (String l : parts[1].split(",")) {
