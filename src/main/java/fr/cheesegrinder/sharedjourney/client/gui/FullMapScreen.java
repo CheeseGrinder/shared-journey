@@ -176,6 +176,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         this();
         this.centerX = centerX;
         this.centerZ = centerZ;
+        selectBlock((int) Math.floor(centerX), (int) Math.floor(centerZ));
     }
 
     @Override
@@ -340,11 +341,21 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
     private void doLocate() {
         try {
-            centerX = Integer.parseInt(locateX.getValue().trim()) + 0.5;
-            centerZ = Integer.parseInt(locateZ.getValue().trim()) + 0.5;
+            int wx = Integer.parseInt(locateX.getValue().trim());
+            int wz = Integer.parseInt(locateZ.getValue().trim());
+            centerX = wx + 0.5;
+            centerZ = wz + 0.5;
+            selectBlock(wx, wz);
         } catch (NumberFormatException ignored) {
             // Invalid input: stay put.
         }
+    }
+
+    /** Marks a block as selected (same white outline as a map click). */
+    private void selectBlock(int wx, int wz) {
+        hasSelection = true;
+        selectedBlockX = wx;
+        selectedBlockZ = wz;
     }
 
     /** Zoom by x2 steps (power-of-2 scale), anchored on a screen point. */
@@ -699,9 +710,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         // Arrival Y computed server-side (/sj tp): the client doesn't
         // always have the target chunk locally, and a "~" would keep the
-        // flying altitude (arriving inside rock or mid-air).
+        // flying altitude (arriving inside rock or mid-air). The map stays
+        // open so the player can keep navigating after the jump.
         mc.player.connection.sendUnsignedCommand("sj tp " + wx + " " + wz);
-        onClose();
     }
 
     /** Opens the creation modal for a waypoint of the requested type. */
@@ -749,7 +760,10 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         return mc.player != null ? mc.player.blockPosition().getY() : 64;
     }
 
-    /** Writes the position to (local) chat; clicking it reopens the map here. */
+    /**
+     * Writes the position to (local) chat; clicking it reopens the map
+     * here. The map stays open: the message waits in the chat history.
+     */
     private void logCoords(int wx, int wz) {
         var mc = Minecraft.getInstance();
         Component msg = Component.translatable(Lang.COORDS_CHAT, wx, wz).withStyle(style -> style.withColor(
@@ -758,7 +772,6 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/sj goto " + wx + " " + wz))
                 .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.translatable(Lang.COORDS_OPEN))));
         mc.gui.getChat().addMessage(msg);
-        onClose(); // close the map to reveal the chat
     }
 
     /**
@@ -1000,6 +1013,13 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         renderHoverBar(gg, mc, mouseX, mouseY);
         if (showKeys) {
             renderLegend(gg);
+        }
+
+        // Incoming chat messages over the map (JourneyMap style): the HUD
+        // chat is painted under this screen, so redraw it on top. Skipped
+        // while MapChatScreen is open: it already draws the focused chat.
+        if (mc.screen == this) {
+            mc.gui.getChat().render(gg, mc.gui.getGuiTicks(), mouseX, mouseY, false);
         }
 
         // Name of the hovered waypoint
