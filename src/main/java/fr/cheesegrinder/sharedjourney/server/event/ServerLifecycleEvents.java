@@ -1,8 +1,10 @@
 package fr.cheesegrinder.sharedjourney.server.event;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
+import fr.cheesegrinder.sharedjourney.api.event.BlockColorRegisterEvent;
 import fr.cheesegrinder.sharedjourney.api.event.LayerRegisterEvent;
 import fr.cheesegrinder.sharedjourney.server.command.MapCommands;
+import fr.cheesegrinder.sharedjourney.server.render.BlockPalette;
 import fr.cheesegrinder.sharedjourney.server.service.BannerWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.CaveTracker;
 import fr.cheesegrinder.sharedjourney.server.service.MapManager;
@@ -38,6 +40,10 @@ public final class ServerLifecycleEvents {
         // Collect custom layers declared by other mods (MOD bus).
         LayerRegisterEvent layerEvent = new LayerRegisterEvent();
         ModLoader.postEvent(layerEvent);
+        // Collect forced block colors BEFORE the engine renders anything.
+        BlockColorRegisterEvent colorEvent = new BlockColorRegisterEvent();
+        ModLoader.postEvent(colorEvent);
+        BlockPalette.setApiColors(colorEvent.getColors());
         // Before MapManager: region loads consult the pending quarantine set.
         QuarantineService.init(event.getServer());
         MapManager.init(event.getServer(), layerEvent.getCustomLayers());

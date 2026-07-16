@@ -62,7 +62,6 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -141,7 +140,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     private boolean suppressNextRelease;
 
     // Top action bar: one button per layer + toggles with their state.
-    private final Map<MapLayer, IconButton> layerIcons = new EnumMap<>(MapLayer.class);
+    private final Map<MapLayer, IconButton> layerIcons = new LinkedHashMap<>();
     private final Map<IconButton, Supplier<Boolean>> toggleIcons = new LinkedHashMap<>();
 
     // Position search (left bar).
@@ -226,15 +225,22 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         // Overlay group: grid + waypoints + players. The bridged plugin
         // overlays (Create trains, RNS deposits) keep their own on-map
         // toggles; their configs live in the settings screen (Addons tab).
-        int total = 5 * step + 6 + 8 * step + 6 + 3 * step - 2;
-        int x = (width - total) / 2;
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
+        // Custom layers announced by the server for this dimension get
+        // their own button after the built-in ones (generic paper icon;
+        // name translated if the mod ships a lang key, raw id otherwise).
+        List<MapLayer> customs = allowed.stream().filter(l -> !l.isBuiltin()).toList();
+        int total = (5 + customs.size()) * step + 6 + 8 * step + 6 + 3 * step - 2;
+        int x = (width - total) / 2;
 
         x = addLayerIcon(x, step, MapLayer.DAY, Items.DAYLIGHT_DETECTOR, allowed);
         x = addLayerIcon(x, step, MapLayer.NIGHT, Items.CLOCK, allowed);
         x = addLayerIcon(x, step, MapLayer.BIOME, Items.OAK_SAPLING, allowed);
         x = addLayerIcon(x, step, MapLayer.TOPO, Items.MAP, allowed);
         x = addLayerIcon(x, step, MapLayer.CAVE, Items.TORCH, allowed);
+        for (MapLayer custom : customs) {
+            x = addCustomLayerIcon(x, step, custom);
+        }
         x += 6;
 
         x = addToggleIcon(x, step, Items.LANTERN, Lang.ACTION_SHOW_CAVE, MapClientConfig.SHOW_CAVE);
@@ -360,6 +366,15 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     private int addLayerIcon(int x, int step, MapLayer target, Item icon, List<MapLayer> allowed) {
         IconButton b = addIcon(x, 6, icon, Lang.actionLayer(target.name()), btn -> selectLayer(target));
         b.active = allowed.isEmpty() || allowed.contains(target);
+        layerIcons.put(target, b);
+        return x + step;
+    }
+
+    /** Button of a custom (mod-provided) layer, always active. */
+    private int addCustomLayerIcon(int x, int step, MapLayer target) {
+        Component tooltip = Component.translatableWithFallback(target.translationKey(), target.id());
+        IconButton b = new IconButton(x, 6, 20, new ItemStack(Items.PAPER), tooltip, btn -> selectLayer(target));
+        addRenderableWidget(b);
         layerIcons.put(target, b);
         return x + step;
     }

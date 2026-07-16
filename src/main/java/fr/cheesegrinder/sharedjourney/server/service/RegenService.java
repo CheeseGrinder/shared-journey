@@ -1,5 +1,6 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
+import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
@@ -196,8 +197,13 @@ public final class RegenService {
         record Target(ResourceKey<Level> dim, Path regionDir) {}
         var targets = new ArrayList<Target>();
         Path worldRoot = server.getWorldPath(LevelResource.ROOT);
+        MapManager mgr = MapManager.get();
         for (ServerLevel level : server.getAllLevels()) {
-            if (LayersServerConfig.layersFor(level.dimension()).isEmpty()) {
+            // Custom layers count: a dimension with no configured built-in
+            // layer but an active custom layer must still be scanned.
+            Set<MapLayer> layers =
+                    mgr == null ? LayersServerConfig.layersFor(level.dimension()) : mgr.activeLayers(level.dimension());
+            if (layers.isEmpty()) {
                 continue;
             }
 

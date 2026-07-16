@@ -90,8 +90,10 @@ Shared Journey flips the model:
   their integration (never install it alongside the real JourneyMap).
 - Modded **blocks** get map colors automatically (texture extraction); modded **mobs** get
   radar icons automatically (model-based rendering).
-- A public API for other mods: waypoint CRUD + cancellable events, map render events for
-  custom overlays (minimap and fullscreen), and a custom layer registration hook.
+- A public API for other mods: waypoint CRUD (groups included) + cancellable events, map
+  render events for custom overlays (minimap and fullscreen), declarative map markers,
+  custom map layers (rendered, stored and synced like the built-ins), forced block map
+  colors, and a server-side read/actions facade (region state, re-render requests).
 
 ### Performance
 - Fully **asynchronous render engine**: the server tick only resolves chunks; pixel work,
@@ -171,8 +173,10 @@ just keep the copyright notice.
 
 ## Known limitations
 
-- Custom layers registered through the API are collected, but their storage/sync pipeline
-  is not wired yet — the five built-in layers are fully operational.
+- Custom layers registered through the API ride the full pipeline (render, storage, sync,
+  client display), but have no per-dimension server config/ops-UI toggle (a custom layer is
+  active everywhere; its renderer can return null to skip chunks), no CAVE-style vertical
+  bands, and a generic map-screen icon.
 - The JourneyMap bridge covers waypoints and the overlay types used by common integrations;
   exotic API surfaces (themes, mapping events…) are acknowledged and ignored.
 - World edits from pistons/fluids/explosions are partially covered: affected chunks refresh

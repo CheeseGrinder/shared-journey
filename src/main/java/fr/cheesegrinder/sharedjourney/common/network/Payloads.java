@@ -94,7 +94,7 @@ public final class Payloads {
                     p.layersByDim.forEach((dim, layers) -> {
                         buf.writeResourceLocation(dim);
                         buf.writeVarInt(layers.size());
-                        layers.forEach(l -> buf.writeVarInt(l.ordinal()));
+                        layers.forEach(l -> buf.writeUtf(l.id()));
                     });
                     buf.writeVarInt(p.caveBands.size());
                     p.caveBands.forEach(buf::writeVarInt);
@@ -110,7 +110,9 @@ public final class Payloads {
                         int m = buf.readVarInt();
                         List<MapLayer> layers = new ArrayList<>(m);
                         for (int j = 0; j < m; j++) {
-                            layers.add(MapLayer.values()[buf.readVarInt()]);
+                            // Lenient: a custom layer id is registered on
+                            // the fly (the client may not have the mod).
+                            layers.add(MapLayer.register(buf.readUtf()));
                         }
 
                         map.put(dim, layers);
@@ -774,7 +776,7 @@ public final class Payloads {
 
     public static void register(final RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar =
-                event.registrar(SharedJourneyConstants.MOD_ID).versioned("8");
+                event.registrar(SharedJourneyConstants.MOD_ID).versioned("9");
 
         registrar.playToClient(
                 LayerSettingsPayload.TYPE,

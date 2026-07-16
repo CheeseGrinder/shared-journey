@@ -31,8 +31,8 @@ Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
 | Package          | Contents                                                                                                                                                         |
 |------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | *(root)*         | `@Mod` entry points: `SharedJourney`, `SharedJourneyClient`                                                                                                      |
-| `api`            | Public interfaces: `Waypoint`, `WaypointApi` (CRUD facade, `Hooks` indirection), `MapLayer`, `ChunkLayerRenderer`, `SharedJourneyConstants`                     |
-| `api.event`      | Custom NeoForge events: `LayerRegisterEvent`, `WaypointEvent`                                                                                                    |
+| `api`            | Public interfaces: `Waypoint`, `WaypointApi` (CRUD + groups facade, `Hooks` indirection), `MapApi` (server-side read/actions facade), `MapLayer` (registry), `ChunkLayerRenderer`, `SharedJourneyConstants` |
+| `api.event`      | Custom NeoForge events: `LayerRegisterEvent`, `BlockColorRegisterEvent`, `WaypointEvent`                                                                         |
 | `api.client`     | Client-only public API: `MapView` (map geometry/conversions)                                                                                                     |
 | `api.client.event` | Client-only events: `MapRenderEvent` (overlay draw hook, minimap + fullscreen), `FullMapScreenEvent`, `MapLayerChangedEvent`                                   |
 | `common.config`  | `CommonConfig`, `ServerConfig` (facade) + per-section `LayersServerConfig`, `EngineServerConfig`, `SyncServerConfig`, `WaypointServerConfig`                     |
@@ -42,7 +42,7 @@ Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
 | `server.command` | `MapCommands` (`/sj`, `/sharedjourney`)                                                                                                                          |
 | `server.event`   | `ServerLifecycleEvents`, `PlayerEvents`, `ChunkEvents`, `ConfigEvents`, `BannerWaypointEvents` (named banner placed/broken)                                     |
 | `server.render`  | `ChunkColorizer` (facade) + per-layer renderers (`SurfaceRenderer`, `TopoRenderer`, `BiomeRenderer`, `CaveRenderer`), `BlockPalette`, `TextureColorExtractor`, `BiomeTints`, `RenderContext`, `ColorUtil` |
-| `server.service` | `MapManager` (async engine), `SyncService` (delta sync), `RegenService` (full regen), `CaveTracker` (cave anti-exploit), `PublicWaypointService` (shared waypoints), `PlayerWaypointService` (per-player private waypoints), `BannerWaypointService` (named banner markers) |
+| `server.service` | `MapManager` (async engine), `SyncService` (delta sync), `RegenService` (full regen), `CaveTracker` (cave anti-exploit), `PublicWaypointService` (shared waypoints), `PlayerWaypointService` (per-player private waypoints), `BannerWaypointService` (named banner markers), `MapApiService` (null-safe backing of `api.MapApi`) |
 | `client.command` | `ClientCommands` (`/sj purge`, `/sj cache`, `/sj goto`)                                                                                                          |
 | `client.config`  | `ClientConfig` (facade) + per-section `MinimapClientConfig`, `RadarClientConfig`, `WaypointClientConfig`, `MapClientConfig`                                     |
 | `client.event`   | `ClientSetupEvents` (keys, HUD layer), `ClientInputEvents`, `ClientSessionEvents`, `DeathWaypointEvents`                                                         |
@@ -56,7 +56,7 @@ The packages keep the layering discipline of the former multi-module split: `api
 
 ## Key Architectural Patterns
 
-**Server-authoritative rendering**: `ChunkColorizer` runs server-side. Block colors come from `BlockPalette` (texture-derived, JourneyMap-like), resolved in order: config overrides (`engine.blockColorOverrides`) → bundled vanilla palette (`assets/sharedjourney/palette/vanilla.json`, generated offline by `tools/PaletteGenerator.java` — regenerate on Minecraft version bumps) → runtime texture extraction from mod jars (`TextureColorExtractor`, pure Java+Gson) → `MapColor` fallback. Clients receive pre-rendered PNGs and never compute pixels themselves.
+**Server-authoritative rendering**: `ChunkColorizer` runs server-side. Block colors come from `BlockPalette` (texture-derived, JourneyMap-like), resolved in order: config overrides (`engine.blockColorOverrides`) → API registrations (`BlockColorRegisterEvent`, mod bus, posted at server start) → bundled vanilla palette (`assets/sharedjourney/palette/vanilla.json`, generated offline by `tools/PaletteGenerator.java` — regenerate on Minecraft version bumps) → runtime texture extraction from mod jars (`TextureColorExtractor`, pure Java+Gson) → `MapColor` fallback. Clients receive pre-rendered PNGs and never compute pixels themselves.
 
 **Async engine with main-thread constraint**: Chunk access (`getChunkNow`) must happen on the server main thread. Only chunk resolution happens on tick; all pixel computation, PNG encoding, and disk I/O are offloaded to worker threads. A `tasksInFlight` cap (`workerCount * 8`) prevents flooding the pool. The dirty chunk queue uses both `ArrayDeque` and `LinkedHashSet` for deduplication.
 
@@ -71,7 +71,7 @@ The packages keep the layering discipline of the former multi-module split: `api
 ## Region and Layer Model
 
 - A **region** = 512×512 blocks = 32×32 chunks, addressed by `RegionKey` (dimension + layer + caveBand + rx + rz).
-- **Layers**: `DAY`, `NIGHT`, `TOPO`, `BIOME`, `CAVE`. `CAVE` has vertical bands (floor(y/16)). `INFO` is NOT a display layer: it is the hover-data sidecar (per-region heights/surface blocks/biomes, `HoverRegionData` .bin blobs) riding the same region pipeline (index, delta sync, disk cache); it is produced by the render engine, excluded from layer settings/UI/commands, and makes fullscreen hover info fully client-local (no on-demand chunk loading — anti timing-attack).
+- **Layers**: `DAY`, `NIGHT`, `TOPO`, `BIOME`, `CAVE`. `CAVE` has vertical bands (floor(y/16)). `MapLayer` is a registry-backed class (NOT an enum, instances unique per id — identity comparison valid): mods register custom layers via `LayerRegisterEvent` (free `[a-z0-9_]+` ids), which ride the full region pipeline (render via their `ChunkLayerRenderer`, storage, delta sync, client cycling/buttons) but have no per-dimension config/ops-UI toggle, no bands, and a generic icon. Layer ids travel as strings on the network (lenient decode: unknown ids register on the fly, so clients work without the registering mod). `INFO` is NOT a display layer: it is the hover-data sidecar (per-region heights/surface blocks/biomes, `HoverRegionData` .bin blobs) riding the same region pipeline (index, delta sync, disk cache); it is produced by the render engine, excluded from layer settings/UI/commands, and makes fullscreen hover info fully client-local (no on-demand chunk loading — anti timing-attack).
 - On-disk layout: `<dim>/<layer>/region_X_Z.png`, with CAVE bands grouped under a parent folder: `<dim>/cave/<band>/` (`RegionStorage.migrateLegacyCaveFolders` migrates the old `cave_<band>` layout on startup, server and client).
 - **Cave anti-exploit**: CAVE bands are only painted where a player actually went underground (`CaveTracker` scans players each second and unlocks a radius around them via `MapManager.unlockCave`; `renderChunk` skips un-unlocked, never-painted cave chunks — including during `regen full`).
 - `RegionIndex` is a `ConcurrentHashMap<RegionKey, Long>` (timestamp registry) serialized to `index.json`.
@@ -79,7 +79,6 @@ The packages keep the layering discipline of the former multi-module split: `api
 ## Code Conventions
 
 - Everything is written in **English**: source code documentation (Javadoc, internal comments, config comments) and runtime user-facing strings (log messages, command feedback). The README is also being translated to English. Legacy French text is being translated progressively during the clean-code effort — translate it to English whenever you touch a file.
-- The custom layer pipeline (`LayerRegisterEvent`) collects registrations but storage/sync for them is not yet wired — only the built-in 5 layers are fully operational.
 - The codebase was authored without being compiled in the target environment; minor API signature adjustments may be needed after changes.
 
 ## Entry Points

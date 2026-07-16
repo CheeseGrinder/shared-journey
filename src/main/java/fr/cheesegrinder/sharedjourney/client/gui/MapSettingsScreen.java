@@ -32,14 +32,14 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
-import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -271,9 +271,9 @@ public class MapSettingsScreen extends Screen {
     }
 
     private List<OptionRow> mapRows() {
-        List<String> layerNames = Arrays.stream(MapLayer.values())
+        List<String> layerNames = MapLayer.values().stream()
                 .filter(l -> l != MapLayer.INFO)
-                .map(Enum::name)
+                .map(MapLayer::name)
                 .toList();
         String currentDefault = MapClientConfig.DEFAULT_LAYER.get().trim().toUpperCase(Locale.ROOT);
         if (!layerNames.contains(currentDefault)) {
@@ -286,7 +286,8 @@ public class MapSettingsScreen extends Screen {
                 Lang.configTooltip("defaultLayer"),
                 layerNames,
                 currentDefault,
-                n -> Component.translatable(Lang.layerName(n)),
+                // Custom layers may ship no lang key: fall back to the id.
+                n -> Component.translatableWithFallback(Lang.layerName(n), n.toLowerCase(Locale.ROOT)),
                 MapClientConfig.DEFAULT_LAYER::set));
         rows.add(configToggle(Lang.SETTINGS_MAP_AUTO_LAYER, "autoLayer", MapClientConfig.AUTO_LAYER));
         rows.add(configToggle(Lang.ACTION_SHOW_CAVE, "showCave", MapClientConfig.SHOW_CAVE));
@@ -687,10 +688,12 @@ public class MapSettingsScreen extends Screen {
         private final Component label;
         private final List<Checkbox> boxes = new ArrayList<>();
 
-        LayerSetRow(Component label, EnumSet<MapLayer> set) {
+        LayerSetRow(Component label, Set<MapLayer> set) {
             this.label = label;
             for (MapLayer layer : MapLayer.values()) {
-                if (layer == MapLayer.INFO) {
+                // Custom layers are not server-config-managed: the ops
+                // layer editor only shows the built-in display layers.
+                if (layer == MapLayer.INFO || !layer.isBuiltin()) {
                     continue;
                 }
 
@@ -780,9 +783,9 @@ public class MapSettingsScreen extends Screen {
      */
     private static final class OpsState {
 
-        final Map<ResourceLocation, EnumSet<MapLayer>> layersByDim =
+        final Map<ResourceLocation, Set<MapLayer>> layersByDim =
                 new TreeMap<>(Comparator.comparing(ResourceLocation::toString));
-        final EnumSet<MapLayer> defaultLayers = EnumSet.noneOf(MapLayer.class);
+        final Set<MapLayer> defaultLayers = new LinkedHashSet<>();
         int bandMin;
         int bandMax;
         int pushRadius;
@@ -809,7 +812,7 @@ public class MapSettingsScreen extends Screen {
                     continue;
                 }
 
-                EnumSet<MapLayer> set = EnumSet.noneOf(MapLayer.class);
+                Set<MapLayer> set = new LinkedHashSet<>();
                 for (String layer : parts[1].split(",")) {
                     addLayer(set, layer);
                 }
@@ -820,8 +823,9 @@ public class MapSettingsScreen extends Screen {
             // Dimensions the server serves but sharedLayers does not list:
             // editable too, seeded with their effective (default) layers.
             ClientMapCache.layersByDim.forEach((dim, layers) -> s.layersByDim.computeIfAbsent(dim, d -> {
-                EnumSet<MapLayer> set = EnumSet.noneOf(MapLayer.class);
-                layers.stream().filter(l -> l != MapLayer.INFO).forEach(set::add);
+                Set<MapLayer> set = new LinkedHashSet<>();
+                // Custom layers excluded: not server-config-managed.
+                layers.stream().filter(l -> l != MapLayer.INFO && l.isBuiltin()).forEach(set::add);
                 return set;
             }));
 
@@ -841,10 +845,10 @@ public class MapSettingsScreen extends Screen {
             return s;
         }
 
-        private static void addLayer(EnumSet<MapLayer> set, String name) {
+        private static void addLayer(Set<MapLayer> set, String name) {
             try {
                 MapLayer layer = MapLayer.valueOf(name.trim().toUpperCase(Locale.ROOT));
-                if (layer != MapLayer.INFO) {
+                if (layer != MapLayer.INFO && layer.isBuiltin()) {
                     set.add(layer);
                 }
             } catch (IllegalArgumentException ignored) {
@@ -863,12 +867,12 @@ public class MapSettingsScreen extends Screen {
         Payloads.OpsConfigPayload toPayload() {
             List<String> shared = new ArrayList<>();
             layersByDim.forEach((dim, set) ->
-                    shared.add(dim + "=" + set.stream().map(Enum::name).collect(Collectors.joining(","))));
+                    shared.add(dim + "=" + set.stream().map(MapLayer::name).collect(Collectors.joining(","))));
             int lo = Math.min(bandMin, bandMax);
             int hi = Math.max(bandMin, bandMax);
             List<Integer> bands = IntStream.rangeClosed(lo, hi).boxed().toList();
             return new Payloads.OpsConfigPayload(
-                    defaultLayers.stream().map(Enum::name).toList(),
+                    defaultLayers.stream().map(MapLayer::name).toList(),
                     shared,
                     bands,
                     pushRadius,

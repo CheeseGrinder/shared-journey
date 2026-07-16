@@ -146,7 +146,9 @@ public final class MapCommands {
         var layerCmd = Commands.literal("layer");
         for (MapLayer layer : MapLayer.values()) {
             // The INFO data layer is not a display layer: never toggleable.
-            if (layer == MapLayer.INFO) {
+            // Custom layers are not config-managed (and may not even be
+            // registered yet: commands are built before server start).
+            if (layer == MapLayer.INFO || !layer.isBuiltin()) {
                 continue;
             }
             layerCmd.then(Commands.argument("dimension", DimensionArgument.dimension())

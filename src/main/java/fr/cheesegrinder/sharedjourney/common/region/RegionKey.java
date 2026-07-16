@@ -9,6 +9,8 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 
+import java.util.Locale;
+
 /**
  * Identifies a map tile: dimension + layer (+ CAVE band) + region.
  * A region covers 32x32 chunks = 512x512 blocks (1 pixel / block).
@@ -50,9 +52,11 @@ public record RegionKey(ResourceKey<Level> dimension, MapLayer layer, int caveBa
         }
 
         try {
+            // Lenient on the layer: a client disk cache may hold regions of
+            // a custom layer before the server announces it this session.
             return new RegionKey(
                     ResourceKey.create(Registries.DIMENSION, dim),
-                    MapLayer.valueOf(p[1]),
+                    MapLayer.register(p[1].toLowerCase(Locale.ROOT)),
                     Integer.parseInt(p[2]),
                     Integer.parseInt(p[3]),
                     Integer.parseInt(p[4]));
@@ -64,14 +68,16 @@ public record RegionKey(ResourceKey<Level> dimension, MapLayer layer, int caveBa
     public static final StreamCodec<FriendlyByteBuf, RegionKey> STREAM_CODEC = StreamCodec.of(
             (buf, key) -> {
                 buf.writeResourceLocation(key.dimension.location());
-                buf.writeVarInt(key.layer.ordinal());
+                buf.writeUtf(key.layer.id());
                 buf.writeVarInt(key.caveBand);
                 buf.writeVarInt(key.rx);
                 buf.writeVarInt(key.rz);
             },
             buf -> {
                 ResourceLocation dim = buf.readResourceLocation();
-                MapLayer layer = MapLayer.values()[buf.readVarInt()];
+                // Lenient: a custom layer id is registered on the fly
+                // (the client may not have the registering mod).
+                MapLayer layer = MapLayer.register(buf.readUtf());
 
                 return new RegionKey(
                         ResourceKey.create(Registries.DIMENSION, dim),

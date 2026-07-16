@@ -60,6 +60,12 @@ public class SharedJourneyClient {
         WaypointApi.Hooks.remove = WaypointStore::remove;
         WaypointApi.Hooks.isShown = WaypointStore::isShown;
         WaypointApi.Hooks.groups = WaypointStore::groups;
+        WaypointApi.Hooks.createGroup = WaypointStore::createGroup;
+        WaypointApi.Hooks.renameGroup = WaypointStore::renameGroup;
+        WaypointApi.Hooks.deleteGroup = WaypointStore::deleteGroup;
+        WaypointApi.Hooks.isGroupEditable = WaypointStore::isEditableGroup;
+        WaypointApi.Hooks.isGroupVisible = WaypointStore::isGroupVisible;
+        WaypointApi.Hooks.setGroupVisible = WaypointStore::setGroupVisible;
 
         // Declarative map markers (screen-render API v2).
         MapMarkerApi.Hooks.register = MapMarkerStore::register;

@@ -33,7 +33,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * server-side). Resolution chain, first hit wins:
  *
  * <ol>
- *   <li>server config {@code engine.blockColorOverrides} (API seam);</li>
+ *   <li>server config {@code engine.blockColorOverrides} (the admin always
+ *       has the last word);</li>
+ *   <li>API registrations ({@link
+ *       fr.cheesegrinder.sharedjourney.api.event.BlockColorRegisterEvent},
+ *       collected at server startup);</li>
  *   <li>bundled vanilla palette ({@code palette/vanilla.json}, generated
  *       offline from the vanilla client jar — dedicated servers do not ship
  *       client textures, and bundling keeps singleplayer and dedicated
@@ -57,7 +61,20 @@ public final class BlockPalette {
 
     private static volatile Map<String, Integer> bundledPalette;
 
+    /** Colors registered through BlockColorRegisterEvent (server startup). */
+    private static volatile Map<Block, Integer> apiColors = Map.of();
+
     private BlockPalette() {}
+
+    /**
+     * Installs the API color registrations (collected at server startup,
+     * before the map engine starts). Clears the resolution cache: a
+     * singleplayer client may start several servers in one session.
+     */
+    public static void setApiColors(Map<Block, Integer> colors) {
+        apiColors = Map.copyOf(colors);
+        CACHE.clear();
+    }
 
     /** Map color (0xRRGGBB) of a block through the resolution chain. */
     static int color(BlockState state, BlockGetter level, BlockPos pos) {
@@ -80,6 +97,11 @@ public final class BlockPalette {
         Integer override = EngineServerConfig.blockColorOverride(block);
         if (override != null) {
             return override;
+        }
+
+        Integer api = apiColors.get(block);
+        if (api != null) {
+            return api;
         }
 
         String id = BuiltInRegistries.BLOCK.getKey(block).toString();

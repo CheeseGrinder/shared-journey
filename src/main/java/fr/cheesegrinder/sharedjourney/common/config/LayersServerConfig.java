@@ -9,16 +9,21 @@ import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 import java.util.ArrayList;
-import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * "layers" section of the server config: active layers per dimension and
  * vertical bands of the CAVE layer. Also owns the parsing cache of the
  * dimension -> layers mappings.
+ *
+ * <p>Only the built-in display layers are configurable here: custom layers
+ * ({@code LayerRegisterEvent}) are active wherever their renderer paints,
+ * without a per-dimension toggle (accepted limitation of the wiring).
  */
 public final class LayersServerConfig {
 
@@ -28,7 +33,7 @@ public final class LayersServerConfig {
     public static ModConfigSpec.ConfigValue<List<? extends String>> DEFAULT_LAYERS;
     public static ModConfigSpec.ConfigValue<List<? extends Integer>> CAVE_BANDS;
 
-    private static final Map<String, EnumSet<MapLayer>> PARSED = new ConcurrentHashMap<>();
+    private static final Map<String, Set<MapLayer>> PARSED = new ConcurrentHashMap<>();
 
     private LayersServerConfig() {}
 
@@ -66,7 +71,7 @@ public final class LayersServerConfig {
         PARSED.clear();
     }
 
-    public static EnumSet<MapLayer> layersFor(ResourceKey<Level> dim) {
+    public static Set<MapLayer> layersFor(ResourceKey<Level> dim) {
         String id = dim.location().toString();
         return PARSED.computeIfAbsent(id, k -> {
             for (String entry : SHARED_LAYERS.get()) {
@@ -75,7 +80,7 @@ public final class LayersServerConfig {
                     return parseLayers(parts[1]);
                 }
             }
-            EnumSet<MapLayer> def = EnumSet.noneOf(MapLayer.class);
+            Set<MapLayer> def = new LinkedHashSet<>();
             DEFAULT_LAYERS.get().forEach(s -> def.add(MapLayer.valueOf(s.trim().toUpperCase(Locale.ROOT))));
             return def;
         });
@@ -84,7 +89,7 @@ public final class LayersServerConfig {
     /** Enables/disables a layer for a dimension and persists it (admin command). */
     public static void setLayer(ResourceKey<Level> dim, MapLayer layer, boolean enabled) {
         String id = dim.location().toString();
-        EnumSet<MapLayer> current = EnumSet.copyOf(layersFor(dim));
+        Set<MapLayer> current = new LinkedHashSet<>(layersFor(dim));
         if (enabled) {
             current.add(layer);
         } else {
@@ -109,8 +114,8 @@ public final class LayersServerConfig {
         ServerConfig.invalidateCache();
     }
 
-    private static EnumSet<MapLayer> parseLayers(String csv) {
-        EnumSet<MapLayer> set = EnumSet.noneOf(MapLayer.class);
+    private static Set<MapLayer> parseLayers(String csv) {
+        Set<MapLayer> set = new LinkedHashSet<>();
         for (String l : csv.split(",")) {
             String t = l.trim();
             if (!t.isEmpty()) {
@@ -124,14 +129,18 @@ public final class LayersServerConfig {
         return set;
     }
 
-    /** Valid display layer name ("DAY"... — INFO is never configurable). */
+    /**
+     * Valid display layer name ("DAY"... — INFO is never configurable,
+     * custom layers are not config-managed).
+     */
     public static boolean isValidLayer(Object o) {
         if (!(o instanceof String s)) {
             return false;
         }
 
         try {
-            return MapLayer.valueOf(s.trim().toUpperCase(Locale.ROOT)) != MapLayer.INFO;
+            MapLayer layer = MapLayer.valueOf(s.trim().toUpperCase(Locale.ROOT));
+            return layer.isBuiltin() && layer != MapLayer.INFO;
         } catch (IllegalArgumentException e) {
             return false;
         }
@@ -163,7 +172,7 @@ public final class LayersServerConfig {
         return true;
     }
 
-    private static String join(EnumSet<MapLayer> set) {
-        return String.join(",", set.stream().map(Enum::name).toList());
+    private static String join(Set<MapLayer> set) {
+        return String.join(",", set.stream().map(MapLayer::name).toList());
     }
 }

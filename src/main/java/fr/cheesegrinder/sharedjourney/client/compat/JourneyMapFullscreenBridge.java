@@ -27,7 +27,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Predicate;
 
@@ -55,7 +55,7 @@ public final class JourneyMapFullscreenBridge {
     private static Object uiFullscreen;
     private static Object stagePre;
     private static Object stagePost;
-    private static final Map<MapLayer, Object> MAP_TYPES = new EnumMap<>(MapLayer.class);
+    private static final Map<MapLayer, Object> MAP_TYPES = new LinkedHashMap<>();
 
     private JourneyMapFullscreenBridge() {}
 
@@ -317,7 +317,8 @@ public final class JourneyMapFullscreenBridge {
 
         double guiScale = mc.getWindow().getGuiScale();
         int zoom512 = (int) Math.round(map.zoomScale() * guiScale * 512.0);
-        Object mapType = MAP_TYPES.get(map.currentLayer());
+        // Custom layers have no JourneyMap equivalent: presented as Day.
+        Object mapType = MAP_TYPES.getOrDefault(map.currentLayer(), MAP_TYPES.get(MapLayer.DAY));
         BlockPos center = new BlockPos((int) Math.floor(map.centerX()), 0, (int) Math.floor(map.centerZ()));
         AABB blockBounds =
                 new AABB(map.worldX(0), 0, map.worldZ(0), map.worldX(map.viewWidth()), 0, map.worldZ(map.viewHeight()));

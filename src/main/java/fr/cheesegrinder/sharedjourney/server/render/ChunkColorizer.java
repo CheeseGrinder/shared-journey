@@ -35,20 +35,35 @@ public final class ChunkColorizer {
             for (int lz = 0; lz < 16; lz++) {
                 int wx = cp.getMinBlockX() + lx;
                 int wz = cp.getMinBlockZ() + lz;
-                int argb =
-                        switch (layer) {
-                            case DAY -> SurfaceRenderer.render(ctx, wx, wz, false);
-                            case NIGHT -> SurfaceRenderer.render(ctx, wx, wz, true);
-                            case TOPO -> TopoRenderer.render(ctx, wx, wz);
-                            case BIOME -> BiomeRenderer.render(ctx, wx, wz);
-                            case CAVE -> CaveRenderer.render(ctx, wx, wz, caveBand);
-                            // INFO is the hover-data sidecar, not a render layer.
-                            case INFO -> throw new IllegalArgumentException("INFO is not a renderable layer");
-                        };
-                out[lx + lz * 16] = argb;
+                out[lx + lz * 16] = renderPixel(ctx, layer, wx, wz, caveBand);
             }
         }
         return out;
+    }
+
+    /**
+     * One pixel of a built-in layer (custom layers render through their
+     * own {@code ChunkLayerRenderer}, never through this facade).
+     */
+    private static int renderPixel(RenderContext ctx, MapLayer layer, int wx, int wz, int caveBand) {
+        if (layer == MapLayer.DAY) {
+            return SurfaceRenderer.render(ctx, wx, wz, false);
+        }
+        if (layer == MapLayer.NIGHT) {
+            return SurfaceRenderer.render(ctx, wx, wz, true);
+        }
+        if (layer == MapLayer.TOPO) {
+            return TopoRenderer.render(ctx, wx, wz);
+        }
+        if (layer == MapLayer.BIOME) {
+            return BiomeRenderer.render(ctx, wx, wz);
+        }
+        if (layer == MapLayer.CAVE) {
+            return CaveRenderer.render(ctx, wx, wz, caveBand);
+        }
+
+        // INFO is the hover-data sidecar, custom layers never reach here.
+        throw new IllegalArgumentException("Not a built-in renderable layer: " + layer.id());
     }
 
     /**

@@ -4,6 +4,8 @@ import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -25,9 +27,8 @@ import java.util.function.Supplier;
  * this facade.
  *
  * <p>Deliberately NOT exposed here (internal session/lifecycle concerns,
- * YAGNI until a consumer needs them): group management (create/rename/
- * delete), session open/close, temp-waypoint cleanup, the bridge's
- * per-source removal.
+ * YAGNI until a consumer needs them): session open/close, temp-waypoint
+ * cleanup, the bridge's per-source removal.
  */
 public final class WaypointApi {
 
@@ -41,6 +42,12 @@ public final class WaypointApi {
         public static Consumer<UUID> remove = id -> {};
         public static Predicate<Waypoint> isShown = wp -> false;
         public static Supplier<List<String>> groups = List::of;
+        public static Predicate<String> createGroup = group -> false;
+        public static BiPredicate<String, String> renameGroup = (from, to) -> false;
+        public static Predicate<String> deleteGroup = group -> false;
+        public static Predicate<String> isGroupEditable = group -> false;
+        public static Predicate<String> isGroupVisible = group -> false;
+        public static BiConsumer<String, Boolean> setGroupVisible = (group, visible) -> {};
 
         private Hooks() {}
     }
@@ -89,5 +96,49 @@ public final class WaypointApi {
     /** Groups in use, sorted, the default group listed first. */
     public static List<String> groups() {
         return Hooks.groups.get();
+    }
+
+    /**
+     * Creates an empty user group. Returns false on invalid or already
+     * taken names.
+     */
+    public static boolean createGroup(String name) {
+        return Hooks.createGroup.test(name);
+    }
+
+    /**
+     * Renames a user group, moving its waypoints and hidden state along.
+     * Returns false if the group is not editable (see
+     * {@link #isGroupEditable}) or the new name is invalid/taken.
+     */
+    public static boolean renameGroup(String from, String to) {
+        return Hooks.renameGroup.test(from, to);
+    }
+
+    /**
+     * Deletes a user group AND every waypoint it holds. Returns false if
+     * the group is not editable (see {@link #isGroupEditable}).
+     */
+    public static boolean deleteGroup(String group) {
+        return Hooks.deleteGroup.test(group);
+    }
+
+    /**
+     * Can this group be renamed/deleted? The reserved groups (default,
+     * deaths, public, banners) and the bridged mods' groups (any group
+     * holding non-user waypoints) cannot.
+     */
+    public static boolean isGroupEditable(String group) {
+        return Hooks.isGroupEditable.test(group);
+    }
+
+    /** Is this group currently visible (management screen checkbox)? */
+    public static boolean isGroupVisible(String group) {
+        return Hooks.isGroupVisible.test(group);
+    }
+
+    /** Shows or hides a whole group; a local, per-client choice. */
+    public static void setGroupVisible(String group, boolean visible) {
+        Hooks.setGroupVisible.accept(group, visible);
     }
 }

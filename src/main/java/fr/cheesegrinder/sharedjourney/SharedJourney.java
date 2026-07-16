@@ -1,10 +1,12 @@
 package fr.cheesegrinder.sharedjourney;
 
+import fr.cheesegrinder.sharedjourney.api.MapApi;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.common.config.CommonConfig;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.server.compat.CreateTrainPathService;
+import fr.cheesegrinder.sharedjourney.server.service.MapApiService;
 import fr.cheesegrinder.sharedjourney.server.service.OpsConfigService;
 import fr.cheesegrinder.sharedjourney.server.service.PlayerWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.PublicWaypointService;
@@ -50,6 +52,12 @@ public class SharedJourney {
         Payloads.Hooks.serverPlayerWaypointRemove = PlayerWaypointService::handleRemove;
         Payloads.Hooks.serverOpsConfigRequest = OpsConfigService::handleRequest;
         Payloads.Hooks.serverOpsConfigUpdate = OpsConfigService::handleUpdate;
+
+        // Public server-side read/actions facade.
+        MapApi.Hooks.isChunkRendered = MapApiService::isChunkRendered;
+        MapApi.Hooks.rerenderChunk = MapApiService::rerenderChunk;
+        MapApi.Hooks.regionVersion = MapApiService::regionVersion;
+        MapApi.Hooks.isHiddenFromMap = SyncService::isHidden;
 
         LOGGER.info("SharedJourney initialized");
     }

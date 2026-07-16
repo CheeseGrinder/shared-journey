@@ -14,25 +14,11 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
   vectoriel (`EntityDots.drawPlayerArrow`) par une texture (style JourneyMap), minimap +
   plein écran.
 
-### API publique (tranches restantes)
+### API publique
 
-_Stratégie (cadrage fait) : pas d'API spéculative. Règle de la couture (les internals de
-chaque chantier prévoient le point d'extension) + publication en FIN du chantier qui
-stabilise le modèle. Déjà publié : rendu écran v1 (`MapView`, `MapRenderEvent`,
-`FullMapScreenEvent`, `MapLayerChangedEvent`), waypoints v1 (`WaypointApi`), UI fullscreen
-(`FullMapToolbarEvent`, `FullMapContextMenuEvent`, `FullMapInfoBarEvent`) et marqueurs
-déclaratifs v2 (`MapMarker`, `MapMarkerProvider`, `MapMarkerApi`)._
-
-- [ ] **rendu serveur (image de région)** : couture posée (`engine.blockColorOverrides` +
-  `BlockPalette` point d'entrée unique) ; publier événement/registre quand un consommateur
-  concret existe.
-- [ ] **couches** : finaliser `LayerRegisterEvent` — bloqueur structurel : `RegionKey`/
-  réseau/disque indexés sur l'enum `MapLayer`, passer à des ids libres est un chantier
-  dédié. En attendant, documenter l'événement comme non câblé.
-- [ ] **lecture/actions** (positions joueurs, état des régions, re-rendu) : YAGNI, à la
-  demande d'un consommateur concret.
-- [ ] **waypoints v2** (YAGNI) : gestion des groupes (create/rename/delete) si un
-  consommateur concret en a besoin ; format NBT pour les index machine-only à trancher.
+_Chantier clos le 2026-07-16 (toutes les tranches publiées — décision utilisateur de lever
+le YAGNI). Reste ouvert : format NBT pour les index machine-only (à trancher si un
+consommateur en a besoin)._
 
 ### Robustesse / perf (P4+)
 
@@ -54,6 +40,31 @@ déclaratifs v2 (`MapMarker`, `MapMarkerProvider`, `MapMarkerApi`)._
 
 ### Chantiers récents (2026-07)
 
+- **Fin de l'API publique (2026-07-16, YAGNI levé sur décision utilisateur)** : quatre
+  tranches. (1) **Waypoints v2** : gestion des groupes exposée dans `WaypointApi`
+  (`createGroup`/`renameGroup`/`deleteGroup`/`isGroupEditable`/`isGroupVisible`/
+  `setGroupVisible`) — pure façade sur la mécanique existante de `WaypointStore`.
+  (2) **Rendu serveur** : `BlockColorRegisterEvent` (bus MOD, posté au démarrage serveur
+  comme `LayerRegisterEvent`) — couleur de bloc forcée, insérée dans la chaîne de
+  `BlockPalette` ENTRE les overrides config (l'admin garde le dernier mot) et la palette
+  embarquée ; pas de re-peinture rétroactive (documenté : `/sj regen`). (3) **Lecture/
+  actions** : `MapApi` (façade serveur, patron `Hooks` câblé par `SharedJourney`, backing
+  null-safe `MapApiService`) — `isChunkRendered`, `rerenderChunk` (enqueue moteur),
+  `regionVersion` (couche en id String), `isHiddenFromMap` (les positions joueurs ne sont
+  PAS exposées : la player list du serveur + ce prédicat suffisent). (4) **Ids de couches
+  libres + câblage `LayerRegisterEvent`** : `MapLayer` converti d'enum en classe-registre
+  (instances uniques par id → les comparaisons d'identité `== MapLayer.CAVE` restent
+  valides partout ; `values()`/`valueOf()`/`name()` conservés pour compat index.json/
+  config) ; ids réseau en String (protocole v9), décodage SOUPLE (id inconnu enregistré à
+  la volée : client sans le mod tiers OK, cache disque client relu avant l'annonce du
+  serveur OK) ; les couches custom passent par tout le pipeline (rendu via leur
+  `ChunkLayerRenderer` — throw/mauvaise taille loggés et chunk sauté —, stockage
+  `<dim>/<id>/`, delta sync, boutons plein écran icône papier + fallback de traduction sur
+  l'id brut, cycle clavier) ; `MapManager.activeLayers(dim)` = config ∪ customs, utilisé
+  par le rendu, la sync, le gate des requêtes et le regen. _Limites acceptées : pas de
+  toggle config/UI ops par dimension pour les couches custom (actives partout, le renderer
+  peut retourner null pour sauter un chunk), pas de bandes verticales, icône générique,
+  l'éditeur de couches ops et `/sj layer` restent builtin-only._
 - **Tranche API UI fullscreen + marqueurs v2 (2026-07-16)** : quatre points d'extension
   publiés. (1) `FullMapToolbarEvent` (boutons déclaratifs, posté à CHAQUE rebuild des
   widgets — ouverture ET resize ; les boutons vivent dans des ZONES ADDONS dédiées,

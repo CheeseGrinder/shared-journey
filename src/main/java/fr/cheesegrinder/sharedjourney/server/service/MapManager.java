@@ -273,7 +273,7 @@ public final class MapManager {
      * the QuarantineService drain.
      */
     private void renderChunk(ServerLevel level, ChunkAccess chunk, ChunkAccess[] neighbors, boolean quarantined) {
-        EnumSet<MapLayer> layers = LayersServerConfig.layersFor(level.dimension());
+        Set<MapLayer> layers = activeLayers(level.dimension());
         ChunkPos cp = chunk.getPos();
         List<RegionKey> touched = new ArrayList<>(layers.size() + 4);
         for (MapLayer layer : layers) {
@@ -296,7 +296,11 @@ public final class MapManager {
                     caveUnlocks.remove(unlock);
                 }
             } else {
-                int[] pixels = ChunkColorizer.render(level, chunk, neighbors, layer, 0);
+                int[] pixels = renderLayer(level, chunk, neighbors, layer);
+                if (pixels == null) {
+                    continue;
+                }
+
                 RegionKey key = RegionKey.of(level.dimension(), layer, 0, cp.x, cp.z);
                 if (writeChunk(key, cp.x, cp.z, pixels, quarantined)) {
                     touched.add(key);
@@ -314,8 +318,50 @@ public final class MapManager {
         }
         // Immediate push to affected players (without waiting for the periodic delta).
         SyncService.pushRegionUpdates(server, touched);
-        // NB: custom layers (LayerRegisterEvent) are collected but their
-        // storage/sync pipeline is not wired yet — see README §Limites.
+    }
+
+    /**
+     * Layers rendered in a dimension: the configured built-ins plus every
+     * registered custom layer (custom layers have no per-dimension config;
+     * their renderer decides by returning null).
+     */
+    public Set<MapLayer> activeLayers(ResourceKey<Level> dim) {
+        Set<MapLayer> layers = new LinkedHashSet<>(LayersServerConfig.layersFor(dim));
+        for (String id : customLayers.keySet()) {
+            layers.add(MapLayer.register(id));
+        }
+
+        return layers;
+    }
+
+    /**
+     * Pixels of one displayable layer for a chunk: built-ins through
+     * {@link ChunkColorizer}, custom layers through their registered
+     * renderer. Null means "skip this chunk on this layer" (custom
+     * renderer opted out, returned a malformed buffer, or threw).
+     */
+    private int[] renderLayer(ServerLevel level, ChunkAccess chunk, ChunkAccess[] neighbors, MapLayer layer) {
+        if (layer.isBuiltin()) {
+            return ChunkColorizer.render(level, chunk, neighbors, layer, 0);
+        }
+
+        ChunkLayerRenderer renderer = customLayers.get(layer.id());
+        if (renderer == null) {
+            return null;
+        }
+
+        try {
+            int[] pixels = renderer.render(level, chunk, 0);
+            if (pixels != null && pixels.length != 256) {
+                LOGGER.warn("Custom layer '{}' returned {} pixels (expected 256), skipping", layer.id(), pixels.length);
+                return null;
+            }
+
+            return pixels;
+        } catch (Throwable t) {
+            LOGGER.warn("Custom layer '{}' renderer failed, skipping chunk", layer.id(), t);
+            return null;
+        }
     }
 
     /** Region keys known to the index (copy, for the full regeneration). */
@@ -325,7 +371,8 @@ public final class MapManager {
 
     /** Has the chunk already been painted (at least one opaque pixel on the first active layer)? */
     public boolean isChunkRendered(ServerLevel level, int cx, int cz) {
-        EnumSet<MapLayer> layers = LayersServerConfig.layersFor(level.dimension());
+        // Custom layers count: a dimension may render custom layers only.
+        Set<MapLayer> layers = activeLayers(level.dimension());
         if (layers.isEmpty()) {
             return true;
         }

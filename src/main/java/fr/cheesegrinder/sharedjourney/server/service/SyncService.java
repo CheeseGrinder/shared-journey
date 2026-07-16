@@ -20,7 +20,6 @@ import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -112,9 +111,15 @@ public final class SyncService {
             return;
         }
 
+        MapManager mgr = MapManager.get();
         Map<ResourceLocation, List<MapLayer>> map = new HashMap<>();
         for (ServerLevel level : server.getAllLevels()) {
-            map.put(level.dimension().location(), new ArrayList<>(LayersServerConfig.layersFor(level.dimension())));
+            // Custom layers included (engine up = always, players join
+            // after ServerStartedEvent): the client learns their ids here.
+            List<MapLayer> layers = mgr == null
+                    ? new ArrayList<>(LayersServerConfig.layersFor(level.dimension()))
+                    : new ArrayList<>(mgr.activeLayers(level.dimension()));
+            map.put(level.dimension().location(), layers);
         }
         PacketDistributor.sendToPlayer(
                 player,
@@ -173,7 +178,8 @@ public final class SyncService {
         int prx = Math.floorDiv(player.blockPosition().getX(), RegionKey.REGION_BLOCKS);
         int prz = Math.floorDiv(player.blockPosition().getZ(), RegionKey.REGION_BLOCKS);
         var dim = player.level().dimension();
-        EnumSet<MapLayer> layers = LayersServerConfig.layersFor(dim);
+        // Custom layers included: their regions delta-sync like built-ins.
+        Set<MapLayer> layers = mgr.activeLayers(dim);
 
         for (int rx = prx - radius; rx <= prx + radius; rx++) {
             for (int rz = prz - radius; rz <= prz + radius; rz++) {
@@ -313,6 +319,9 @@ public final class SyncService {
             return;
         }
 
+        // Keys are gated to the player's dimension below: one lookup.
+        Set<MapLayer> active = mgr.activeLayers(player.level().dimension());
+
         int max = Math.min(payload.keys().size(), 128); // anti-abuse
         for (int i = 0; i < max; i++) {
             RegionKey key = payload.keys().get(i);
@@ -321,9 +330,8 @@ public final class SyncService {
             }
 
             // INFO (hover sidecar) is always requestable; display layers
-            // must be active for the dimension.
-            if (key.layer() != MapLayer.INFO
-                    && !LayersServerConfig.layersFor(key.dimension()).contains(key.layer())) {
+            // (built-in AND custom) must be active for the dimension.
+            if (key.layer() != MapLayer.INFO && !active.contains(key.layer())) {
                 continue;
             }
 
@@ -421,7 +429,7 @@ public final class SyncService {
 
         if (regionFilter != null) {
             var dim = player.level().dimension();
-            for (MapLayer layer : LayersServerConfig.layersFor(dim)) {
+            for (MapLayer layer : mgr.activeLayers(dim)) {
                 if (layer == MapLayer.CAVE) {
                     for (int band : LayersServerConfig.CAVE_BANDS.get()) {
                         RegionKey key = new RegionKey(dim, layer, band, regionFilter[0], regionFilter[1]);
