@@ -22,7 +22,7 @@ consommateur en a besoin)._
 
 ### Robustesse / perf (P4+)
 
-- [ ] **P4 · ★★★☆☆ — Overlay des rails Create en souterrain** (recherche) : l'overlay reste
+- [x] **P4 · ★★★☆☆ — Overlay des rails Create en souterrain** (recherche) : l'overlay reste
   affiché en surface quand la voie est enterrée et n'apparaît pas sur les couches CAVE.
   Corréler les pixels du `TrainMapRenderer` avec la couche affichée et les hauteurs
   (sidecar INFO ?) pour masquer en surface et/ou afficher dans la bande CAVE.
