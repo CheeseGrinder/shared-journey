@@ -15,10 +15,18 @@ public final class MapMarkerRenderer {
 
     private MapMarkerRenderer() {}
 
+    /**
+     * Footprint of a DIAMOND marker relative to the native sprite size:
+     * API markers keep the ~10px footprint of the former vector diamond
+     * instead of the full 16px waypoint icon.
+     */
+    private static final float DIAMOND_MARKER_SCALE = 10f / WaypointIcons.SIZE;
+
     /** Draws one marker at screen position (sx, sy) at the given scale. */
     public static void draw(GuiGraphics gg, MapMarker marker, float sx, float sy, float scale) {
         switch (marker.shape()) {
-            case DIAMOND -> EntityDots.drawWaypointDiamond(gg, sx, sy, marker.colorRgb(), scale);
+            case DIAMOND ->
+                WaypointIcons.draw(gg, WaypointIcons.DIAMOND, sx, sy, marker.colorRgb(), scale * DIAMOND_MARKER_SCALE);
             case DOT -> EntityDots.draw(gg, Math.round(sx), Math.round(sy), 0xFF000000 | marker.colorRgb());
         }
     }

@@ -21,6 +21,7 @@ import fr.cheesegrinder.sharedjourney.client.render.EntityDots;
 import fr.cheesegrinder.sharedjourney.client.render.MapMarkerRenderer;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
 import fr.cheesegrinder.sharedjourney.client.render.MobHeadIcons;
+import fr.cheesegrinder.sharedjourney.client.render.WaypointIcons;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.MapMarkerStore;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
@@ -1468,13 +1469,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 continue;
             }
 
-            if (Waypoint.SOURCE_BANNER.equals(wp.source())) {
-                EntityDots.drawBannerIcon(gg, sx, sy, wp.colorRgb(), 1.2f);
-            } else {
-                EntityDots.drawWaypointDiamond(gg, sx, sy, wp.colorRgb(), 1.2f);
-            }
+            WaypointIcons.draw(gg, wp, sx, sy, 1.0f);
             if (zoom >= 0.5f && WaypointClientConfig.SHOW_WAYPOINT_NAMES.get()) {
-                gg.drawCenteredString(font, wp.name(), sx, sy - 13, 0xFFFFFF);
+                gg.drawCenteredString(font, wp.name(), sx, sy - WaypointIcons.SIZE / 2 - 10, 0xFFFFFF);
             }
         }
 

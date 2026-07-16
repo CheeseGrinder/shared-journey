@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.client.gui;
 
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
+import fr.cheesegrinder.sharedjourney.client.render.WaypointIcons;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
 
@@ -518,7 +519,7 @@ public class WaypointListScreen extends Screen {
                     x -= 2;
                 }
 
-                gg.fill(left + 2, top + 4, left + 14, top + 16, 0xFF000000 | waypoint.colorRgb());
+                WaypointIcons.draw(gg, waypoint, left + 8, top + 10, 1.0f);
                 boolean shown = WaypointStore.isShown(waypoint);
                 int nameColor = shown ? 0xFFFFFF : 0x808080;
                 gg.drawString(font, waypoint.name(), left + 20, top + 1, nameColor);

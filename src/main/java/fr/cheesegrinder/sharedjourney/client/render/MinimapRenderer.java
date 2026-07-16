@@ -460,11 +460,7 @@ public final class MinimapRenderer {
                 sx = Math.clamp(sx, -maxR, maxR);
                 sy = Math.clamp(sy, -maxR, maxR);
             }
-            if (Waypoint.SOURCE_BANNER.equals(wp.source())) {
-                EntityDots.drawBannerIcon(gg, cx + (float) sx, cy + (float) sy, wp.colorRgb(), 0.9f);
-            } else {
-                EntityDots.drawWaypointDiamond(gg, cx + (float) sx, cy + (float) sy, wp.colorRgb(), 0.9f);
-            }
+            WaypointIcons.draw(gg, wp, cx + (float) sx, cy + (float) sy, 0.75f);
         }
 
         // ---- Other players' heads (server positions, no distance limit),

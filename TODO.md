@@ -6,7 +6,7 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
 
 ### Chantier UI — partie icônes (en attente des assets, pas encore fournis)
 
-- [ ] **P3 · ★★★☆☆ — Icône in-world des waypoints (losange JM)** : losange à la position du
+- [x] **P3 · ★★★☆☆ — Icône in-world des waypoints (losange JM)** : losange à la position du
   waypoint, TOUJOURS visible (pas de cône de visée, contrairement au label), masqué hors des
   bornes `beaconMinDistance`/`beaconMaxDistance`. D'abord vectoriel, puis texture PNG
   (personnalisable par resource pack).
