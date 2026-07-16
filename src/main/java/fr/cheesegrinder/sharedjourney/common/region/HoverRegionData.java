@@ -6,6 +6,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -82,6 +83,37 @@ public final class HoverRegionData {
         blocks[slot] = blockIdx;
         biomes[slot] = biomeIdx;
         presence[slot >> 6] |= 1L << (slot & 63);
+    }
+
+    /**
+     * True when the stored chunk already holds exactly this data (same
+     * heights, surface blocks and biomes): lets the engine skip the
+     * version bump — and thus the re-push — of renders that changed
+     * nothing (e.g. a neighbor re-render for a light update).
+     */
+    public boolean chunkEquals(int localCx, int localCz, short[] chunkHeights, String[] blockIds, String[] biomeIds) {
+        int slot = localCz * RegionKey.REGION_CHUNKS + localCx;
+        if ((presence[slot >> 6] & (1L << (slot & 63))) == 0) {
+            return false;
+        }
+
+        if (!Arrays.equals(heights[slot], chunkHeights)) {
+            return false;
+        }
+
+        for (int i = 0; i < COLUMNS; i++) {
+            if (!paletteValue(blockPalette, blocks[slot][i]).equals(blockIds[i])) {
+                return false;
+            }
+        }
+
+        for (int i = 0; i < BIOME_CELLS; i++) {
+            if (!paletteValue(biomePalette, biomes[slot][i]).equals(biomeIds[i])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

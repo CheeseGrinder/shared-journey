@@ -289,22 +289,28 @@ public final class MapManager {
                     }
 
                     int[] pixels = ChunkColorizer.render(level, chunk, neighbors, layer, band);
-                    writeChunk(key, cp.x, cp.z, pixels, quarantined);
-                    touched.add(key);
+                    if (writeChunk(key, cp.x, cp.z, pixels, quarantined)) {
+                        touched.add(key);
+                    }
+
                     caveUnlocks.remove(unlock);
                 }
             } else {
                 int[] pixels = ChunkColorizer.render(level, chunk, neighbors, layer, 0);
                 RegionKey key = RegionKey.of(level.dimension(), layer, 0, cp.x, cp.z);
-                writeChunk(key, cp.x, cp.z, pixels, quarantined);
-                touched.add(key);
+                if (writeChunk(key, cp.x, cp.z, pixels, quarantined)) {
+                    touched.add(key);
+                }
             }
         }
         // Hover sidecar (INFO pseudo-layer): produced here, while the chunk
         // is in hand — the fullscreen hover info then works fully
         // client-side, with no on-demand chunk loading (anti timing-attack).
         if (!layers.isEmpty()) {
-            touched.add(writeHoverChunk(level, chunk, quarantined));
+            RegionKey hoverKey = writeHoverChunk(level, chunk, quarantined);
+            if (hoverKey != null) {
+                touched.add(hoverKey);
+            }
         }
         // Immediate push to affected players (without waiting for the periodic delta).
         SyncService.pushRegionUpdates(server, touched);
@@ -473,13 +479,23 @@ public final class MapManager {
 
     // ------------------------------------------------------------------ writes (workers)
 
-    private void writeChunk(RegionKey key, int cx, int cz, int[] chunkPixels, boolean quarantined) {
+    /**
+     * Writes a rendered chunk into its region. Returns false — without
+     * bumping the version, so nothing is re-pushed — when the pixels are
+     * identical to what the region already holds (frequent since block
+     * changes re-render the whole 3x3 neighborhood for lighting).
+     */
+    private boolean writeChunk(RegionKey key, int cx, int cz, int[] chunkPixels, boolean quarantined) {
         RegionImage img = getOrLoad(key, true);
         int ox = Math.floorMod(cx, RegionKey.REGION_CHUNKS) * 16;
         int oz = Math.floorMod(cz, RegionKey.REGION_CHUNKS) * 16;
         long version;
 
         synchronized (Objects.requireNonNull(img)) {
+            if (chunkUnchanged(img, ox, oz, chunkPixels)) {
+                return false;
+            }
+
             if (quarantined && img.publicPixels == null) {
                 // Freeze the pre-quarantine state: distant players keep
                 // being served this snapshot until the chunks drain.
@@ -508,12 +524,27 @@ public final class MapManager {
             }
         }
         index.put(key, version); // RAM registry; serialized by saveAll()
+        return true;
+    }
+
+    /** Are the region's pixels at this chunk already exactly these? */
+    private static boolean chunkUnchanged(RegionImage img, int ox, int oz, int[] chunkPixels) {
+        for (int z = 0; z < 16; z++) {
+            int rowStart = ox + (oz + z) * RegionKey.REGION_BLOCKS;
+            if (!Arrays.equals(img.pixels, rowStart, rowStart + 16, chunkPixels, z * 16, z * 16 + 16)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
      * Extracts and stores the chunk's hover data (surface heights, blocks,
      * biomes) into its region sidecar. Runs on a worker, read-only chunk
-     * access like the layer renderers. Returns the touched INFO region key.
+     * access like the layer renderers. Returns the touched INFO region key,
+     * or null — no version bump, nothing re-pushed — when the extracted
+     * data is identical to what the sidecar already holds.
      */
     private RegionKey writeHoverChunk(ServerLevel level, ChunkAccess chunk, boolean quarantined) {
         ChunkPos cp = chunk.getPos();
@@ -553,6 +584,10 @@ public final class MapManager {
         int localCx = Math.floorMod(cp.x, RegionKey.REGION_CHUNKS);
         int localCz = Math.floorMod(cp.z, RegionKey.REGION_CHUNKS);
         synchronized (Objects.requireNonNull(region)) {
+            if (region.data.chunkEquals(localCx, localCz, heights, blockIds, biomeIds)) {
+                return null;
+            }
+
             if (quarantined && region.publicData == null) {
                 // Freeze the pre-quarantine hover data (same rule as the
                 // region images: heights/blocks would leak the activity).

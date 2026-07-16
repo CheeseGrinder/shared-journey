@@ -17,6 +17,10 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
   serveur et le re-push.
 - **Lignes de pixels aux frontières de régions** (fix CLAMP_TO_EDGE) : vérifier à plusieurs
   zooms/pans qu'aucune ligne décalée ne réapparaît.
+- **Éclairage aux frontières de chunks (2026-07-16)** : poser/casser une torche près d'une
+  frontière, vérifier que les chunks voisins se rallument/s'assombrissent sur la carte
+  (NIGHT et CAVE) ; vérifier aussi qu'une horloge redstone ne cause PAS de re-push en
+  boucle (garde « pixels inchangés »).
 
 ## À faire
 
@@ -179,7 +183,16 @@ stabilise le modèle. Déjà publié : rendu écran v1 (`MapView`, `MapRenderEve
 
 ### Bugs marquants
 
-- **Lignes de pixels décalées aux frontières de régions (2026-07-15, à valider en jeu)** :
+- **Éclairage non propagé aux chunks voisins (2026-07-16, à valider en jeu)** : poser une
+  lumière près d'une frontière de chunk ne rafraîchissait que le chunk modifié — la
+  lumière porte jusqu'à 15 blocs et traverse les frontières (ombrage NIGHT/CAVE), les
+  voisins restaient sombres. `ChunkEvents.markDirty` (break/place/neighborNotify) et les
+  explosions enfilent maintenant le voisinage 3×3. Pour que ce ×9 ne spamme pas le réseau
+  (NeighborNotify part en rafale — horloges redstone), garde « inchangé » posée au write :
+  `writeChunk` compare les pixels entrants au contenu de la région et
+  `writeHoverChunk`/`HoverRegionData.chunkEquals` comparent le sidecar INFO — identique =
+  pas de bump de version, pas de re-push (bénéficie aussi au regen et aux re-rendus
+  quelconques qui ne changent rien).
   problème de RENDU, pas de données — wrap GL par défaut GL_REPEAT sur les
   `DynamicTexture` de régions : en bord de quad sous transform fractionnaire,
   l'échantillonnage tombe parfois pile sur u/v = 1.0 et wrappe sur la rangée/colonne

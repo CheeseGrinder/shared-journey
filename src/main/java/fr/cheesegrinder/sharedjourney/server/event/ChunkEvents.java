@@ -145,8 +145,14 @@ public final class ChunkEvents {
             return;
         }
 
+        // 3x3 around each affected chunk: the blast relights its borders
+        // (see markDirty); everything is deduplicated by the queue.
         for (BlockPos pos : event.getAffectedBlocks()) {
-            mgr.enqueueChunk(level, pos.getX() >> 4, pos.getZ() >> 4); // deduplicated
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    mgr.enqueueChunk(level, (pos.getX() >> 4) + dx, (pos.getZ() >> 4) + dz);
+                }
+            }
         }
     }
 
@@ -182,10 +188,19 @@ public final class ChunkEvents {
 
         int cx = event.getPos().getX() >> 4;
         int cz = event.getPos().getZ() >> 4;
-        mgr.enqueueChunk(level, cx, cz);
+        // The whole 3x3 neighborhood: block light travels up to 15 blocks,
+        // so a change near a border also relights the neighboring chunks'
+        // pixels (NIGHT/CAVE shading) — placing a torch used to leave the
+        // neighbors dark. The queue dedup and the unchanged-pixel skip in
+        // MapManager.writeChunk absorb the extra renders.
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                mgr.enqueueChunk(level, cx + dx, cz + dz);
+            }
+        }
         if (CommonConfig.DEBUG_LOGGING.get()) {
             LOGGER.info(
-                    "SharedJourney: chunk {},{} marked to re-render ({})",
+                    "SharedJourney: chunk {},{} (+neighbors) marked to re-render ({})",
                     cx,
                     cz,
                     level.dimension().location());
