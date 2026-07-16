@@ -14,6 +14,11 @@ import org.jetbrains.annotations.NotNull;
  */
 public class IconButton extends Button {
 
+    /** Selected-state accent (gold, same hue as the manager's selection). */
+    private static final int SELECTED_BORDER = 0xFFFFD770;
+
+    private static final int SELECTED_FILL = 0x38FFD770;
+
     private final ItemStack icon;
     private boolean selected;
 
@@ -30,9 +35,17 @@ public class IconButton extends Button {
     @Override
     protected void renderWidget(@NotNull GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         super.renderWidget(gg, mouseX, mouseY, partialTick);
+        if (selected) {
+            // Tinted underlay below the icon so the active state reads at
+            // a glance (the old thin light-blue outline was near-invisible
+            // against the vanilla button texture).
+            gg.fill(getX() + 1, getY() + 1, getX() + width - 1, getY() + height - 1, SELECTED_FILL);
+        }
+
         gg.renderItem(icon, getX() + (width - 16) / 2, getY() + (height - 16) / 2);
         if (selected) {
-            gg.renderOutline(getX(), getY(), width, height, 0xFF7FD3FF);
+            // Border drawn after the icon so it stays unbroken.
+            gg.renderOutline(getX(), getY(), width, height, SELECTED_BORDER);
         }
     }
 }

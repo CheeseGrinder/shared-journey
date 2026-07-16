@@ -48,6 +48,7 @@ public final class Payloads {
         public static Consumer<PlayerPositionsPayload> clientPlayerPositions = p -> {};
         public static Consumer<RegenStatePayload> clientRegenState = p -> {};
         public static Consumer<RegenChunksPayload> clientRegenChunks = p -> {};
+        public static Consumer<RegenProgressPayload> clientRegenProgress = p -> {};
         public static Consumer<TrainPathPayload> clientTrainPath = p -> {};
         public static Consumer<PublicWaypointPayload> clientPublicWaypoint = p -> {};
         public static Consumer<PublicWaypointRemovePayload> clientPublicWaypointRemove = p -> {};
@@ -411,6 +412,29 @@ public final class Payloads {
                     }
                     return new RegenChunksPayload(dimension, rx, rz, mask);
                 });
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Numeric regen progress (chunks done / total), pushed ~1x/s. Sent to
+     * every player during a full-map regen (/sj admin regen), or only to
+     * the requesting player for a local re-render (/sj admin rerender).
+     * {@code active=false} clears the client display when the run ends.
+     */
+    public record RegenProgressPayload(boolean active, int done, int total) implements CustomPacketPayload {
+        public static final Type<RegenProgressPayload> TYPE = new Type<>(id("regen_progress"));
+
+        public static final StreamCodec<FriendlyByteBuf, RegenProgressPayload> CODEC = StreamCodec.of(
+                (buf, p) -> {
+                    buf.writeBoolean(p.active);
+                    buf.writeVarInt(p.done);
+                    buf.writeVarInt(p.total);
+                },
+                buf -> new RegenProgressPayload(buf.readBoolean(), buf.readVarInt(), buf.readVarInt()));
 
         @Override
         public @NotNull Type<? extends CustomPacketPayload> type() {
@@ -796,6 +820,11 @@ public final class Payloads {
                 RegenChunksPayload.TYPE,
                 RegenChunksPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientRegenChunks.accept(payload)));
+
+        registrar.playToClient(
+                RegenProgressPayload.TYPE,
+                RegenProgressPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Hooks.clientRegenProgress.accept(payload)));
 
         registrar.playToServer(
                 TrainPathRequestPayload.TYPE,

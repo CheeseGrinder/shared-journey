@@ -28,7 +28,6 @@ import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
 
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -40,9 +39,7 @@ import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -79,7 +76,7 @@ import java.util.function.Supplier;
  * - left click: select a block (outline); double-click: create a waypoint
  * - double-click on a waypoint: edit it (name, color, deletion)
  * - right click: context menu (teleport, waypoints, chat)
- * - JourneyMap-style shortcuts: arrows (pan), B, C, F, J, T, =, -
+ * - JourneyMap-style shortcuts: arrows (pan), B, C, F, T, =, -
  * - icon bar at the top to change layer; +/- at the bottom for the CAVE band
  * Missing/stale visible regions are requested from the server (throttled).
  */
@@ -663,9 +660,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         Waypoint nearest = nearestWaypoint(mouseX, mouseY);
         if (nearest != null) {
             // Banner waypoints are read-only (position/name/color/group
-            // come from the physical banner): double-click does not open
+            // come from the physical banner) and death waypoints are a
+            // factual record (where you died): double-click does not open
             // the edit form, same restriction as the manager screen.
-            boolean editable = !Waypoint.SOURCE_BANNER.equals(nearest.source());
+            boolean editable =
+                    !Waypoint.SOURCE_BANNER.equals(nearest.source()) && !Waypoint.GROUP_DEATHS.equals(nearest.group());
             if (doubleClick && editable && nearest.id().equals(lastClickWaypoint)) {
                 lastClickAt = 0;
                 lastClickWaypoint = null;
@@ -944,10 +943,13 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     }
 
     /**
-     * JourneyMap-style shortcuts: arrows = pan 16 blocks, B = waypoint at
-     * cursor, C = cursor position in chat, F = follow player, J = close
-     * the map, T = open chat, =/- = zoom. The mod's configured keys
-     * (layer, map) are also honored.
+     * JourneyMap-style shortcuts. Hardcoded: arrows = pan 16 blocks,
+     * C = share the cursor position in chat, F = center on player,
+     * keypad +/- = zoom. Everything else follows the configurable key
+     * bindings — the mod's (waypoint at cursor, waypoint manager, zoom,
+     * layer, map — the map key closes the screen, acting as a toggle)
+     * and vanilla's chat key — so rebinding them in the controls screen
+     * carries into the map and its legend.
      */
     private boolean handleShortcut(int keyCode, int scanCode) {
         var mc = Minecraft.getInstance();
@@ -968,13 +970,6 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 centerX += PAN_STEP_BLOCKS;
                 return true;
             }
-            case GLFW.GLFW_KEY_B -> {
-                createWaypointAt(
-                        (int) Math.floor(worldX(cursorX())),
-                        (int) Math.floor(worldZ(cursorY())),
-                        Waypoint.Type.DIMENSION);
-                return true;
-            }
             case GLFW.GLFW_KEY_C -> {
                 logCoords((int) Math.floor(worldX(cursorX())), (int) Math.floor(worldZ(cursorY())));
                 return true;
@@ -983,27 +978,48 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 centerOnPlayer();
                 return true;
             }
-            case GLFW.GLFW_KEY_J -> {
-                onClose();
-                return true;
-            }
-            case GLFW.GLFW_KEY_T -> {
-                // Chat over the map, opened on the NEXT tick: otherwise the
-                // same frame's 't' character would land in the chat.
-                mc.tell(() -> mc.setScreen(new MapChatScreen(this)));
-                return true;
-            }
-            case GLFW.GLFW_KEY_EQUAL, GLFW.GLFW_KEY_KP_ADD -> {
+            case GLFW.GLFW_KEY_KP_ADD -> {
                 zoomStep(1, width / 2.0, height / 2.0);
                 return true;
             }
-            case GLFW.GLFW_KEY_MINUS, GLFW.GLFW_KEY_KP_SUBTRACT -> {
+            case GLFW.GLFW_KEY_KP_SUBTRACT -> {
                 zoomStep(-1, width / 2.0, height / 2.0);
                 return true;
             }
             default -> {
-                // The mod's configurable keys, tested below.
+                // The configurable keys, tested below.
             }
+        }
+
+        if (ClientSetupEvents.CREATE_WAYPOINT.matches(keyCode, scanCode)) {
+            int wx = (int) Math.floor(worldX(cursorX()));
+            int wz = (int) Math.floor(worldZ(cursorY()));
+            // Next tick: opening the edit form during the key press would
+            // leak the typed character into the name field.
+            mc.tell(() -> createWaypointAt(wx, wz, Waypoint.Type.DIMENSION));
+            return true;
+        }
+
+        if (ClientSetupEvents.OPEN_WAYPOINTS.matches(keyCode, scanCode)) {
+            mc.setScreen(new WaypointListScreen(this));
+            return true;
+        }
+
+        if (ClientSetupEvents.ZOOM_IN.matches(keyCode, scanCode)) {
+            zoomStep(1, width / 2.0, height / 2.0);
+            return true;
+        }
+
+        if (ClientSetupEvents.ZOOM_OUT.matches(keyCode, scanCode)) {
+            zoomStep(-1, width / 2.0, height / 2.0);
+            return true;
+        }
+
+        if (mc.options.keyChat.matches(keyCode, scanCode)) {
+            // Chat over the map, opened on the NEXT tick: otherwise the
+            // same frame's character would land in the chat input.
+            mc.tell(() -> mc.setScreen(new MapChatScreen(this, "")));
+            return true;
         }
 
         if (ClientSetupEvents.CYCLE_LAYER.matches(keyCode, scanCode)) {
@@ -1049,11 +1065,13 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     // ------------------------------------------------------------------ rendering
 
     /**
-     * Bridged plugin overlays (Create trains, RNS deposits) active: only
-     * from zoom 1024 onward and never on the CAVE layer.
+     * Bridged plugin overlays (Create trains, RNS deposits) active: never
+     * on the CAVE layer, otherwise always — their visibility is left to
+     * the per-overlay toggles (the old zoom floor proved more confusing
+     * than useful).
      */
     private boolean pluginOverlaysActive() {
-        return zoom >= 1024f / 2048f && layer != MapLayer.CAVE;
+        return layer != MapLayer.CAVE;
     }
 
     @Override
@@ -1096,13 +1114,18 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                     1.1f);
         }
 
+        // Whole UI chrome (widgets, info bars, chat) raised to z=200:
+        // the plugin overlay icons (renderItem, sprites) write depth up
+        // to ~150 and would win the depth test over z=0 draws even when
+        // painted later in the frame.
+        gg.pose().pushPose();
+        gg.pose().translate(0, 0, 200);
+
         super.render(gg, mouseX, mouseY, partialTick);
 
         renderTopInfoBar(gg, mc);
         renderHoverBar(gg, mc, mouseX, mouseY);
-        if (showKeys) {
-            renderLegend(gg);
-        }
+        renderRegenProgress(gg);
 
         // Incoming chat messages over the map (JourneyMap style): the HUD
         // chat is painted under this screen, so redraw it on top. Skipped
@@ -1110,6 +1133,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         if (mc.screen == this) {
             mc.gui.getChat().render(gg, mc.gui.getGuiTicks(), mouseX, mouseY, false);
         }
+
+        gg.pose().popPose();
 
         // Name of the hovered waypoint
         Waypoint hovered = nearestWaypoint(mouseX, mouseY);
@@ -1120,6 +1145,18 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                             hovered.name() + " (" + hovered.x() + ", " + hovered.y() + ", " + hovered.z() + ")"),
                     mouseX,
                     mouseY);
+        }
+
+        // Legend near the end: it must sit above the map annotations
+        // (waypoint diamonds and labels, plugin overlays). Raised on z:
+        // overlay icons (renderItem, sprites) write depth up to ~150 and
+        // would win the depth test over a z=0 panel even drawn later.
+        // Only the context menu (z=500) stays above it.
+        if (showKeys) {
+            gg.pose().pushPose();
+            gg.pose().translate(0, 0, 300);
+            renderLegend(gg);
+            gg.pose().popPose();
         }
 
         // Context menu last: always on top.
@@ -1193,6 +1230,31 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 .getString();
     }
 
+    /**
+     * Regen progress (full regen or a local re-render this player asked
+     * for): slim bar + count under the top info bar. The vanilla boss bar
+     * is hidden behind this fullscreen screen, so the map draws its own.
+     */
+    private void renderRegenProgress(GuiGraphics gg) {
+        Payloads.RegenProgressPayload progress = ClientMapCache.regenProgress;
+        if (progress == null) {
+            return;
+        }
+
+        int barW = 182;
+        int x0 = (width - barW) / 2;
+        int y0 = 46;
+        String text = Component.translatable(Lang.REGEN_BOSSBAR, progress.done(), progress.total())
+                .getString();
+        int textW = font.width(text);
+        gg.fill(x0 - 4, y0 - 2, x0 + barW + 4, y0 + 18, 0xA0101010);
+        gg.drawString(font, text, (width - textW) / 2, y0, 0xE0E0E0);
+        float ratio = progress.total() == 0 ? 1f : (float) progress.done() / progress.total();
+        int fillW = (int) (barW * Math.clamp(ratio, 0f, 1f));
+        gg.fill(x0, y0 + 12, x0 + barW, y0 + 16, 0xFF303030);
+        gg.fill(x0, y0 + 12, x0 + fillW, y0 + 16, 0xFF4CBB6A);
+    }
+
     /** Centered text line over a translucent background (JourneyMap style). */
     private void drawInfoBar(GuiGraphics gg, String text, int y) {
         int w = font.width(text);
@@ -1201,52 +1263,78 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         gg.drawString(font, text, x, y, 0xE0E0E0);
     }
 
-    /** Controls legend (Show Keys), bottom right. */
+    /**
+     * Controls legend (Show Keys), bottom right: one keycap-styled chip
+     * per shortcut with its description, drawn at full font size (the old
+     * version scaled the font down to 0.75, which blurred the text).
+     */
     private void renderLegend(GuiGraphics gg) {
-        List<String> lines = new ArrayList<>();
+        record LegendRow(String chip, String label) {}
+        var mc = Minecraft.getInstance();
+        List<LegendRow> rows = new ArrayList<>();
         for (KeyMapping key : List.of(
                 ClientSetupEvents.OPEN_FULL_MAP,
                 ClientSetupEvents.TOGGLE_MINIMAP,
                 ClientSetupEvents.CYCLE_LAYER,
                 ClientSetupEvents.ZOOM_IN,
-                ClientSetupEvents.ZOOM_OUT)) {
-            lines.add(key.getTranslatedKeyMessage().getString().toUpperCase(Locale.ROOT) + "  "
-                    + Component.translatable(key.getName()).getString());
+                ClientSetupEvents.ZOOM_OUT,
+                ClientSetupEvents.OPEN_WAYPOINTS)) {
+            rows.add(new LegendRow(chipFor(key), translate(key.getName())));
         }
-        lines.add(Component.translatable(Lang.LEGEND_DRAG).getString());
-        lines.add(Component.translatable(Lang.LEGEND_SCROLL).getString());
-        lines.add(Component.translatable(Lang.LEGEND_DOUBLE_CLICK).getString());
-        lines.add(Component.translatable(Lang.LEGEND_RIGHT_CLICK).getString());
-        lines.add(Component.translatable(Lang.LEGEND_ARROWS).getString());
-        lines.add(Component.translatable(Lang.LEGEND_KEY_B).getString());
-        lines.add(Component.translatable(Lang.LEGEND_KEY_C).getString());
-        lines.add(Component.translatable(Lang.LEGEND_KEY_F).getString());
-        lines.add(Component.translatable(Lang.LEGEND_KEY_T).getString());
-        lines.add(Component.translatable(Lang.LEGEND_KEY_J).getString());
+        rows.add(new LegendRow(translate(Lang.LEGEND_CHIP_DRAG), translate(Lang.LEGEND_DRAG)));
+        rows.add(new LegendRow(translate(Lang.LEGEND_CHIP_WHEEL), translate(Lang.LEGEND_SCROLL)));
+        rows.add(new LegendRow(translate(Lang.LEGEND_CHIP_DOUBLE_CLICK), translate(Lang.LEGEND_DOUBLE_CLICK)));
+        rows.add(new LegendRow(translate(Lang.LEGEND_CHIP_RIGHT_CLICK), translate(Lang.LEGEND_RIGHT_CLICK)));
+        rows.add(new LegendRow("←↑↓→", translate(Lang.LEGEND_ARROWS)));
+        // Rebindable shortcuts show their live binding, not a hardcoded
+        // letter; C and F are the only truly fixed keys left.
+        rows.add(new LegendRow(chipFor(ClientSetupEvents.CREATE_WAYPOINT), translate(Lang.LEGEND_KEY_B)));
+        rows.add(new LegendRow("C", translate(Lang.LEGEND_KEY_C)));
+        rows.add(new LegendRow("F", translate(Lang.LEGEND_KEY_F)));
+        rows.add(new LegendRow(chipFor(mc.options.keyChat), translate(Lang.LEGEND_KEY_T)));
 
-        int maxW = 0;
-        for (String line : lines) {
-            maxW = Math.max(maxW, font.width(line));
+        int chipW = 0;
+        int labelW = 0;
+        for (LegendRow row : rows) {
+            chipW = Math.max(chipW, font.width(row.chip()));
+            labelW = Math.max(labelW, font.width(row.label()));
         }
+        chipW += 8;
 
-        // Reduced scale, anchored bottom right of the screen.
-        float scale = 0.75f;
-        int lineH = 10;
-        int boxW = (int) (maxW * scale) + 8;
-        int boxH = (int) (lines.size() * lineH * scale) + 6;
+        String title = translate(Lang.LEGEND_TITLE);
+        int rowH = 15;
+        int chipH = 12;
+        int pad = 6;
+        int boxW = Math.max(chipW + 6 + labelW, font.width(title)) + pad * 2;
+        int boxH = pad + 12 + rows.size() * rowH + pad;
         int x0 = width - boxW - 6;
         // Larger bottom margin: stay clear of the chat area.
         int y0 = height - boxH - 16;
-        gg.fill(x0, y0, width - 6, y0 + boxH, 0xA0101010);
-        gg.pose().pushPose();
-        gg.pose().translate(x0 + 4, y0 + 3, 0);
-        gg.pose().scale(scale, scale, 1f);
-        int y = 0;
-        for (String line : lines) {
-            gg.drawString(font, line, 0, y, 0xE0E0E0);
-            y += lineH;
+
+        gg.fill(x0, y0, x0 + boxW, y0 + boxH, UiColors.MENU_BACKGROUND);
+        gg.renderOutline(x0, y0, boxW, boxH, UiColors.MENU_BORDER);
+        gg.drawString(font, title, x0 + pad, y0 + pad, UiColors.TEXT_TITLE);
+
+        int y = y0 + pad + 12;
+        for (LegendRow row : rows) {
+            int chipTop = y + (rowH - chipH) / 2;
+            gg.fill(x0 + pad, chipTop, x0 + pad + chipW, chipTop + chipH, UiColors.CHIP_BACKGROUND);
+            gg.renderOutline(x0 + pad, chipTop, chipW, chipH, UiColors.CHIP_BORDER);
+            int chipTextX = x0 + pad + (chipW - font.width(row.chip())) / 2;
+            gg.drawString(font, row.chip(), chipTextX, chipTop + 2, UiColors.TEXT_HOVER);
+            gg.drawString(font, row.label(), x0 + pad + chipW + 6, chipTop + 2, UiColors.TEXT);
+            y += rowH;
         }
-        gg.pose().popPose();
+    }
+
+    /** Resolved translation text (legend rows are measured as strings). */
+    private static String translate(String key) {
+        return Component.translatable(key).getString();
+    }
+
+    /** Legend chip text of a key binding: its LIVE bound key, uppercased. */
+    private static String chipFor(KeyMapping key) {
+        return key.getTranslatedKeyMessage().getString().toUpperCase(Locale.ROOT);
     }
 
     private void renderBackgroundLayers(GuiGraphics gg) {
@@ -1291,7 +1379,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                             RegionKey.REGION_BLOCKS,
                             RegionKey.REGION_BLOCKS);
                     if (ClientMapCache.regenActive) {
-                        MinimapRenderer.drawRegenVeil(gg, dim.location(), rx, rz);
+                        MinimapRenderer.drawRegenVeil(gg, dim.location(), rx, rz, region.contentMask());
                     }
                 }
                 // Request if missing or potentially stale (throttled); the
@@ -1318,14 +1406,12 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             int firstCx = Math.floorDiv((int) Math.floor(worldX(0)), 16);
             int lastCx = Math.floorDiv((int) Math.ceil(worldX(width)), 16) + 1;
             for (int gcx = firstCx; gcx <= lastCx; gcx++) {
-                int sx = (int) Math.round(screenX(gcx * 16));
-                gg.fill(sx, 0, sx + 1, height, gridColor);
+                drawGridLine(gg, true, screenX(gcx * 16), gridColor);
             }
             int firstCz = Math.floorDiv((int) Math.floor(worldZ(0)), 16);
             int lastCz = Math.floorDiv((int) Math.ceil(worldZ(height)), 16) + 1;
             for (int gcz = firstCz; gcz <= lastCz; gcz++) {
-                int sy = (int) Math.round(screenY(gcz * 16));
-                gg.fill(0, sy, width, sy + 1, gridColor);
+                drawGridLine(gg, false, screenY(gcz * 16), gridColor);
             }
         }
 
@@ -1335,6 +1421,21 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             int sy0 = (int) Math.round(screenY(selectedBlockZ));
             int sx1 = (int) Math.round(screenX(selectedBlockX + 1));
             int sy1 = (int) Math.round(screenY(selectedBlockZ + 1));
+            // At low zoom a block is barely a pixel wide, which made the
+            // highlight invisible when the map opens on a shared position
+            // (default zoom): grow the outline around the block's center
+            // up to a readable minimum.
+            int minPx = 6;
+            if (sx1 - sx0 < minPx) {
+                int cx = (sx0 + sx1) / 2;
+                sx0 = cx - minPx / 2;
+                sx1 = cx + minPx / 2;
+            }
+            if (sy1 - sy0 < minPx) {
+                int cy = (sy0 + sy1) / 2;
+                sy0 = cy - minPx / 2;
+                sy1 = cy + minPx / 2;
+            }
             gg.renderOutline(sx0, sy0, Math.max(1, sx1 - sx0), Math.max(1, sy1 - sy0), 0xFFE0E0E0);
         }
 
@@ -1439,6 +1540,25 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         }
     }
 
+    /**
+     * 1 px grid line centered on an exact (fractional) screen position.
+     * The tiles are rasterized from float vertices: rounding the line to
+     * whole GUI pixels drifted up to a pixel off the chunk boundaries,
+     * and a [x, x+1) fill sat entirely on one side of them.
+     */
+    private void drawGridLine(GuiGraphics gg, boolean vertical, double screenPos, int color) {
+        var pose = gg.pose();
+        pose.pushPose();
+        if (vertical) {
+            pose.translate((float) (screenPos - 0.5), 0f, 0f);
+            gg.fill(0, 0, 1, height, color);
+        } else {
+            pose.translate(0f, (float) (screenPos - 0.5), 0f);
+            gg.fill(0, 0, width, 1, color);
+        }
+        pose.popPose();
+    }
+
     @Override
     public void renderBackground(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         // No vanilla blur: the background is painted by renderBackgroundLayers().
@@ -1458,8 +1578,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         private final FullMapScreen parent;
 
-        MapChatScreen(FullMapScreen parent) {
-            super("");
+        MapChatScreen(FullMapScreen parent, String initial) {
+            super(initial);
             this.parent = parent;
         }
 

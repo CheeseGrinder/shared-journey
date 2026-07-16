@@ -150,9 +150,13 @@ public final class Lang {
 
     // ------------------------------------------------------------------ fullscreen map: misc
 
-    public static final String COORDS_CHAT = key("coords.chat");
     public static final String COORDS_OPEN = key("coords.open");
 
+    public static final String LEGEND_TITLE = key("legend.title");
+    public static final String LEGEND_CHIP_DRAG = key("legend.chip.drag");
+    public static final String LEGEND_CHIP_WHEEL = key("legend.chip.wheel");
+    public static final String LEGEND_CHIP_DOUBLE_CLICK = key("legend.chip.double_click");
+    public static final String LEGEND_CHIP_RIGHT_CLICK = key("legend.chip.right_click");
     public static final String LEGEND_DRAG = key("legend.drag");
     public static final String LEGEND_SCROLL = key("legend.scroll");
     public static final String LEGEND_DOUBLE_CLICK = key("legend.double_click");
@@ -162,7 +166,6 @@ public final class Lang {
     public static final String LEGEND_KEY_C = key("legend.key_c");
     public static final String LEGEND_KEY_F = key("legend.key_f");
     public static final String LEGEND_KEY_T = key("legend.key_t");
-    public static final String LEGEND_KEY_J = key("legend.key_j");
 
     // ------------------------------------------------------------------ minimap
 
@@ -209,6 +212,8 @@ public final class Lang {
     public static final String WAYPOINTS_TOGGLE = key("waypoints.toggle");
     public static final String WAYPOINTS_EDIT = key("waypoints.edit");
     public static final String WAYPOINTS_TELEPORT = key("waypoints.teleport");
+    public static final String WAYPOINTS_VIEW = key("waypoints.view");
+    public static final String WAYPOINTS_VIEW_TOOLTIP = key("waypoints.view.tooltip");
     public static final String WAYPOINTS_ON = key("waypoints.on");
     public static final String WAYPOINTS_OFF = key("waypoints.off");
 

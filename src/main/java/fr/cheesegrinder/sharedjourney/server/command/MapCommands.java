@@ -15,7 +15,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -118,29 +117,28 @@ public final class MapCommands {
                                                             IntegerArgumentType.getInteger(ctx, "rz")
                                                         })))))));
 
-        // rerender <chunkRadius>
+        // rerender <chunkRadius>: local re-render around the player, with
+        // a private progress bar (RegenService local mode).
         admin.then(Commands.literal("rerender")
                 .then(Commands.argument("chunkRadius", IntegerArgumentType.integer(0, 32))
                         .executes(ctx -> {
                             var src = ctx.getSource();
                             ServerPlayer player = src.getPlayerOrException();
-                            MapManager mgr = MapManager.get();
-                            if (mgr == null) {
+                            int r = IntegerArgumentType.getInteger(ctx, "chunkRadius");
+                            int count = RegenService.startAround(player, r);
+                            if (count < 0) {
+                                src.sendFailure(Component.literal(
+                                        RegenService.isRunning()
+                                                ? "A regeneration is already running (/sj admin regen cancel to stop it)"
+                                                : "Map engine unavailable"));
+                                return 0;
+                            }
+                            if (count == 0) {
+                                src.sendSuccess(() -> Component.literal("No painted chunks in this radius"), false);
                                 return 0;
                             }
 
-                            ServerLevel level = player.serverLevel();
-                            int r = IntegerArgumentType.getInteger(ctx, "chunkRadius");
-                            ChunkPos c = player.chunkPosition();
-                            int count = 0;
-                            for (int cx = c.x - r; cx <= c.x + r; cx++) {
-                                for (int cz = c.z - r; cz <= c.z + r; cz++) {
-                                    mgr.enqueueChunk(level, cx, cz);
-                                    count++;
-                                }
-                            }
-                            final int total = count;
-                            src.sendSuccess(() -> Component.literal(total + " chunk(s) queued for re-render"), true);
+                            src.sendSuccess(() -> Component.literal(count + " chunk(s) queued for re-render"), true);
                             return count;
                         })));
 

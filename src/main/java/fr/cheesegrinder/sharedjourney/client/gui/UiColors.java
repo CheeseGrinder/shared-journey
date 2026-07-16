@@ -32,5 +32,11 @@ final class UiColors {
     /** Muted title/header text. */
     static final int TEXT_TITLE = 0xFF8A8A92;
 
+    /** Keycap chip background (fullscreen map legend). */
+    static final int CHIP_BACKGROUND = 0xFF2E2E36;
+
+    /** Keycap chip border (fullscreen map legend). */
+    static final int CHIP_BORDER = 0xFF5A5A64;
+
     private UiColors() {}
 }

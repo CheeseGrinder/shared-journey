@@ -204,6 +204,12 @@ public class WaypointListScreen extends Screen {
         mc.setScreen(null);
     }
 
+    /** Opens the fullscreen map centered on the waypoint (works without TP permission). */
+    private void showOnMap(Waypoint wp) {
+        Minecraft mc = Minecraft.getInstance();
+        mc.setScreen(new FullMapScreen(wp.x() + 0.5, wp.z() + 0.5));
+    }
+
     /** Waypoints of the selected group ("All": everything), sorted by name. */
     private List<Waypoint> selectedWaypoints() {
         List<Waypoint> result = new ArrayList<>();
@@ -435,14 +441,26 @@ public class WaypointListScreen extends Screen {
                 // Banner waypoints are read-only (position/name/color are
                 // derived from the physical banner): no Edit, no Delete —
                 // removing them means breaking the banner in the world.
+                // Death waypoints are a factual record of where the player
+                // died: they can be consulted and deleted, never edited.
                 boolean banner = Waypoint.SOURCE_BANNER.equals(waypoint.source());
-                if (!banner) {
+                boolean death = Waypoint.GROUP_DEATHS.equals(waypoint.group());
+                if (!banner && !death) {
                     buttons.add(Button.builder(
                                     Component.translatable(Lang.WAYPOINTS_EDIT),
                                     b -> mc.setScreen(new WaypointEditScreen(WaypointListScreen.this, waypoint)))
                             .size(40, 20)
                             .build());
                 }
+
+                // Everyone gets "view on the map"; the teleport button is
+                // op-only, so it must not be the only way to reach a point.
+                Button view = Button.builder(Component.translatable(Lang.WAYPOINTS_VIEW), b -> showOnMap(waypoint))
+                        .size(34, 20)
+                        .tooltip(Tooltip.create(Component.translatable(Lang.WAYPOINTS_VIEW_TOOLTIP)))
+                        .build();
+                view.active = sameDimension(mc, waypoint);
+                buttons.add(view);
                 if (mc.player != null && mc.player.hasPermissions(2)) {
                     Button tp = Button.builder(
                                     Component.translatable(Lang.WAYPOINTS_TELEPORT), b -> teleportTo(waypoint))

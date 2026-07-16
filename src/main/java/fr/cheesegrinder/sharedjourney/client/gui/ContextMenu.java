@@ -137,7 +137,9 @@ public final class ContextMenu {
 
     public void render(GuiGraphics gg, int mouseX, int mouseY) {
         gg.pose().pushPose();
-        gg.pose().translate(0, 0, 200);
+        // Above everything the map draws, including the legend (z=300)
+        // and vanilla tooltips (z=400).
+        gg.pose().translate(0, 0, 500);
         drawPanel(gg, x, y, w, h);
         int rowY = y + PAD_Y;
         if (title != null) {

@@ -95,6 +95,14 @@ public final class RegenService {
     private static boolean scanning;
     /** Incremented on every start/cancel: invalidates stale async scans. */
     private static int epoch;
+    /**
+     * Local re-render (/sj admin rerender): progress goes only to the
+     * requesting player, and the global stale-chunk veil stays off (the
+     * rest of the map is not stale). Null = full-map regen.
+     */
+    private static ServerPlayer localViewer;
+    /** Ticks until the next numeric progress push (~1x/s). */
+    private static int progressBroadcastIn;
 
     /** A map region position, dimension included (chunk progress masks). */
     private record MaskKey(ResourceKey<Level> dim, int rx, int rz) {}
@@ -268,12 +276,66 @@ public final class RegenService {
         doneMasks.clear();
         dirtyMasks.clear();
         maskBroadcastIn = 0;
+        progressBroadcastIn = 0;
+        localViewer = null;
         PacketDistributor.sendToAllPlayers(new Payloads.RegenStatePayload(true));
+    }
+
+    /**
+     * Local mode (/sj admin rerender): re-renders the already painted
+     * chunks in a radius around the player. Same queue/throttle as the
+     * full regen, but progress is reported only to that player and no
+     * stale veil is raised. Returns the chunk count, or -1 when the
+     * engine is unavailable or a regen is already running.
+     */
+    public static int startAround(ServerPlayer player, int chunkRadius) {
+        MapManager mgr = MapManager.get();
+        if (mgr == null || isRunning()) {
+            return -1;
+        }
+
+        ServerLevel level = player.serverLevel();
+        var center = player.chunkPosition();
+        // Batches grouped per region, like the full modes.
+        Map<MaskKey, long[]> masks = new HashMap<>();
+        int count = 0;
+        for (int cz = center.z - chunkRadius; cz <= center.z + chunkRadius; cz++) {
+            for (int cx = center.x - chunkRadius; cx <= center.x + chunkRadius; cx++) {
+                if (!mgr.isChunkRendered(level, cx, cz)) {
+                    continue;
+                }
+
+                MaskKey key = new MaskKey(
+                        level.dimension(),
+                        Math.floorDiv(cx, RegionKey.REGION_CHUNKS),
+                        Math.floorDiv(cz, RegionKey.REGION_CHUNKS));
+                int bit = Math.floorMod(cz, RegionKey.REGION_CHUNKS) * RegionKey.REGION_CHUNKS
+                        + Math.floorMod(cx, RegionKey.REGION_CHUNKS);
+                long[] mask = masks.computeIfAbsent(key, k -> new long[16]);
+                mask[bit >> 6] |= 1L << (bit & 63);
+                count++;
+            }
+        }
+
+        if (count == 0) {
+            return 0;
+        }
+
+        doneMasks.clear();
+        dirtyMasks.clear();
+        maskBroadcastIn = 0;
+        progressBroadcastIn = 0;
+        localViewer = player;
+        ArrayDeque<Batch> q = new ArrayDeque<>();
+        masks.forEach((key, mask) -> q.add(new Batch(key.dim(), key.rx(), key.rz(), mask)));
+        install(q, count);
+        return count;
     }
 
     /** Sends the current regen state and progress to a player joining mid-regen. */
     public static void sendStateTo(ServerPlayer player) {
-        if (!isRunning()) {
+        // Local re-renders are private to their requester: nothing to sync.
+        if (!isRunning() || localViewer != null) {
             return;
         }
 
@@ -305,6 +367,29 @@ public final class RegenService {
                     new Payloads.RegenChunksPayload(key.dim().location(), key.rx(), key.rz(), doneMasks.get(key)));
         }
         dirtyMasks.clear();
+    }
+
+    /**
+     * Pushes the numeric done/total (~1x/s) for the fullscreen map's
+     * progress bar: to everyone during a full regen, only to the
+     * requesting player for a local re-render.
+     */
+    private static void broadcastProgress() {
+        if (--progressBroadcastIn > 0) {
+            return;
+        }
+
+        progressBroadcastIn = 20;
+        sendProgress(new Payloads.RegenProgressPayload(true, done, total));
+    }
+
+    /** Routes a progress payload to its audience (all, or the local viewer). */
+    private static void sendProgress(Payloads.RegenProgressPayload payload) {
+        if (localViewer == null) {
+            PacketDistributor.sendToAllPlayers(payload);
+        } else if (!localViewer.hasDisconnected()) {
+            PacketDistributor.sendToPlayer(localViewer, payload);
+        }
     }
 
     /** Installs the queue and (re)initializes the boss bar (main thread). */
@@ -360,11 +445,17 @@ public final class RegenService {
         bossBar = null;
         doneMasks.clear();
         dirtyMasks.clear();
-        // Lift the clients' stale-chunk veil (guarded: cancel can run
-        // during server shutdown, when broadcasting is no longer possible).
+        // Lift the clients' stale-chunk veil and clear the progress bar
+        // (guarded: cancel can run during server shutdown, when
+        // broadcasting is no longer possible).
         if (ServerLifecycleHooks.getCurrentServer() != null) {
-            PacketDistributor.sendToAllPlayers(new Payloads.RegenStatePayload(false));
+            sendProgress(new Payloads.RegenProgressPayload(false, done, total));
+            if (localViewer == null) {
+                PacketDistributor.sendToAllPlayers(new Payloads.RegenStatePayload(false));
+            }
         }
+
+        localViewer = null;
     }
 
     /** Called every server tick (main thread). */
@@ -380,9 +471,14 @@ public final class RegenService {
         }
 
         if (bossBar != null) {
-            // Also covers players who joined along the way (idempotent).
-            for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-                bossBar.addPlayer(p);
+            if (localViewer != null) {
+                // Local re-render: only its requester sees the bar.
+                bossBar.addPlayer(localViewer);
+            } else {
+                // Also covers players who joined along the way (idempotent).
+                for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                    bossBar.addPlayer(p);
+                }
             }
         }
         // The async scan has not delivered the queue yet.
@@ -402,8 +498,11 @@ public final class RegenService {
                 }
 
                 // Processed either way: the client veil must lift even on
-                // chunks that turn out not to be renderable.
-                markDone(current.dim(), cx, cz);
+                // chunks that turn out not to be renderable. Local mode
+                // raises no veil, so there is no mask to maintain.
+                if (localViewer == null) {
+                    markDone(current.dim(), cx, cz);
+                }
 
                 // Never any terrain generation: status checked before loading.
                 if (!isChunkFull(level, cx, cz)) {
@@ -423,6 +522,7 @@ public final class RegenService {
         }
 
         broadcastDirtyMasks();
+        broadcastProgress();
 
         // End: wait for the render pool to finish before removing the bar.
         if (queue != null && queue.isEmpty() && current == null && mgr.queueSize() == 0 && mgr.tasksInFlight() == 0) {

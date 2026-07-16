@@ -67,6 +67,11 @@ public final class ClientMapCache {
     public static volatile Map<UUID, Payloads.PlayerPositionsPayload.PlayerPos> playerPositions = Map.of();
     /** Server regen running: the map veils chunks absent from regenDoneMasks. */
     public static volatile boolean regenActive;
+    /**
+     * Numeric regen progress (full regen, or a local re-render this player
+     * requested), for the fullscreen map's progress bar. Null when idle.
+     */
+    public static volatile Payloads.RegenProgressPayload regenProgress;
 
     /** A map region position (chunk progress masks are layer-agnostic). */
     public record RegionPos(ResourceLocation dimension, int rx, int rz) {}
@@ -142,8 +147,14 @@ public final class ClientMapCache {
         return new HoverInfo(column.y(), column.biomeId(), column.blockId());
     }
 
-    /** A fully-assembled cached region texture, at the version it was received. */
-    public record Region(long version, ResourceLocation texture) {}
+    /**
+     * A fully-assembled cached region texture, at the version it was
+     * received. {@code contentMask} marks the chunks that hold at least one
+     * painted (non-transparent) pixel — bit (localZ*32 + localX), same
+     * layout as the regen masks — so overlays like the regen veil can skip
+     * never-explored chunks.
+     */
+    public record Region(long version, ResourceLocation texture, long[] contentMask) {}
 
     private static final class Assembly {
         final long version;
@@ -221,6 +232,7 @@ public final class ClientMapCache {
         HOVER_MISSES.clear();
         regenActive = false;
         regenDoneMasks.clear();
+        regenProgress = null;
     }
 
     public static int loadedCount() {
@@ -281,6 +293,7 @@ public final class ClientMapCache {
     private static void uploadTexture(RegionKey key, long version, byte[] png) {
         try {
             NativeImage image = NativeImage.read(new ByteArrayInputStream(png));
+            long[] contentMask = computeContentMask(image);
             ResourceLocation rl = textureId(key);
             DynamicTexture texture = new DynamicTexture(image);
             // Region quads are drawn edge to edge under a fractional
@@ -293,11 +306,45 @@ public final class ClientMapCache {
             GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
             GlStateManager._bindTexture(0);
             Minecraft.getInstance().getTextureManager().register(rl, texture);
-            REGIONS.put(key, new Region(version, rl));
+            REGIONS.put(key, new Region(version, rl, contentMask));
             DISK_MISSES.remove(key);
         } catch (IOException e) {
             LOGGER.error("Invalid region PNG for {}", key, e);
         }
+    }
+
+    /**
+     * Per-chunk "has painted content" bits of a region image: bit
+     * (localZ*32 + localX) set when the 16x16 pixel cell holds at least
+     * one non-transparent pixel. Never-explored chunks stay fully
+     * transparent in the PNG, and overlays (regen veil) must not paint
+     * over them. One-time scan at upload.
+     */
+    private static long[] computeContentMask(NativeImage image) {
+        long[] mask = new long[16];
+        int chunks = RegionKey.REGION_CHUNKS;
+        int chunkPx = image.getWidth() / chunks;
+        for (int cz = 0; cz < chunks; cz++) {
+            for (int cx = 0; cx < chunks; cx++) {
+                if (cellHasContent(image, cx * chunkPx, cz * chunkPx, chunkPx)) {
+                    int bit = cz * chunks + cx;
+                    mask[bit >> 6] |= 1L << (bit & 63);
+                }
+            }
+        }
+        return mask;
+    }
+
+    /** True when one pixel of the (size x size) cell has a non-zero alpha. */
+    private static boolean cellHasContent(NativeImage image, int x0, int y0, int size) {
+        for (int y = y0; y < y0 + size; y++) {
+            for (int x = x0; x < x0 + size; x++) {
+                if ((image.getPixelRGBA(x, y) >>> 24) != 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static ResourceLocation textureId(RegionKey key) {

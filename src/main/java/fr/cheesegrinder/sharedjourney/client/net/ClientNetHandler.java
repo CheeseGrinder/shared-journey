@@ -50,6 +50,10 @@ public final class ClientNetHandler {
                 new ClientMapCache.RegionPos(payload.dimension(), payload.rx(), payload.rz()), payload.mask());
     }
 
+    public static void handleRegenProgress(Payloads.RegenProgressPayload payload) {
+        ClientMapCache.regenProgress = payload.active() ? payload : null;
+    }
+
     public static void handleTrainPath(Payloads.TrainPathPayload payload) {
         CreateTrainMapBridge.acceptPath(payload.trainId(), payload.xs(), payload.zs());
     }

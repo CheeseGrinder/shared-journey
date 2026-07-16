@@ -318,7 +318,7 @@ public final class MinimapRenderer {
                         RegionKey.REGION_BLOCKS,
                         RegionKey.REGION_BLOCKS);
                 if (ClientMapCache.regenActive) {
-                    drawRegenVeil(gg, dim.location(), rx, rz);
+                    drawRegenVeil(gg, dim.location(), rx, rz, region.contentMask());
                 }
             }
         }
@@ -331,10 +331,10 @@ public final class MinimapRenderer {
             int gxStart = Math.floorDiv((int) px - reach, 16) * 16;
             int gzStart = Math.floorDiv((int) pz - reach, 16) * 16;
             for (int gx = gxStart; gx <= (int) px + reach; gx += 16) {
-                gg.fill(gx, (int) pz - reach, gx + 1, (int) pz + reach, gridColor);
+                drawGridLine(gg, true, gx, (int) pz - reach, (int) pz + reach, gridColor);
             }
             for (int gz = gzStart; gz <= (int) pz + reach; gz += 16) {
-                gg.fill((int) px - reach, gz, (int) px + reach, gz + 1, gridColor);
+                drawGridLine(gg, false, gz, (int) px - reach, (int) px + reach, gridColor);
             }
         }
 
@@ -548,21 +548,27 @@ public final class MinimapRenderer {
      * single quads. No progress mask received for the region = nothing
      * done: the whole region is veiled.
      */
-    public static void drawRegenVeil(GuiGraphics gg, ResourceLocation dimension, int rx, int rz) {
+    public static void drawRegenVeil(GuiGraphics gg, ResourceLocation dimension, int rx, int rz, long[] contentMask) {
         int x0 = rx * RegionKey.REGION_BLOCKS;
         int z0 = rz * RegionKey.REGION_BLOCKS;
         long[] mask = ClientMapCache.regenDoneMasks.get(new ClientMapCache.RegionPos(dimension, rx, rz));
-        if (mask == null) {
-            gg.fill(x0, z0, x0 + RegionKey.REGION_BLOCKS, z0 + RegionKey.REGION_BLOCKS, STALE_OVERLAY);
-            return;
-        }
-
         int chunkPx = RegionKey.REGION_BLOCKS / RegionKey.REGION_CHUNKS;
         for (int cz = 0; cz < RegionKey.REGION_CHUNKS; cz++) {
             int runStart = -1;
             for (int cx = 0; cx <= RegionKey.REGION_CHUNKS; cx++) {
-                int bit = cz * RegionKey.REGION_CHUNKS + cx;
-                boolean stale = cx < RegionKey.REGION_CHUNKS && (mask[bit >> 6] & (1L << (bit & 63))) == 0;
+                // Stale = not re-rendered yet AND actually painted in the
+                // displayed image: never-explored chunks (transparent in
+                // the PNG) never get a done bit in plain "regen" mode and
+                // used to stay veiled forever. The cx == REGION_CHUNKS
+                // sentinel column only closes the last run: the masks must
+                // not be read there (bit 1024 is out of range).
+                boolean stale = false;
+                if (cx < RegionKey.REGION_CHUNKS) {
+                    int bit = cz * RegionKey.REGION_CHUNKS + cx;
+                    boolean notDone = mask == null || (mask[bit >> 6] & (1L << (bit & 63))) == 0;
+                    boolean painted = contentMask == null || (contentMask[bit >> 6] & (1L << (bit & 63))) != 0;
+                    stale = notDone && painted;
+                }
                 if (stale && runStart < 0) {
                     runStart = cx;
                 } else if (!stale && runStart >= 0) {
@@ -576,6 +582,29 @@ public final class MinimapRenderer {
                 }
             }
         }
+    }
+
+    /**
+     * Grid line at a world coordinate, drawn in the content pose with a
+     * constant 1-screen-px thickness centered on the chunk boundary. A
+     * plain 1-block-wide fill was zoom px thick and sat entirely on one
+     * side of the boundary, reading as an offset grid.
+     */
+    private static void drawGridLine(GuiGraphics gg, boolean vertical, int at, int from, int to, int color) {
+        var pose = gg.pose();
+        pose.pushPose();
+        if (vertical) {
+            pose.translate((float) at, 0f, 0f);
+            pose.scale(1f / zoom, 1f, 1f);
+            pose.translate(-0.5f, 0f, 0f);
+            gg.fill(0, from, 1, to, color);
+        } else {
+            pose.translate(0f, (float) at, 0f);
+            pose.scale(1f, 1f / zoom, 1f);
+            pose.translate(0f, -0.5f, 0f);
+            gg.fill(from, 0, to, 1, color);
+        }
+        pose.popPose();
     }
 
     /** Translucent black background shared by every minimap label. */
