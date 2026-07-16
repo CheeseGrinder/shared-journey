@@ -66,7 +66,9 @@ Shared Journey flips the model:
   and click a **Create train** to smoothly follow it across the network.
 - **Hover info**: height, surface block, and biome under the cursor — fully client-local.
 - Right-click **context menu**: waypoints (private, temporary, or public), teleport (OP),
-  and posting the position in chat as a clickable link that opens the map for others.
+  and sharing the position in chat — the chat input is pre-filled with `[x, z]` (JourneyMap
+  style) so you can add context before sending; received coordinates become clickable links
+  that open the map there.
 - Works while the chat is open, and can be opened centered anywhere via clickable chat
   messages (`/sj goto`).
 

@@ -849,17 +849,18 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     }
 
     /**
-     * Writes the position to (local) chat; clicking it reopens the map
-     * here. The map stays open: the message waits in the chat history.
+     * Opens the chat over the map, pre-filled with the position
+     * (JourneyMap style): the player can append context for the other
+     * players and sends the message themselves — the mod never emits
+     * chat on its own. The "[x, z]" pattern is linkified on reception
+     * (ChatCoordEvents), so receivers click it to open their map here.
      */
     private void logCoords(int wx, int wz) {
         var mc = Minecraft.getInstance();
-        Component msg = Component.translatable(Lang.COORDS_CHAT, wx, wz).withStyle(style -> style.withColor(
-                        ChatFormatting.AQUA)
-                .withUnderlined(true)
-                .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/sj goto " + wx + " " + wz))
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.translatable(Lang.COORDS_OPEN))));
-        mc.gui.getChat().addMessage(msg);
+        String prefill = "[" + wx + ", " + wz + "] ";
+        // Next tick, like the T shortcut: a same-frame key press would
+        // otherwise leak its character into the chat input.
+        mc.tell(() -> mc.setScreen(new MapChatScreen(this, prefill)));
     }
 
     /**
