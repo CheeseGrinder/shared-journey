@@ -26,6 +26,15 @@ consommateur en a besoin)._
   affiché en surface quand la voie est enterrée et n'apparaît pas sur les couches CAVE.
   Corréler les pixels du `TrainMapRenderer` avec la couche affichée et les hauteurs
   (sidecar INFO ?) pour masquer en surface et/ou afficher dans la bande CAVE.
+- [ ] **P4 · ★★☆☆☆ — Découpage de `Payloads.java`** : fichier devenu illisible (~920 lignes,
+  8 groupes fonctionnels + registration). Découpage par groupe fonctionnel (pas
+  client/server — payloads `common`, plusieurs bidirectionnels, un split par direction
+  casserait la cohérence payload+codec) : `RegionSyncPayloads` (LayerSettings, RegionData,
+  ClientIndex, RegionRequest), `PlayerVisibilityPayloads` (MapVisibility, HiddenPlayers,
+  PlayerPositions), `RegenPayloads` (RegenState, RegenChunks, RegenProgress),
+  `TrainPathPayloads`, `WaypointPayloads` (public + player + banner), `OpsConfigPayloads` ;
+  `Payloads` devient un orchestrateur mince (`Hooks`, `id()`, `register()` qui délègue à
+  chaque groupe).
 - [ ] **P4 · ★★☆☆☆ — Optimisation** : allocations par frame, réflexion dans les chemins
   chauds des bridges, caches.
 - [ ] **P5 · ★★☆☆☆ — Rendu via shader** : étudier l'approche JourneyMap (draw avec ses
