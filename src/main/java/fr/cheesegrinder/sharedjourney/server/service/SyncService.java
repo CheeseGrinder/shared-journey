@@ -378,6 +378,15 @@ public final class SyncService {
         if (changed) {
             broadcastHiddenPlayers();
         }
+        if (changed && !payload.hidden()) {
+            // Back to visible: the pending chunks quarantined for this
+            // player no longer have a reason to be held — publish them now
+            // (those near ANOTHER hidden player keep their deadline).
+            MinecraftServer server = player.getServer();
+            if (server != null) {
+                QuarantineService.onPlayerVisible(server);
+            }
+        }
     }
 
     /** Sends the current hidden player list to a joining player. */

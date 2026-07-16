@@ -16,21 +16,23 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -52,15 +54,23 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * <p>Players near a pending chunk (including the hidden player themself)
  * keep receiving the real data immediately: the game already streams them
- * the area. Accepted limit: proximity to ANY pending chunk of a region
- * trusts the whole region — two distinct quarantined spots in the same
- * region cross-reveal to players standing next to either one (both are
- * within 512 blocks anyway).
+ * the area. That entitlement is remembered per chunk ("witnesses",
+ * persisted with the pending set): a player who legitimately saw the real
+ * data keeps receiving it after moving away or switching dimension —
+ * otherwise their map would swap to the public variant at the first drain
+ * and visibly lose the quarantined chunks until the drain completes.
+ * Accepted limit: proximity to ANY pending chunk of a region trusts the
+ * whole region — two distinct quarantined spots in the same region
+ * cross-reveal to players standing next to either one (both are within
+ * 512 blocks anyway).
  *
  * <p>Chunks drain individually after {@code quarantineDrainMinutes},
  * randomized +/-25% so the reveal does not replay the trajectory in order;
  * at drain time proximity is re-evaluated (a hidden player still nearby
- * re-arms the deadline). Pending chunks survive a restart
+ * re-arms the deadline). A player switching back to visible on the map
+ * publishes immediately every pending chunk not justified by another
+ * still-hidden player ({@link #onPlayerVisible}) — the quarantine only
+ * existed to hide them. Pending chunks survive a restart
  * ({@code quarantine.json} next to index.json).
  */
 public final class QuarantineService {
@@ -76,7 +86,6 @@ public final class QuarantineService {
     private static final int MAX_DRAIN_PER_SCAN = 64;
 
     private static final Gson GSON = new Gson();
-    private static final Type MAP_TYPE = new TypeToken<Map<String, Long>>() {}.getType();
 
     /** Verdict for a chunk about to be rendered. */
     public enum Verdict {
@@ -96,6 +105,8 @@ public final class QuarantineService {
     private static final Map<ChunkId, Long> PENDING = new ConcurrentHashMap<>();
     /** Secondary index for the per-region trust checks and variant loading. */
     private static final Map<RegionPos, Set<ChunkId>> BY_REGION = new ConcurrentHashMap<>();
+    /** Pending chunk -> players entitled to its real data (see class Javadoc). */
+    private static final Map<ChunkId, Set<UUID>> WITNESSES = new ConcurrentHashMap<>();
 
     private static Path file;
 
@@ -115,6 +126,7 @@ public final class QuarantineService {
         save();
         PENDING.clear();
         BY_REGION.clear();
+        WITNESSES.clear();
         file = null;
     }
 
@@ -144,20 +156,32 @@ public final class QuarantineService {
 
         // New activity in a pending chunk re-arms its deadline (draining in
         // the middle of the activity would reveal a live position).
-        arm(id);
+        arm(level, id);
         return Verdict.QUARANTINE;
     }
 
     /**
      * May this player receive the REAL variant of this region right now?
-     * True when the region has no pending chunk, or when the player stands
-     * within the quarantine radius of one (the game already streams them the
-     * area — see the class Javadoc for the accepted cross-reveal limit).
+     * True when the region has no pending chunk, when the player is a
+     * recorded witness of one, or when they currently stand within the
+     * quarantine radius of one (the game already streams them the area —
+     * see the class Javadoc for the accepted cross-reveal limit). A
+     * proximity hit is recorded as a witness so the trust survives the
+     * player moving away — their map would otherwise swap to the public
+     * variant and visibly lose the quarantined chunks.
      */
     public static boolean isTrusted(ServerPlayer player, RegionKey key) {
         Set<ChunkId> pending = BY_REGION.get(new RegionPos(key.dimension(), key.rx(), key.rz()));
         if (pending == null || pending.isEmpty()) {
             return true;
+        }
+
+        UUID uuid = player.getUUID();
+        for (ChunkId id : pending) {
+            Set<UUID> witnesses = WITNESSES.get(id);
+            if (witnesses != null && witnesses.contains(uuid)) {
+                return true;
+            }
         }
         if (!player.level().dimension().equals(key.dimension())) {
             return false;
@@ -167,6 +191,7 @@ public final class QuarantineService {
         ChunkPos pos = player.chunkPosition();
         for (ChunkId id : pending) {
             if (Math.max(Math.abs(pos.x - id.cx()), Math.abs(pos.z - id.cz())) <= radius) {
+                witness(id, uuid);
                 return true;
             }
         }
@@ -213,7 +238,7 @@ public final class QuarantineService {
             // A hidden player is still nearby: draining now would reveal a
             // live position — re-arm.
             if (level != null && isNearHiddenPlayer(level, id.cx(), id.cz())) {
-                arm(id);
+                arm(level, id);
                 continue;
             }
 
@@ -226,9 +251,43 @@ public final class QuarantineService {
         }
     }
 
+    /**
+     * A player just switched back to visible on the map: publishes
+     * immediately every pending chunk that no longer sits near any
+     * still-hidden player — the quarantine only existed to hide them, and
+     * they chose to reveal themself (no trajectory-replay concern, so no
+     * jitter or smoothing either). Chunks justified by ANOTHER hidden
+     * player keep their deadline. Main thread.
+     */
+    public static void onPlayerVisible(MinecraftServer server) {
+        MapManager mgr = MapManager.get();
+        if (mgr == null || PENDING.isEmpty()) {
+            return;
+        }
+
+        Set<RegionKey> touched = new LinkedHashSet<>();
+        int published = 0;
+        for (ChunkId id : List.copyOf(PENDING.keySet())) {
+            ServerLevel level = server.getLevel(id.dim());
+            if (level != null && isNearHiddenPlayer(level, id.cx(), id.cz())) {
+                continue;
+            }
+
+            boolean regionClean = release(id);
+            touched.addAll(mgr.publishChunk(id.dim(), id.cx(), id.cz(), regionClean));
+            published++;
+        }
+        if (!touched.isEmpty()) {
+            SyncService.pushRegionUpdates(server, List.copyOf(touched));
+        }
+        if (published > 0) {
+            LOGGER.info("SharedJourney: {} quarantined chunk(s) published (player visible again)", published);
+        }
+    }
+
     // ------------------------------------------------------------------ internals
 
-    private static void arm(ChunkId id) {
+    private static void arm(ServerLevel level, ChunkId id) {
         long delay = PrivacyServerConfig.QUARANTINE_DRAIN_MINUTES.get() * 60_000L;
         // +/-25% jitter: draining in exact quarantine order would replay the
         // hidden player's trajectory, just delayed.
@@ -238,11 +297,26 @@ public final class QuarantineService {
                     .computeIfAbsent(regionOf(id), k -> ConcurrentHashMap.newKeySet())
                     .add(id);
         }
+
+        // Every player the game is streaming the area to right now stays
+        // entitled to the real data — including the hidden player themself.
+        int radius = effectiveRadius(level.getServer());
+        for (Player player : level.players()) {
+            ChunkPos pos = player.chunkPosition();
+            if (Math.max(Math.abs(pos.x - id.cx()), Math.abs(pos.z - id.cz())) <= radius) {
+                witness(id, player.getUUID());
+            }
+        }
+    }
+
+    private static void witness(ChunkId id, UUID player) {
+        WITNESSES.computeIfAbsent(id, k -> ConcurrentHashMap.newKeySet()).add(player);
     }
 
     /** Removes a chunk from the pending set; true if its region is now clean. */
     private static boolean release(ChunkId id) {
         PENDING.remove(id);
+        WITNESSES.remove(id);
         RegionPos rp = regionOf(id);
         Set<ChunkId> set = BY_REGION.get(rp);
         if (set == null) {
@@ -297,32 +371,51 @@ public final class QuarantineService {
     private static synchronized void load() {
         PENDING.clear();
         BY_REGION.clear();
+        WITNESSES.clear();
         if (!Files.exists(file)) {
             return;
         }
 
         try (Reader r = Files.newBufferedReader(file)) {
-            Map<String, Long> raw = GSON.fromJson(r, MAP_TYPE);
-            if (raw == null) {
+            JsonObject root = GSON.fromJson(r, JsonObject.class);
+            if (root == null) {
                 return;
             }
 
-            raw.forEach((k, deadline) -> {
-                ChunkId id = parseChunkId(k);
-                if (id != null && deadline != null) {
-                    PENDING.put(id, deadline);
-                    BY_REGION
-                            .computeIfAbsent(regionOf(id), rp -> ConcurrentHashMap.newKeySet())
-                            .add(id);
+            for (Map.Entry<String, JsonElement> e : root.entrySet()) {
+                ChunkId id = parseChunkId(e.getKey());
+                if (id != null) {
+                    restoreEntry(id, e.getValue());
                 }
-            });
+            }
             if (!PENDING.isEmpty()) {
                 LOGGER.info("SharedJourney: {} quarantined chunk(s) restored", PENDING.size());
             }
         } catch (Exception e) {
             // Corrupted file: start from scratch — worst case an early reveal.
             LOGGER.warn("SharedJourney: unreadable {}, quarantine reset", FILE_NAME);
+            PENDING.clear();
+            BY_REGION.clear();
+            WITNESSES.clear();
         }
+    }
+
+    /** One pending chunk from disk; legacy format = bare deadline number. */
+    private static void restoreEntry(ChunkId id, JsonElement value) {
+        long deadline;
+        if (value.isJsonPrimitive()) {
+            deadline = value.getAsLong();
+        } else {
+            JsonObject obj = value.getAsJsonObject();
+            deadline = obj.get("deadline").getAsLong();
+            for (JsonElement w : obj.getAsJsonArray("witnesses")) {
+                witness(id, UUID.fromString(w.getAsString()));
+            }
+        }
+        PENDING.put(id, deadline);
+        BY_REGION
+                .computeIfAbsent(regionOf(id), rp -> ConcurrentHashMap.newKeySet())
+                .add(id);
     }
 
     /** Saves the pending set (world save, shutdown). */
@@ -332,9 +425,19 @@ public final class QuarantineService {
         }
 
         try {
-            Map<String, Long> raw = new HashMap<>();
-            PENDING.forEach((id, deadline) -> raw.put(id.dim().location() + "|" + id.cx() + "|" + id.cz(), deadline));
-            RegionStorage.writeAtomically(file, GSON.toJson(raw, MAP_TYPE).getBytes(StandardCharsets.UTF_8));
+            JsonObject root = new JsonObject();
+            PENDING.forEach((id, deadline) -> {
+                JsonObject entry = new JsonObject();
+                entry.addProperty("deadline", deadline);
+                JsonArray list = new JsonArray();
+                Set<UUID> witnesses = WITNESSES.get(id);
+                if (witnesses != null) {
+                    witnesses.forEach(u -> list.add(u.toString()));
+                }
+                entry.add("witnesses", list);
+                root.add(id.dim().location() + "|" + id.cx() + "|" + id.cz(), entry);
+            });
+            RegionStorage.writeAtomically(file, GSON.toJson(root).getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
             LOGGER.error("Failed to save {}", file, e);
         }

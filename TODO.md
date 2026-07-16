@@ -162,6 +162,20 @@ stabilise le modèle. Déjà publié : rendu écran v1 (`MapView`, `MapRenderEve
 
 ### Bugs marquants
 
+- **Quarantaine — deux fuites de confort (2026-07-16)** : (1) un joueur caché qui repassait
+  visible laissait ses chunks en attente jusqu'à la deadline — désormais
+  `SyncService.handleMapVisibility` → `QuarantineService.onPlayerVisible` publie
+  immédiatement tout chunk en attente qui n'est plus proche d'un AUTRE joueur caché
+  (plus de raison de retenir, pas de souci de rejouer la trajectoire : le joueur a choisi
+  de se révéler). (2) la map du joueur caché lui-même se vidait puis se re-remplissait au
+  fil du drain : `isTrusted` ne regardait que la proximité COURANTE — passé le rayon de
+  ses propres chunks, il recevait la variante publique (figée pré-quarantaine, vide de
+  son exploration). Corrigé par les « témoins » : tout joueur dans le rayon au moment de
+  l'activité (`arm`) ou d'un hit de proximité (`isTrusted`) reste durablement autorisé au
+  réel pour ce chunk, même parti/changé de dimension (couvre aussi le compagnon visible
+  qui s'éloigne). Témoins persistés dans `quarantine.json` (nouveau format objet
+  `{deadline, witnesses}`, l'ancien format nombre est encore lu — les témoins d'avant
+  migration sont perdus, re-push public accepté une fois).
 - **Éclairage non propagé aux chunks voisins (2026-07-16)** : poser une
   lumière près d'une frontière de chunk ne rafraîchissait que le chunk modifié — la
   lumière porte jusqu'à 15 blocs et traverse les frontières (ombrage NIGHT/CAVE), les
