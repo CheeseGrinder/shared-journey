@@ -110,6 +110,14 @@ public final class Lang {
     public static final String SETTINGS_SERVER_QUAR_RADIUS = key("settings.server.quarantine_radius");
     public static final String SETTINGS_SERVER_QUAR_DRAIN = key("settings.server.quarantine_drain");
 
+    // Slider value units ("%s px", "%s blocks"...).
+    public static final String UNIT_PIXELS = key("settings.unit.pixels");
+    public static final String UNIT_BLOCKS = key("settings.unit.blocks");
+    public static final String UNIT_KBPS = key("settings.unit.kbps");
+    public static final String UNIT_SECONDS = key("settings.unit.seconds");
+    public static final String UNIT_CHUNKS = key("settings.unit.chunks");
+    public static final String UNIT_MINUTES = key("settings.unit.minutes");
+
     /** Settings tab label ("sharedjourney.settings.tab.minimap"...). */
     public static String settingsTab(String name) {
         return key("settings.tab." + name.toLowerCase(Locale.ROOT));
@@ -212,6 +220,8 @@ public final class Lang {
     // ------------------------------------------------------------------ commands / services
 
     public static final String COMMAND_PURGED = key("command.purged");
+    public static final String COMMAND_CACHE = key("command.cache");
+    public static final String COMMAND_TELEPORTED = key("command.teleported");
     public static final String REGEN_SCAN = key("regen.scan");
     public static final String REGEN_BOSSBAR = key("regen.bossbar");
 

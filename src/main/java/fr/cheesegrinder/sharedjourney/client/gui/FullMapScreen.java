@@ -378,10 +378,10 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         }
     }
 
-    /** Y range of the current CAVE band, shown on the slider. */
+    /** Y range of the current CAVE band, shown on the slider (same format as the settings screen). */
     private String bandLabel() {
         int band = currentBand();
-        return "y" + (band * 16) + ".." + (band * 16 + 15);
+        return "y " + (band * 16) + ".." + (band * 16 + 15);
     }
 
     private int currentBand() {

@@ -73,10 +73,11 @@ public final class ClientCommands {
                 .then(Commands.literal("cache").executes(ctx -> {
                     CommandSourceStack src = ctx.getSource();
                     src.sendSuccess(
-                            () -> Component.literal(
-                                    "Local cache: " + DiskCache.index().size() + " region(s) on disk, "
-                                            + ClientMapCache.loadedCount() + " texture(s) loaded, "
-                                            + ClientMapCache.pendingCount() + " being received"),
+                            () -> Component.translatable(
+                                    Lang.COMMAND_CACHE,
+                                    DiskCache.index().size(),
+                                    ClientMapCache.loadedCount(),
+                                    ClientMapCache.pendingCount()),
                             false);
                     return 1;
                 }));

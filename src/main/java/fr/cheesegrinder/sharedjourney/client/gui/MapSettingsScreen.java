@@ -211,7 +211,7 @@ public class MapSettingsScreen extends Screen {
                 64,
                 320,
                 MinimapClientConfig.MINIMAP_SIZE.get(),
-                v -> Component.literal(v + " px"),
+                v -> Component.translatable(Lang.UNIT_PIXELS, v),
                 MinimapClientConfig.MINIMAP_SIZE::set));
         rows.add(cycle(
                 Component.translatable(Lang.SETTINGS_MINIMAP_CORNER),
@@ -250,7 +250,7 @@ public class MapSettingsScreen extends Screen {
                 8,
                 128,
                 RadarClientConfig.RADAR_RADIUS.get(),
-                v -> Component.literal(v + " blocks"),
+                v -> Component.translatable(Lang.UNIT_BLOCKS, v),
                 RadarClientConfig.RADAR_RADIUS::set));
         rows.add(configToggle(Lang.SETTINGS_RADAR_HEADS, "mobHeads", RadarClientConfig.RADAR_MOB_HEADS));
         rows.add(configToggle(Lang.ACTION_SHOW_PLAYERS, "showPlayers", RadarClientConfig.RADAR_PLAYERS));
@@ -307,7 +307,7 @@ public class MapSettingsScreen extends Screen {
                 1,
                 128,
                 WaypointClientConfig.TEMP_WAYPOINT_RADIUS.get(),
-                v -> Component.literal(v + " blocks"),
+                v -> Component.translatable(Lang.UNIT_BLOCKS, v),
                 WaypointClientConfig.TEMP_WAYPOINT_RADIUS::set));
         rows.add(
                 configToggle(Lang.SETTINGS_WAYPOINT_BEACONS, "waypointBeacons", WaypointClientConfig.WAYPOINT_BEACONS));
@@ -317,7 +317,7 @@ public class MapSettingsScreen extends Screen {
                 0,
                 512,
                 WaypointClientConfig.BEACON_MIN_DISTANCE.get(),
-                v -> Component.literal(v + " blocks"),
+                v -> Component.translatable(Lang.UNIT_BLOCKS, v),
                 WaypointClientConfig.BEACON_MIN_DISTANCE::set));
         rows.add(intSlider(
                 Component.translatable(Lang.SETTINGS_WAYPOINT_BEACON_MAX),
@@ -325,7 +325,7 @@ public class MapSettingsScreen extends Screen {
                 16,
                 4096,
                 WaypointClientConfig.BEACON_MAX_DISTANCE.get(),
-                v -> Component.literal(v + " blocks"),
+                v -> Component.translatable(Lang.UNIT_BLOCKS, v),
                 WaypointClientConfig.BEACON_MAX_DISTANCE::set));
         rows.add(configToggle(Lang.SETTINGS_WAYPOINT_DEATH, "deathWaypoints", WaypointClientConfig.DEATH_WAYPOINTS));
         return rows;
@@ -394,7 +394,7 @@ public class MapSettingsScreen extends Screen {
                 32,
                 8192,
                 ops.maxKb,
-                v -> Component.literal(v + " KB/s"),
+                v -> Component.translatable(Lang.UNIT_KBPS, v),
                 v -> ops.maxKb = v));
         // Stored in ticks (payload/config), displayed in seconds.
         rows.add(intSlider(
@@ -403,7 +403,7 @@ public class MapSettingsScreen extends Screen {
                 5,
                 1200,
                 ops.syncRate,
-                v -> Component.literal(String.format(Locale.ROOT, "%.2f s", v / 20.0)),
+                v -> Component.translatable(Lang.UNIT_SECONDS, String.format(Locale.ROOT, "%.2f", v / 20.0)),
                 v -> ops.syncRate = v));
         rows.add(toggle(
                 Component.translatable(Lang.SETTINGS_SERVER_ON_DEMAND),
@@ -416,7 +416,7 @@ public class MapSettingsScreen extends Screen {
                 0,
                 128,
                 ops.radarCap,
-                v -> Component.literal(v + " blocks"),
+                v -> Component.translatable(Lang.UNIT_BLOCKS, v),
                 v -> ops.radarCap = v));
 
         rows.add(new HeaderRow(Component.translatable(Lang.SETTINGS_SERVER_WAYPOINTS)));
@@ -447,7 +447,7 @@ public class MapSettingsScreen extends Screen {
                 1,
                 32,
                 ops.quarantineRadius,
-                v -> Component.literal(v + " chunks"),
+                v -> Component.translatable(Lang.UNIT_CHUNKS, v),
                 v -> ops.quarantineRadius = v));
         rows.add(intSlider(
                 Component.translatable(Lang.SETTINGS_SERVER_QUAR_DRAIN),
@@ -455,7 +455,7 @@ public class MapSettingsScreen extends Screen {
                 1,
                 120,
                 ops.quarantineDrain,
-                v -> Component.literal(v + " min"),
+                v -> Component.translatable(Lang.UNIT_MINUTES, v),
                 v -> ops.quarantineDrain = v));
         return rows;
     }

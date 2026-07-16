@@ -2,6 +2,7 @@ package fr.cheesegrinder.sharedjourney.server.command;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
+import fr.cheesegrinder.sharedjourney.common.util.Lang;
 import fr.cheesegrinder.sharedjourney.server.service.MapManager;
 import fr.cheesegrinder.sharedjourney.server.service.RegenService;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
@@ -250,7 +251,7 @@ public final class MapCommands {
         ChunkAccess chunk = level.getChunk(x >> 4, z >> 4);
         int y = arrivalY(level, chunk, x, z);
         player.teleportTo(level, x + 0.5, y, z + 0.5, Set.of(), player.getYRot(), player.getXRot());
-        src.sendSuccess(() -> Component.literal("Teleported to " + x + " " + y + " " + z), true);
+        src.sendSuccess(() -> Component.translatable(Lang.COMMAND_TELEPORTED, x, y, z), true);
         return 1;
     }
 

@@ -13,9 +13,7 @@
   "sharedjourney.layer.topo": "Topographic",
   "sharedjourney.layer.biome": "Biomes",
   "sharedjourney.layer.cave": "Caves",
-  "sharedjourney.layer.auto": "Auto: %s",
 
-  "sharedjourney.fullmap.hint": "Drag: pan | Wheel: zoom | Right-click: new waypoint | Click marker: edit",
   "sharedjourney.waypoint.create": "New waypoint",
   "sharedjourney.waypoint.edit": "Edit waypoint",
   "sharedjourney.waypoint.delete": "Delete",
@@ -34,6 +32,8 @@
   "sharedjourney.waypoint.type.banner": "Banner",
   "sharedjourney.waypoint.type.tooltip": "Private: only you see it. Public: shared with every player on the server. Temporary: automatically deleted when reached.",
   "sharedjourney.command.purged": "%s cached region file(s) deleted for layer '%s'",
+  "sharedjourney.command.cache": "Local cache: %s region(s) on disk, %s texture(s) loaded, %s being received",
+  "sharedjourney.command.teleported": "Teleported to %s %s %s",
 
   "sharedjourney.context.teleport": "Teleport here",
   "sharedjourney.context.waypoints": "Waypoints",
@@ -154,6 +154,12 @@
   "sharedjourney.settings.value.off": "Off",
   "sharedjourney.settings.value.quarantine": "Quarantine",
   "sharedjourney.settings.value.exclude": "Exclude",
+  "sharedjourney.settings.unit.pixels": "%s px",
+  "sharedjourney.settings.unit.blocks": "%s blocks",
+  "sharedjourney.settings.unit.kbps": "%s KB/s",
+  "sharedjourney.settings.unit.seconds": "%s s",
+  "sharedjourney.settings.unit.chunks": "%s chunks",
+  "sharedjourney.settings.unit.minutes": "%s min",
 
   "sharedjourney.time.day": "Daytime",
   "sharedjourney.time.sunset": "Sunset",
@@ -207,7 +213,7 @@
   "sharedjourney.configuration.hiddenBlocks.button": "Edit list",
 
   "sharedjourney.configuration.sync": "Sync",
-  "sharedjourney.configuration.sync.tooltip": "Map synchronisation settings between server and clients.",
+  "sharedjourney.configuration.sync.tooltip": "Map synchronization settings between server and clients.",
   "sharedjourney.configuration.sync.button": "Configure",
 
   "sharedjourney.configuration.pushRadiusRegions": "Push Radius (regions)",

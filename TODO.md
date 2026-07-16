@@ -4,11 +4,6 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
 
 ## À faire
 
-### Chantier UI — partie hors-icônes (reste)
-
-- [ ] **P4 · ★★☆☆☆ — Passe sur les textes** : nettoyer/harmoniser les libellés (dont les
-  unités des sliders de l'écran de config, aujourd'hui en anglais brut).
-
 ### Chantier UI — partie icônes (en attente des assets, pas encore fournis)
 
 - [ ] **P3 · ★★★☆☆ — Icône in-world des waypoints (losange JM)** : losange à la position du
@@ -50,20 +45,33 @@ stabilise le modèle. Déjà publié : rendu écran v1 (`MapView`, `MapRenderEve
   chauds des bridges, caches.
 - [ ] **P5 · ★★☆☆☆ — Rendu via shader** : étudier l'approche JourneyMap (draw avec ses
   propres shaders) pour des formes plus propres (anti-aliasing).
-- [ ] **P5 · ★☆☆☆☆ — Audit des traductions** : clés manquantes/mortes (sera largement
-  couvert par la passe textes).
-
 ## Ordre recommandé
 
-1. **Chantier UI hors-icônes** : passe textes, puis tranche **API UI**.
+1. **Tranche API UI** (boutons, menu contextuel, barre d'infos — section API publique).
 2. **Chantier UI icônes** dès que les assets sont fournis (losange in-world, marqueur joueur).
 3. **Robustesse** : rails Create souterrains.
-4. **Optimisation** (P4), puis shaders + audit traductions (P5).
+4. **Optimisation** (P4), puis shaders (P5).
 
 ## Fait (résumé — détails dans l'historique git)
 
 ### Chantiers récents (2026-07)
 
+- **Passe textes + audit i18n (2026-07-16, clôt le chantier UI hors-icônes)** : unités des
+  sliders de l'écran de config via des clés `settings.unit.*` (px, blocs, Ko/s, s, chunks,
+  min) au lieu de l'anglais brut ; feedbacks joueur `/sj cache` et `/sj tp` traduisibles
+  (`command.cache`, `command.teleported`) — les feedbacks admin (`stats`, `regen`,
+  `rerender`, `sync force`, `layer`, `save`) restent volontairement en anglais (outillage
+  op, convention du projet) ; clés mortes supprimées (`fullmap.hint`, `layer.auto`) ;
+  harmonisations fr (« calque » → « couche », « beacons » → « balises ») et en
+  (« synchronisation » → « synchronization ») ; label de bande CAVE unifié (`y 0..15`,
+  plein écran + écran de config) ; parité en/fr vérifiée par script (aucune clé
+  manquante d'un côté ou de l'autre, toutes les clés de `Lang.java` résolues). L'audit
+  des traductions (ex-P5) est couvert.
+- **QoL carte plein écran (2026-07-16)** : `/sj goto`, clic sur les coords dans le chat et
+  la recherche X/Z posent la sélection de bloc (bordure blanche) sur la cible ; le TP du
+  menu contextuel et « Position in chat » ne ferment plus la map ; le chat HUD est
+  redessiné par-dessus la map (style JM — le HUD vanilla est peint sous les screens),
+  sans double rendu quand le chat est ouvert par-dessus (touche T).
 - **Chantier UI hors-icônes (2026-07-15)** :
   - **Boussole** : toggle de la barre du haut du plein écran, pilote
     `minimap.rotateWithPlayer`. Le plein écran lui-même reste nord fixe par construction
