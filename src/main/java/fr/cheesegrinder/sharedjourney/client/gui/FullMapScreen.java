@@ -591,9 +591,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         // Create's train map toggle widget (drawn top-left by its overlay):
         // its native handler only knows about JM's screen.
-        if (button == 0
-                && pluginOverlaysActive()
-                && CreateTrainMapBridge.handleToggleClick((int) mouseX, (int) mouseY)) {
+        if (button == 0 && CreateTrainMapBridge.handleToggleClick((int) mouseX, (int) mouseY)) {
             return true;
         }
 
@@ -640,10 +638,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         }
 
         if ((button == 0 || button == 1) && !dragged) {
-            boolean overlays = pluginOverlaysActive();
             // JourneyMap PRE click (cancellable): a bridged plugin (RNS
             // deposits...) can consume the click before our own handling.
-            if (overlays && JourneyMapFullscreenBridge.fireClick(this, true, mouseX, mouseY, button)) {
+            if (JourneyMapFullscreenBridge.fireClick(this, true, mouseX, mouseY, button)) {
                 return true;
             }
 
@@ -656,9 +653,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 handled = true;
             }
 
-            if (overlays) {
-                JourneyMapFullscreenBridge.fireClick(this, false, mouseX, mouseY, button);
-            }
+            JourneyMapFullscreenBridge.fireClick(this, false, mouseX, mouseY, button);
+
             return handled;
         }
         return false;
@@ -1080,16 +1076,6 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
     // ------------------------------------------------------------------ rendering
 
-    /**
-     * Bridged plugin overlays (Create trains, RNS deposits) active: never
-     * on the CAVE layer, otherwise always — their visibility is left to
-     * the per-overlay toggles (the old zoom floor proved more confusing
-     * than useful).
-     */
-    private boolean pluginOverlaysActive() {
-        return layer != MapLayer.CAVE;
-    }
-
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         var mc = Minecraft.getInstance();
@@ -1110,11 +1096,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         // deposits...): above the map, below the widgets. Create's train
         // map is rendered directly (its JM render path has a broken hover
         // pick — see CreateTrainMapBridge), with name tooltips.
-        if (pluginOverlaysActive()) {
-            JourneyMapFullscreenBridge.fireRender(this, gg, mouseX, mouseY, partialTick);
-            CreateTrainMapBridge.renderMap(
-                    gg, width, height, centerX, centerZ, zoom, mouseX, mouseY, true, followedTrain);
-        }
+        JourneyMapFullscreenBridge.fireRender(this, gg, mouseX, mouseY, partialTick);
+        CreateTrainMapBridge.renderMap(gg, width, height, centerX, centerZ, zoom, mouseX, mouseY, true, followedTrain);
 
         // Public API overlays (api.client.event.MapRenderEvent): same spot
         // as the bridged overlays, but never gated by zoom or layer.
