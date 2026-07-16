@@ -2,7 +2,11 @@ package fr.cheesegrinder.sharedjourney.client.gui;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
+import fr.cheesegrinder.sharedjourney.api.client.MapMarker;
+import fr.cheesegrinder.sharedjourney.api.client.event.FullMapContextMenuEvent;
+import fr.cheesegrinder.sharedjourney.api.client.event.FullMapInfoBarEvent;
 import fr.cheesegrinder.sharedjourney.api.client.event.FullMapScreenEvent;
+import fr.cheesegrinder.sharedjourney.api.client.event.FullMapToolbarEvent;
 import fr.cheesegrinder.sharedjourney.api.client.event.MapLayerChangedEvent;
 import fr.cheesegrinder.sharedjourney.api.client.event.MapRenderEvent;
 import fr.cheesegrinder.sharedjourney.client.compat.CreateTrainMapBridge;
@@ -14,9 +18,11 @@ import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientSetupEvents;
 import fr.cheesegrinder.sharedjourney.client.render.EntityDots;
+import fr.cheesegrinder.sharedjourney.client.render.MapMarkerRenderer;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
 import fr.cheesegrinder.sharedjourney.client.render.MobHeadIcons;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
+import fr.cheesegrinder.sharedjourney.client.service.MapMarkerStore;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
@@ -50,6 +56,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -83,6 +90,12 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     private static final long DOUBLE_CLICK_MS = 350;
     /** Keyboard pan step (arrows), in blocks — same as JourneyMap. */
     private static final int PAN_STEP_BLOCKS = 16;
+    /** Toolbar button step: 20 px buttons + 2 px gap. */
+    private static final int TOOLBAR_STEP = 22;
+    /** Buttons stacked by the left toolbar (locate, follow, zoom ×2, waypoints, settings). */
+    private static final int LEFT_TOOLBAR_ROWS = 6;
+    /** Y of the addon zone (API TOP_LEFT buttons + bridged overlay widgets). */
+    private static final int ADDON_ZONE_Y = 30;
     /**
      * Fraction of the remaining distance to the followed train the camera
      * closes each frame: a simple exponential smoothing (snappy enough to
@@ -185,6 +198,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         closeContextMenu(); // resize: drop the transient menu
         buildTopToolbar();
         buildLeftToolbar();
+        buildApiToolbar();
         updateBandButtons();
         refreshToolbar();
         if (!apiOpened) {
@@ -251,9 +265,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
     /** Left bar: position search, follow player, zoom. */
     private void buildLeftToolbar() {
-        // Below the bridged plugins' overlay controls (Create's train map
-        // draws its toggle in the top-left corner) to avoid overlapping.
-        int y = 70;
+        // Vertically centered column, floored below the addon zone (API
+        // TOP_LEFT buttons and the relocated RNS overlay toggle, at y=30)
+        // so small windows can't make them overlap.
+        int totalHeight = (LEFT_TOOLBAR_ROWS - 1) * TOOLBAR_STEP + 20;
+        int y = Math.max((height - totalHeight) / 2, ADDON_ZONE_Y + TOOLBAR_STEP);
         addIcon(6, y, Items.COMPASS, Lang.ACTION_LOCATE, b -> {
             locateOpen = !locateOpen;
             updateLocateWidgets();
@@ -284,6 +300,57 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 .setScreen(new WaypointListScreen(this)));
         addIcon(6, y + 110, Items.COMPARATOR, Lang.ACTION_SETTINGS, b -> Minecraft.getInstance()
                 .setScreen(new MapSettingsScreen(this)));
+    }
+
+    /**
+     * Third-party buttons (api.client.event.FullMapToolbarEvent), posted
+     * on every widget rebuild (open AND resize). They live in dedicated
+     * addon zones, visually separate from the internal toolbars (player
+     * feedback: a mod button and an addon button must be tellable apart):
+     * TOP_LEFT buttons form a horizontal cluster in the top-left corner
+     * (where the bridged overlay widgets historically live), TOP_RIGHT
+     * buttons are right-aligned, marching left from the Close button.
+     * Toggle outlines ride the same refreshToolbar() mechanism as the
+     * internal toggles, so this must run after buildTopToolbar() (which
+     * clears toggleIcons).
+     */
+    private void buildApiToolbar() {
+        FullMapToolbarEvent event = new FullMapToolbarEvent(this);
+        NeoForge.EVENT_BUS.post(event);
+        // The addon zone also hosts the bridged widgets, which keep their
+        // native look (Create's train toggle at (3,30), RNS's deposits
+        // toggle relocated next to it, both ~55 px wide): API buttons
+        // start after their reserved footprints.
+        int leftX = 6;
+        if (CreateTrainMapBridge.toggleWidgetActive()) {
+            leftX += 64;
+        }
+        if (ModList.get().isLoaded("create_rns")) {
+            leftX += 64;
+        }
+        int topX = width - 26 - TOOLBAR_STEP;
+        for (FullMapToolbarEvent.ToolbarButton spec : event.getButtons()) {
+            int x;
+            int y;
+            if (spec.slot() == FullMapToolbarEvent.Slot.TOP_LEFT) {
+                x = leftX;
+                y = ADDON_ZONE_Y;
+                leftX += TOOLBAR_STEP;
+            } else {
+                x = topX;
+                y = 6;
+                topX -= TOOLBAR_STEP;
+            }
+
+            IconButton button = new IconButton(x, y, 20, spec.icon(), spec.tooltip(), b -> {
+                spec.onPress().run();
+                refreshToolbar();
+            });
+            addRenderableWidget(button);
+            if (spec.selected() != null) {
+                toggleIcons.put(button, () -> spec.selected().getAsBoolean());
+            }
+        }
     }
 
     private IconButton addIcon(int x, int y, Item icon, String tooltipKey, Button.OnPress press) {
@@ -683,8 +750,29 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                                 () -> mc.setScreen(new WaypointListScreen(this))))));
         items.add(ContextMenu.Item.action(Component.translatable(Lang.CONTEXT_CHAT), () -> logCoords(wx, wz)));
 
+        // Third-party rows (api.client.event.FullMapContextMenuEvent),
+        // appended below the internal ones.
+        FullMapContextMenuEvent event = new FullMapContextMenuEvent(this, wx, wz);
+        NeoForge.EVENT_BUS.post(event);
+        for (FullMapContextMenuEvent.Entry entry : event.getEntries()) {
+            items.add(toMenuItem(entry));
+        }
+
         Component title = Component.literal(wx + ", " + wz);
         contextMenu = new ContextMenu(font, title, items, mouseX, mouseY, width, height, this::closeContextMenu);
+    }
+
+    /** API context-menu entry -> internal menu row (one submenu level). */
+    private static ContextMenu.Item toMenuItem(FullMapContextMenuEvent.Entry entry) {
+        if (entry.children() == null) {
+            return ContextMenu.Item.action(entry.label(), entry.action());
+        }
+
+        List<ContextMenu.Item> children = new ArrayList<>();
+        for (FullMapContextMenuEvent.Entry child : entry.children()) {
+            children.add(ContextMenu.Item.action(child.label(), child.action()));
+        }
+        return ContextMenu.Item.submenu(entry.label(), children);
     }
 
     private void closeContextMenu() {
@@ -1055,16 +1143,32 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 + " ■ x: " + pos.getX() + ", z: " + pos.getZ() + ", y: " + pos.getY()
                 + " ■ " + biome
                 + " ■ Zoom: " + Math.round(zoom * 2048);
-        drawInfoBar(gg, text, 30);
+        drawInfoBar(gg, text + apiSegments(new FullMapInfoBarEvent.Top(this)), 30);
+    }
+
+    /**
+     * Third-party segments (api.client.event.FullMapInfoBarEvent),
+     * appended after the internal ones with the bar's " ■ " separator.
+     */
+    private String apiSegments(FullMapInfoBarEvent event) {
+        NeoForge.EVENT_BUS.post(event);
+        StringBuilder sb = new StringBuilder();
+        for (Component segment : event.getSegments()) {
+            sb.append(" ■ ").append(segment.getString());
+        }
+        return sb.toString();
     }
 
     /** Bar at the bottom of the screen: hovered block ■ position ■ biome. */
     private void renderHoverBar(GuiGraphics gg, Minecraft mc, int mouseX, int mouseY) {
         int wx = (int) Math.floor(worldX(mouseX));
         int wz = (int) Math.floor(worldZ(mouseY));
+        // API segments are appended on both branches: a contributor may
+        // care exactly about unexplored columns (no hover info).
+        String extra = apiSegments(new FullMapInfoBarEvent.Hover(this, wx, wz));
         ClientMapCache.HoverInfo info = hoverInfoAt(mc, wx, wz);
         if (info == null) {
-            drawInfoBar(gg, "x: " + wx + ", z: " + wz, height - 24);
+            drawInfoBar(gg, "x: " + wx + ", z: " + wz + extra, height - 24);
             return;
         }
 
@@ -1077,6 +1181,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         if (!info.biomeId().isEmpty()) {
             sb.append(" ■ ").append(biomeName(info.biomeId()));
         }
+        sb.append(extra);
         drawInfoBar(gg, sb.toString(), height - 24);
     }
 
@@ -1230,6 +1335,23 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             int sx1 = (int) Math.round(screenX(selectedBlockX + 1));
             int sy1 = (int) Math.round(screenY(selectedBlockZ + 1));
             gg.renderOutline(sx0, sy0, Math.max(1, sx1 - sx0), Math.max(1, sy1 - sy0), 0xFFE0E0E0);
+        }
+
+        // Declarative API markers (api.client.MapMarkerApi), in screen
+        // coordinates: above the tiles/grid/selection, below the
+        // waypoints and player markers (internal navigation keeps visual
+        // priority). Clamped markers are pinned to the screen edge.
+        for (MapMarker marker : MapMarkerStore.collect(this)) {
+            double msx = screenX(marker.x());
+            double msy = screenY(marker.z());
+            if (marker.clampToEdge()) {
+                msx = Math.clamp(msx, 8, width - 8);
+                msy = Math.clamp(msy, 8, height - 8);
+            } else if (msx < -8 || msx > width + 8 || msy < -8 || msy > height + 8) {
+                continue;
+            }
+
+            MapMarkerRenderer.draw(gg, marker, (float) msx, (float) msy, 1.2f);
         }
 
         // Waypoints on top, in screen coordinates (constant size regardless of zoom)

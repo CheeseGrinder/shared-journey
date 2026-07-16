@@ -2,6 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.render;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
+import fr.cheesegrinder.sharedjourney.api.client.MapMarker;
 import fr.cheesegrinder.sharedjourney.api.client.MapView;
 import fr.cheesegrinder.sharedjourney.api.client.event.MapLayerChangedEvent;
 import fr.cheesegrinder.sharedjourney.api.client.event.MapRenderEvent;
@@ -11,6 +12,7 @@ import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
+import fr.cheesegrinder.sharedjourney.client.service.MapMarkerStore;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
@@ -385,6 +387,7 @@ public final class MinimapRenderer {
         // the minimap's scissor, in a pose where (0,0) is the map's
         // top-left corner — rotated with the map content when rotation is
         // on, so world-anchored draws land on the right spot.
+        MapView apiView = new MinimapView(size, size, px, pz, zoom, dim.location(), layer, band);
         gg.pose().pushPose();
         if (rotate) {
             gg.pose().translate(cx, cy, 0);
@@ -392,10 +395,7 @@ public final class MinimapRenderer {
             gg.pose().translate(-cx, -cy, 0);
         }
         gg.pose().translate(x, y, 0);
-        NeoForge.EVENT_BUS.post(new MapRenderEvent(
-                gg,
-                new MinimapView(size, size, px, pz, zoom, dim.location(), layer, band),
-                deltaTracker.getGameTimeDeltaPartialTick(true)));
+        NeoForge.EVENT_BUS.post(new MapRenderEvent(gg, apiView, deltaTracker.getGameTimeDeltaPartialTick(true)));
         gg.pose().popPose();
 
         gg.disableScissor();
@@ -414,6 +414,33 @@ public final class MinimapRenderer {
         double cosT = Math.cos(theta);
         double sinT = Math.sin(theta);
         float maxR = half;
+
+        // Declarative API markers (api.client.MapMarkerApi), below the
+        // waypoints and player markers, with the same border pinning when
+        // clampToEdge is set (radial on a circle, rect on a square).
+        for (MapMarker marker : MapMarkerStore.collect(apiView)) {
+            double ox = (marker.x() - px) * zoom;
+            double oz = (marker.z() - pz) * zoom;
+            double sx = ox * cosT - oz * sinT;
+            double sy = ox * sinT + oz * cosT;
+            if (marker.clampToEdge()) {
+                if (circle) {
+                    double r = Math.sqrt(sx * sx + sy * sy);
+                    if (r > maxR) {
+                        sx = sx / r * maxR;
+                        sy = sy / r * maxR;
+                    }
+                } else {
+                    sx = Math.clamp(sx, -maxR, maxR);
+                    sy = Math.clamp(sy, -maxR, maxR);
+                }
+            } else if (circle ? Math.sqrt(sx * sx + sy * sy) > maxR : (Math.abs(sx) > maxR || Math.abs(sy) > maxR)) {
+                continue;
+            }
+
+            MapMarkerRenderer.draw(gg, marker, cx + (float) sx, cy + (float) sy, 0.9f);
+        }
+
         for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
             if (!MapClientConfig.SHOW_WAYPOINTS.get() || !WaypointStore.isShown(wp)) {
                 continue;

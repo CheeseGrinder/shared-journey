@@ -1,9 +1,11 @@
 package fr.cheesegrinder.sharedjourney;
 
 import fr.cheesegrinder.sharedjourney.api.WaypointApi;
+import fr.cheesegrinder.sharedjourney.api.client.MapMarkerApi;
 import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapBridge;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.net.ClientNetHandler;
+import fr.cheesegrinder.sharedjourney.client.service.MapMarkerStore;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 
@@ -57,6 +59,10 @@ public class SharedJourneyClient {
         WaypointApi.Hooks.remove = WaypointStore::remove;
         WaypointApi.Hooks.isShown = WaypointStore::isShown;
         WaypointApi.Hooks.groups = WaypointStore::groups;
+
+        // Declarative map markers (screen-render API v2).
+        MapMarkerApi.Hooks.register = MapMarkerStore::register;
+        MapMarkerApi.Hooks.unregister = MapMarkerStore::unregister;
     }
 
     @SubscribeEvent

@@ -192,11 +192,13 @@ public final class JourneyMapFullscreenBridge {
      * edge — on OUR fullscreen map that lands right on the left toolbar.
      * Its render AND click paths both resolve the position from the same
      * {@code ToggleLocation.JOURNEY} constant, so relocating that constant
-     * moves the widget and its hitbox consistently: top-left, next to
-     * Create's train map widget (drawn at (3, 30), ~55 px wide) when
-     * Create is present. Deep reflection on final instance fields — legal
-     * here because RNS ships no module-info (open automatic module); on
-     * failure the widget just stays where RNS puts it.
+     * moves the widget and its hitbox consistently: into the top-left
+     * addon zone (y=30), next to Create's train map widget (drawn at
+     * (3, 30), ~55 px wide) when Create is present. API TOP_LEFT buttons
+     * start after both widgets (see FullMapScreen.buildApiToolbar). Deep
+     * reflection on final instance fields — legal here because RNS ships
+     * no module-info (open automatic module); on failure the widget just
+     * stays where RNS puts it.
      */
     private static void relocateRnsToggle() {
         if (!ModList.get().isLoaded("create_rns")) {

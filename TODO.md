@@ -19,11 +19,10 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
 _Stratégie (cadrage fait) : pas d'API spéculative. Règle de la couture (les internals de
 chaque chantier prévoient le point d'extension) + publication en FIN du chantier qui
 stabilise le modèle. Déjà publié : rendu écran v1 (`MapView`, `MapRenderEvent`,
-`FullMapScreenEvent`, `MapLayerChangedEvent`) et waypoints v1 (`WaypointApi`)._
+`FullMapScreenEvent`, `MapLayerChangedEvent`), waypoints v1 (`WaypointApi`), UI fullscreen
+(`FullMapToolbarEvent`, `FullMapContextMenuEvent`, `FullMapInfoBarEvent`) et marqueurs
+déclaratifs v2 (`MapMarker`, `MapMarkerProvider`, `MapMarkerApi`)._
 
-- [ ] **UI fullscreen** (boutons, menu contextuel, barre d'infos) — dernière tranche du
-  chantier UI ; inclut la suite v2 du rendu écran (enregistrement d'icônes/marqueurs de
-  haut niveau, clamping bordure fourni).
 - [ ] **rendu serveur (image de région)** : couture posée (`engine.blockColorOverrides` +
   `BlockPalette` point d'entrée unique) ; publier événement/registre quand un consommateur
   concret existe.
@@ -47,15 +46,45 @@ stabilise le modèle. Déjà publié : rendu écran v1 (`MapView`, `MapRenderEve
   propres shaders) pour des formes plus propres (anti-aliasing).
 ## Ordre recommandé
 
-1. **Tranche API UI** (boutons, menu contextuel, barre d'infos — section API publique).
-2. **Chantier UI icônes** dès que les assets sont fournis (losange in-world, marqueur joueur).
-3. **Robustesse** : rails Create souterrains.
-4. **Optimisation** (P4), puis shaders (P5).
+1. **Chantier UI icônes** dès que les assets sont fournis (losange in-world, marqueur joueur).
+2. **Robustesse** : rails Create souterrains.
+3. **Optimisation** (P4), puis shaders (P5).
 
 ## Fait (résumé — détails dans l'historique git)
 
 ### Chantiers récents (2026-07)
 
+- **Tranche API UI fullscreen + marqueurs v2 (2026-07-16)** : quatre points d'extension
+  publiés. (1) `FullMapToolbarEvent` (boutons déclaratifs, posté à CHAQUE rebuild des
+  widgets — ouverture ET resize ; les boutons vivent dans des ZONES ADDONS dédiées,
+  jamais mélangés aux barres internes — retour utilisateur : un bouton du mod et un
+  bouton d'addon doivent se distinguer d'un coup d'œil : `Slot.TOP_LEFT` = cluster
+  horizontal du coin haut-gauche (l'emplacement historique des widgets bridgés),
+  `Slot.TOP_RIGHT` = aligné à droite en remontant depuis Close ; toggles via
+  `BooleanSupplier` branchés sur le `refreshToolbar()` existant). (2) `FullMapContextMenuEvent` (entrées
+  ajoutées sous les lignes internes, coords du bloc cliqué, un seul niveau de sous-menu —
+  vérifié à la construction). (3) `FullMapInfoBarEvent.Top/Hover` (segments `Component`
+  joints par « ■ », posté PAR FRAME — les barres sont déjà reconstruites chaque frame, le
+  survol dépend de la souris ; documenté « listeners cheap »). (4) Marqueurs déclaratifs
+  v2 : `MapMarker` (x/z, RGB, DIAMOND/DOT, `clampToEdge`) + `MapMarkerProvider` interrogé
+  par frame et par surface (filtrage dimension/zoom/couche côté fournisseur) +
+  `MapMarkerApi` (patron `Hooks`, registre `MapMarkerStore` — snapshot immuable lock-free,
+  provider qui throw loggé une fois et sauté) ; dessinés minimap ET plein écran via
+  `MapMarkerRenderer` (point d'entrée unique → la contrainte de design est tenue :
+  déclaratif ou callback `GuiGraphics` de l'appelant, `EntityDots.*` jamais exposé) ;
+  clamp bordure : repris du clamp waypoints minimap (radial cercle / rect carré), AJOUTÉ
+  au plein écran (pin au bord de l'écran) — sous les waypoints/joueurs/flèche, ordre vs
+  overlays `MapRenderEvent` v1 non spécifié. **Dogfood tenté puis reverté (décision
+  utilisateur)** : le toggle trains de Create avait été migré sur l'API boutons, mais son
+  widget NATIF (look Create, dessiné en (3,30) par `renderToggleWidget`) est préféré —
+  un widget au look de son mod se reconnaît d'un coup d'œil. Widget + routage de clic
+  dans `mouseClicked` restaurés ; les boutons API TOP_LEFT démarrent APRÈS l'empreinte
+  des widgets bridgés (~64 px réservés par widget présent : Create via
+  `toggleWidgetActive()`, RNS via `ModList` — RNS reste relogé en x=70 si Create, sinon
+  7). L'API boutons reste publiée sans consommateur interne (un mod d'exemple la
+  validera). _Limites acceptées : pas de gestion d'overflow des zones addons ;
+  réservation à largeur fixe (~64 px) ; outline des toggles API rafraîchie au
+  press/rebuild seulement ; icônes ItemStack uniquement (textures plus tard)._
 - **Passe textes + audit i18n (2026-07-16, clôt le chantier UI hors-icônes)** : unités des
   sliders de l'écran de config via des clés `settings.unit.*` (px, blocs, Ko/s, s, chunks,
   min) au lieu de l'anglais brut ; feedbacks joueur `/sj cache` et `/sj tp` traduisibles

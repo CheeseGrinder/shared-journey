@@ -56,7 +56,12 @@ public final class CreateTrainMapBridge {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /** Position of the toggle widget drawn by the train map (Create's constants). */
+    /**
+     * Position of the toggle widget drawn by the train map (Create's
+     * constants): Create's native look is deliberately kept — a bridged
+     * mod with its own widget reads as an addon at a glance. API TOP_LEFT
+     * buttons start after it (see FullMapScreen.buildApiToolbar).
+     */
     private static final int TOGGLE_WIDGET_X = 3;
 
     private static final int TOGGLE_WIDGET_Y = 30;
@@ -286,11 +291,8 @@ public final class CreateTrainMapBridge {
         try {
             // Create's own toggle (the widget below): overlay hidden but
             // the widget stays clickable on the fullscreen map.
-            Object cclient = allConfigsClient.invoke(null);
-            boolean createOverlayOn = Boolean.TRUE.equals(configBoolGet.invoke(showTrainMapOverlayField.get(cclient)));
-
             List<?> tooltip = null;
-            if (createOverlayOn) {
+            if (overlayEnabled()) {
                 var pose = gg.pose();
                 pose.pushPose();
                 pose.translate(screenW / 2f, screenH / 2f, 0);
@@ -458,13 +460,32 @@ public final class CreateTrainMapBridge {
      * the click was consumed.
      */
     public static boolean handleToggleClick(int mouseX, int mouseY) {
-        if (!JourneyMapBridge.bridgeActive() || !resolve() || !MapClientConfig.SHOW_TRAIN_OVERLAY.get()) {
+        if (!toggleWidgetActive()) {
             return false;
         }
 
         try {
             return Boolean.TRUE.equals(
                     handleToggleWidgetClick.invoke(null, mouseX, mouseY, TOGGLE_WIDGET_X, TOGGLE_WIDGET_Y));
+        } catch (Throwable t) {
+            warnAndDisable(t);
+            return false;
+        }
+    }
+
+    /**
+     * True when the toggle widget is drawn on the fullscreen map: the
+     * addon zone reserves its footprint before placing API buttons.
+     */
+    public static boolean toggleWidgetActive() {
+        return JourneyMapBridge.bridgeActive() && resolve() && MapClientConfig.SHOW_TRAIN_OVERLAY.get();
+    }
+
+    /** Create's own "show train map overlay" client config value. */
+    private static boolean overlayEnabled() {
+        try {
+            Object cclient = allConfigsClient.invoke(null);
+            return Boolean.TRUE.equals(configBoolGet.invoke(showTrainMapOverlayField.get(cclient)));
         } catch (Throwable t) {
             warnAndDisable(t);
             return false;
