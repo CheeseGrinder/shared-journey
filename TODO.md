@@ -2,26 +2,6 @@
 
 Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ (faible plus-value) → ★★★★★ (forte plus-value).
 
-## À valider en jeu (faits du 2026-07-15, non encore testés)
-
-- **Chantier UI hors-icônes** : boussole (la minimap bascule nord fixe ↔ orientée joueur),
-  groupe overlays de la barre du haut (grille, waypoints, joueurs), écran de config
-  intégré `MapSettingsScreen` (onglets client + Addons appliqués à chaud ; onglet
-  Serveur : tester en op ET en non-op, vérifier l'apply → re-broadcast des couches sur un
-  second client ; tooltips au survol des contrôles), widget RNS relogé en haut à côté de
-  celui de Create (vérifier position ET clic, avec et sans Create), nouvelles configs
-  `minimap.zoomDefault` / `map.rememberLayer` / `map.showWaypoints`.
-- **Quarantaine (fuites d'information)** : deux clients dev, l'un caché qui casse des
-  blocs/explore ; vérifier que l'autre ne voit rien avant le délai puis voit tout après.
-- **Intégrité du cache** : éditer un PNG du cache client, se reconnecter, vérifier le warn
-  serveur et le re-push.
-- **Lignes de pixels aux frontières de régions** (fix CLAMP_TO_EDGE) : vérifier à plusieurs
-  zooms/pans qu'aucune ligne décalée ne réapparaît.
-- **Éclairage aux frontières de chunks (2026-07-16)** : poser/casser une torche près d'une
-  frontière, vérifier que les chunks voisins se rallument/s'assombrissent sur la carte
-  (NIGHT et CAVE) ; vérifier aussi qu'une horloge redstone ne cause PAS de re-push en
-  boucle (garde « pixels inchangés »).
-
 ## À faire
 
 ### Chantier UI — partie hors-icônes (reste)
@@ -75,17 +55,16 @@ stabilise le modèle. Déjà publié : rendu écran v1 (`MapView`, `MapRenderEve
 
 ## Ordre recommandé
 
-1. **Valider en jeu** les faits du 2026-07-15 (section dédiée en tête).
-2. **Chantier UI hors-icônes** : passe textes, puis tranche **API UI**.
-3. **Chantier UI icônes** dès que les assets sont fournis (losange in-world, marqueur joueur).
-4. **Robustesse** : rails Create souterrains.
-5. **Optimisation** (P4), puis shaders + audit traductions (P5).
+1. **Chantier UI hors-icônes** : passe textes, puis tranche **API UI**.
+2. **Chantier UI icônes** dès que les assets sont fournis (losange in-world, marqueur joueur).
+3. **Robustesse** : rails Create souterrains.
+4. **Optimisation** (P4), puis shaders + audit traductions (P5).
 
 ## Fait (résumé — détails dans l'historique git)
 
 ### Chantiers récents (2026-07)
 
-- **Chantier UI hors-icônes (2026-07-15, à valider en jeu)** :
+- **Chantier UI hors-icônes (2026-07-15)** :
   - **Boussole** : toggle de la barre du haut du plein écran, pilote
     `minimap.rotateWithPlayer`. Le plein écran lui-même reste nord fixe par construction
     (conversions écran↔monde et overlays bridgés le supposent) — le faire tourner serait
@@ -118,14 +97,14 @@ stabilise le modèle. Déjà publié : rendu écran v1 (`MapView`, `MapRenderEve
     `map.rememberLayer` (le plein écran rouvre sur sa dernière couche),
     `map.showWaypoints`. Reportées à la partie icônes/thème : gridColor/gridOpacity,
     opacité de la minimap.
-- **Intégrité du cache client (2026-07-15, à valider en jeu)** : SHA-256 des octets
+- **Intégrité du cache client (2026-07-15)** : SHA-256 des octets
   exactement servis enregistré côté serveur (`hashes.json`, alimenté aux points
   d'encodage, jamais paresseux) ; hash RECALCULÉ côté client au handshake depuis les
   fichiers (jamais lu d'un index falsifiable), format `clé=version:hash`, protocole v7 ;
   même version + hash différent = fichier trafiqué → non seedé → re-push + warn. La
   variante publique (quarantaine) n'est pas suivie : fallback comparaison de versions.
   _Non fait (YAGNI) : métadonnées tEXt dans le PNG pour un index reconstructible._
-- **Fuites d'information — quarantaine à la diffusion (2026-07-15, à valider en jeu)** :
+- **Fuites d'information — quarantaine à la diffusion (2026-07-15)** :
   gate à la DIFFUSION (pas au rendu) au point unique de résolution de chunk
   (`MapManager.tick`/`renderNow` → `QuarantineService.evaluate` : RENDER/QUARANTINE/DROP).
   Proximité ≤ `quarantineRadiusChunks` d'un joueur caché = quarantaine quel qu'en soit
@@ -183,7 +162,7 @@ stabilise le modèle. Déjà publié : rendu écran v1 (`MapView`, `MapRenderEve
 
 ### Bugs marquants
 
-- **Éclairage non propagé aux chunks voisins (2026-07-16, à valider en jeu)** : poser une
+- **Éclairage non propagé aux chunks voisins (2026-07-16)** : poser une
   lumière près d'une frontière de chunk ne rafraîchissait que le chunk modifié — la
   lumière porte jusqu'à 15 blocs et traverse les frontières (ombrage NIGHT/CAVE), les
   voisins restaient sombres. `ChunkEvents.markDirty` (break/place/neighborNotify) et les
@@ -193,6 +172,7 @@ stabilise le modèle. Déjà publié : rendu écran v1 (`MapView`, `MapRenderEve
   `writeHoverChunk`/`HoverRegionData.chunkEquals` comparent le sidecar INFO — identique =
   pas de bump de version, pas de re-push (bénéficie aussi au regen et aux re-rendus
   quelconques qui ne changent rien).
+- **Lignes de pixels décalées aux frontières de régions (2026-07-15)** :
   problème de RENDU, pas de données — wrap GL par défaut GL_REPEAT sur les
   `DynamicTexture` de régions : en bord de quad sous transform fractionnaire,
   l'échantillonnage tombe parfois pile sur u/v = 1.0 et wrappe sur la rangée/colonne
