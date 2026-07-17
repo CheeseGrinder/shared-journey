@@ -1,4 +1,4 @@
-package fr.cheesegrinder.sharedjourney.client.gui;
+package fr.cheesegrinder.sharedjourney.client.gui.util;
 
 import fr.cheesegrinder.sharedjourney.client.render.WaypointIcons;
 

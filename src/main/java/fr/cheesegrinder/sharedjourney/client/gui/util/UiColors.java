@@ -1,4 +1,4 @@
-package fr.cheesegrinder.sharedjourney.client.gui;
+package fr.cheesegrinder.sharedjourney.client.gui.util;
 
 /**
  * Shared ARGB color palette of the mod's custom-rendered screens
@@ -6,37 +6,37 @@ package fr.cheesegrinder.sharedjourney.client.gui;
  * {@link ContextMenu}, the group autocomplete dropdown). Centralized so
  * the panels stay visually consistent and the values aren't repeated.
  */
-final class UiColors {
+public final class UiColors {
 
     /** Panel/dropdown background (translucent near-black). */
-    static final int PANEL_BACKGROUND = 0xE0101014;
+    public static final int PANEL_BACKGROUND = 0xE0101014;
 
     /** Panel border (dark gray). */
-    static final int PANEL_BORDER = 0xFF404048;
+    public static final int PANEL_BORDER = 0xFF404048;
 
     /** Flat menu/dropdown background (context menu, autocomplete). */
-    static final int MENU_BACKGROUND = 0xF016161C;
+    public static final int MENU_BACKGROUND = 0xF016161C;
 
     /** Flat menu/dropdown border. */
-    static final int MENU_BORDER = 0xFF44444C;
+    public static final int MENU_BORDER = 0xFF44444C;
 
     /** Hovered/selected row highlight. */
-    static final int ROW_HIGHLIGHT = 0xFF32323C;
+    public static final int ROW_HIGHLIGHT = 0xFF32323C;
 
     /** Default row text. */
-    static final int TEXT = 0xFFCACACA;
+    public static final int TEXT = 0xFFCACACA;
 
     /** Hovered/selected row text. */
-    static final int TEXT_HOVER = 0xFFFFFFFF;
+    public static final int TEXT_HOVER = 0xFFFFFFFF;
 
     /** Muted title/header text. */
-    static final int TEXT_TITLE = 0xFF8A8A92;
+    public static final int TEXT_TITLE = 0xFF8A8A92;
 
     /** Keycap chip background (fullscreen map legend). */
-    static final int CHIP_BACKGROUND = 0xFF2E2E36;
+    public static final int CHIP_BACKGROUND = 0xFF2E2E36;
 
     /** Keycap chip border (fullscreen map legend). */
-    static final int CHIP_BORDER = 0xFF5A5A64;
+    public static final int CHIP_BORDER = 0xFF5A5A64;
 
     private UiColors() {}
 }

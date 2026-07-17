@@ -1,6 +1,7 @@
-package fr.cheesegrinder.sharedjourney.client.gui;
+package fr.cheesegrinder.sharedjourney.client.gui.screen;
 
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
+import fr.cheesegrinder.sharedjourney.client.gui.modal.ModalScreen;
 import fr.cheesegrinder.sharedjourney.client.render.WaypointIcons;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;

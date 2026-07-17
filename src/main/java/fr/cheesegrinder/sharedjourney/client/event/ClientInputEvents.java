@@ -2,9 +2,9 @@ package fr.cheesegrinder.sharedjourney.client.event;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
-import fr.cheesegrinder.sharedjourney.client.gui.FullMapScreen;
-import fr.cheesegrinder.sharedjourney.client.gui.WaypointEditScreen;
-import fr.cheesegrinder.sharedjourney.client.gui.WaypointListScreen;
+import fr.cheesegrinder.sharedjourney.client.gui.screen.FullMapScreen;
+import fr.cheesegrinder.sharedjourney.client.gui.screen.WaypointEditScreen;
+import fr.cheesegrinder.sharedjourney.client.gui.screen.WaypointListScreen;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 

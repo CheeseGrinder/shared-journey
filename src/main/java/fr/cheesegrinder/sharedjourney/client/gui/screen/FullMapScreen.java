@@ -1,4 +1,4 @@
-package fr.cheesegrinder.sharedjourney.client.gui;
+package fr.cheesegrinder.sharedjourney.client.gui.screen;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
@@ -17,6 +17,9 @@ import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientSetupEvents;
+import fr.cheesegrinder.sharedjourney.client.gui.util.ContextMenu;
+import fr.cheesegrinder.sharedjourney.client.gui.util.IconButton;
+import fr.cheesegrinder.sharedjourney.client.gui.util.UiColors;
 import fr.cheesegrinder.sharedjourney.client.render.DebugOverlay;
 import fr.cheesegrinder.sharedjourney.client.render.EntityDots;
 import fr.cheesegrinder.sharedjourney.client.render.MapMarkerRenderer;

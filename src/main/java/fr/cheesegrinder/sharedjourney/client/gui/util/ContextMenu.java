@@ -1,4 +1,4 @@
-package fr.cheesegrinder.sharedjourney.client.gui;
+package fr.cheesegrinder.sharedjourney.client.gui.util;
 
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;

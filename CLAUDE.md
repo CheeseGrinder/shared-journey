@@ -46,7 +46,9 @@ Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
 | `client.command` | `ClientCommands` (`/sj purge`, `/sj cache`, `/sj goto`)                                                                                                          |
 | `client.config`  | `ClientConfig` (facade) + per-section `MinimapClientConfig`, `RadarClientConfig`, `WaypointClientConfig`, `MapClientConfig`                                     |
 | `client.event`   | `ClientSetupEvents` (keys, HUD layer), `ClientInputEvents`, `ClientSessionEvents`, `DeathWaypointEvents`                                                         |
-| `client.gui`     | `FullMapScreen`, `WaypointListScreen`, `WaypointEditScreen`, `ContextMenu`, `ModalScreen`, `UiColors`                                                            |
+| `client.gui.screen` | Full `Screen`s: `FullMapScreen`, `MapSettingsScreen`, `WaypointListScreen`, `WaypointEditScreen`                                                              |
+| `client.gui.modal`  | `ModalScreen` (base for the small centered dark-panel modals)                                                                                                   |
+| `client.gui.util`   | Reusable UI building blocks: `UiColors`, `IconButton`, `ContextMenu` (a component, not a screen/modal), `OptionList` (+ generic rows), `SettingsControls` (row factories) |
 | `client.net`     | `ClientNetHandler` (payload handlers)                                                                                                                            |
 | `client.render`  | `MinimapRenderer` (HUD minimap)                                                                                                                                  |
 | `client.service` | `ClientMapCache`, `DiskCache`, `WaypointStore`                                                                                                                   |

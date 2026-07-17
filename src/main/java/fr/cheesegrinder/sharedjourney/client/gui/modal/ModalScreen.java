@@ -1,4 +1,6 @@
-package fr.cheesegrinder.sharedjourney.client.gui;
+package fr.cheesegrinder.sharedjourney.client.gui.modal;
+
+import fr.cheesegrinder.sharedjourney.client.gui.util.UiColors;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -12,7 +14,7 @@ import org.jetbrains.annotations.NotNull;
  * confirmation): same dark panel style as the waypoint edit form, title
  * above the content, close returns to the parent screen.
  */
-abstract class ModalScreen extends Screen {
+public abstract class ModalScreen extends Screen {
 
     protected static final int PANEL_WIDTH = 220;
 
@@ -21,7 +23,7 @@ abstract class ModalScreen extends Screen {
     protected int panelLeft;
     protected int contentTop;
 
-    ModalScreen(Component title, Screen parent) {
+    protected ModalScreen(Component title, Screen parent) {
         super(title);
         this.parent = parent;
     }

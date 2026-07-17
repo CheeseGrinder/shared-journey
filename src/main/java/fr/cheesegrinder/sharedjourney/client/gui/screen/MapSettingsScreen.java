@@ -1,4 +1,11 @@
-package fr.cheesegrinder.sharedjourney.client.gui;
+package fr.cheesegrinder.sharedjourney.client.gui.screen;
+
+import static fr.cheesegrinder.sharedjourney.client.gui.util.SettingsControls.configToggle;
+import static fr.cheesegrinder.sharedjourney.client.gui.util.SettingsControls.cycle;
+import static fr.cheesegrinder.sharedjourney.client.gui.util.SettingsControls.header;
+import static fr.cheesegrinder.sharedjourney.client.gui.util.SettingsControls.info;
+import static fr.cheesegrinder.sharedjourney.client.gui.util.SettingsControls.intSlider;
+import static fr.cheesegrinder.sharedjourney.client.gui.util.SettingsControls.toggle;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
@@ -6,6 +13,9 @@ import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
+import fr.cheesegrinder.sharedjourney.client.gui.util.OptionList;
+import fr.cheesegrinder.sharedjourney.client.gui.util.OptionList.OptionRow;
+import fr.cheesegrinder.sharedjourney.client.gui.util.UiColors;
 import fr.cheesegrinder.sharedjourney.client.render.DebugOverlay;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.common.config.PrivacyServerConfig;
@@ -15,11 +25,8 @@ import fr.cheesegrinder.sharedjourney.common.util.Lang;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractSliderButton;
-import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Checkbox;
-import net.minecraft.client.gui.components.ContainerObjectSelectionList;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratableEntry;
@@ -28,7 +35,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
 import net.neoforged.fml.ModList;
-import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import org.jetbrains.annotations.NotNull;
@@ -43,11 +49,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.IntConsumer;
-import java.util.function.IntFunction;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -64,11 +65,8 @@ import java.util.stream.IntStream;
  */
 public class MapSettingsScreen extends Screen {
 
-    private static final int ROW_HEIGHT = 24;
     private static final int LIST_TOP = 46;
     private static final int LIST_BOTTOM_MARGIN = 32;
-    private static final int ROW_WIDTH = 380;
-    private static final int CONTROL_WIDTH = 140;
 
     /**
      * Settings tabs; ADDONS only exists when a bridged mod is present,
@@ -356,12 +354,12 @@ public class MapSettingsScreen extends Screen {
     private List<OptionRow> addonRows() {
         List<OptionRow> rows = new ArrayList<>();
         if (ModList.get().isLoaded("create")) {
-            rows.add(new HeaderRow(Component.literal("Create")));
+            rows.add(header(Component.literal("Create")));
             rows.add(configToggle(Lang.ACTION_SHOW_TRAINS, "showTrainOverlay", MapClientConfig.SHOW_TRAIN_OVERLAY));
         }
 
         if (ModList.get().isLoaded("create_rns")) {
-            rows.add(new HeaderRow(Component.literal("Create: Rock & Stone")));
+            rows.add(header(Component.literal("Create: Rock & Stone")));
             rows.add(configToggle(
                     Lang.ACTION_SHOW_DEPOSITS, "showDepositOverlay", MapClientConfig.SHOW_DEPOSIT_OVERLAY));
         }
@@ -375,7 +373,7 @@ public class MapSettingsScreen extends Screen {
      */
     private List<OptionRow> debugRows() {
         List<OptionRow> rows = new ArrayList<>();
-        rows.add(new HeaderRow(Component.literal("Rendering")));
+        rows.add(header(Component.literal("Rendering")));
         rows.add(toggle(
                 Component.literal("Rendering overlay"),
                 null,
@@ -389,15 +387,15 @@ public class MapSettingsScreen extends Screen {
     private List<OptionRow> serverRows() {
         List<OptionRow> rows = new ArrayList<>();
         if (ops == null) {
-            rows.add(new InfoRow(Component.translatable(Lang.SETTINGS_WAITING)));
+            rows.add(info(Component.translatable(Lang.SETTINGS_WAITING)));
             return rows;
         }
 
-        rows.add(new HeaderRow(Component.translatable(Lang.SETTINGS_SERVER_LAYERS)));
+        rows.add(header(Component.translatable(Lang.SETTINGS_SERVER_LAYERS)));
         ops.layersByDim.forEach((dim, set) -> rows.add(new LayerSetRow(Component.literal(dimensionLabel(dim)), set)));
         rows.add(new LayerSetRow(Component.translatable(Lang.SETTINGS_SERVER_DEFAULT_LAYERS), ops.defaultLayers));
 
-        rows.add(new HeaderRow(Component.translatable(Lang.SETTINGS_SERVER_BANDS)));
+        rows.add(header(Component.translatable(Lang.SETTINGS_SERVER_BANDS)));
         rows.add(intSlider(
                 Component.translatable(Lang.SETTINGS_SERVER_BAND_MIN),
                 Lang.configTooltip("caveBands"),
@@ -415,7 +413,7 @@ public class MapSettingsScreen extends Screen {
                 MapSettingsScreen::bandLabel,
                 v -> ops.bandMax = v));
 
-        rows.add(new HeaderRow(Component.translatable(Lang.SETTINGS_SERVER_SYNC)));
+        rows.add(header(Component.translatable(Lang.SETTINGS_SERVER_SYNC)));
         rows.add(intSlider(
                 Component.translatable(Lang.SETTINGS_SERVER_PUSH_RADIUS),
                 Lang.configTooltip("pushRadiusRegions"),
@@ -455,7 +453,7 @@ public class MapSettingsScreen extends Screen {
                 v -> Component.translatable(Lang.UNIT_BLOCKS, v),
                 v -> ops.radarCap = v));
 
-        rows.add(new HeaderRow(Component.translatable(Lang.SETTINGS_SERVER_WAYPOINTS)));
+        rows.add(header(Component.translatable(Lang.SETTINGS_SERVER_WAYPOINTS)));
         rows.add(toggle(
                 Component.translatable(Lang.SETTINGS_SERVER_DEATH),
                 Lang.configTooltip("deathWaypointsEnabled"),
@@ -469,7 +467,7 @@ public class MapSettingsScreen extends Screen {
                 v -> Component.translatable(Lang.settingsValue(v ? "server" : "client")),
                 v -> ops.storageServer = v));
 
-        rows.add(new HeaderRow(Component.translatable(Lang.SETTINGS_SERVER_PRIVACY)));
+        rows.add(header(Component.translatable(Lang.SETTINGS_SERVER_PRIVACY)));
         rows.add(cycle(
                 Component.translatable(Lang.SETTINGS_SERVER_POLICY),
                 Lang.configTooltip("hiddenAreaPolicy"),
@@ -508,207 +506,6 @@ public class MapSettingsScreen extends Screen {
         }
 
         return dim.toString();
-    }
-
-    // ------------------------------------------------------------------ row factories
-
-    /** Client config toggle: applied live, saved once on close. */
-    private OptionRow configToggle(String labelKey, String configKey, ModConfigSpec.BooleanValue value) {
-        return toggle(Component.translatable(labelKey), Lang.configTooltip(configKey), value::get, value::set);
-    }
-
-    private OptionRow toggle(Component label, String tooltipKey, Supplier<Boolean> get, Consumer<Boolean> set) {
-        Button b = Button.builder(onOff(get.get()), btn -> {
-                    boolean now = !get.get();
-                    set.accept(now);
-                    btn.setMessage(onOff(now));
-                })
-                .size(48, 20)
-                .build();
-        return row(label, tooltipKey, b);
-    }
-
-    private static Component onOff(boolean on) {
-        String key = on ? Lang.SETTINGS_ON : Lang.SETTINGS_OFF;
-        return Component.translatable(key).withStyle(s -> s.withColor(on ? 0x7FD37F : 0xD37F7F));
-    }
-
-    private <T> OptionRow cycle(
-            Component label,
-            String tooltipKey,
-            List<T> values,
-            T current,
-            Function<T, Component> name,
-            Consumer<T> set) {
-        int start = Math.max(0, values.indexOf(current));
-        int[] index = {start};
-        Button b = Button.builder(name.apply(values.get(start)), btn -> {
-                    index[0] = (index[0] + 1) % values.size();
-                    T value = values.get(index[0]);
-                    set.accept(value);
-                    btn.setMessage(name.apply(value));
-                })
-                .size(CONTROL_WIDTH, 20)
-                .build();
-        return row(label, tooltipKey, b);
-    }
-
-    private OptionRow intSlider(
-            Component label,
-            String tooltipKey,
-            int min,
-            int max,
-            int current,
-            IntFunction<Component> display,
-            IntConsumer set) {
-        return row(label, tooltipKey, new IntSlider(min, max, current, display, set));
-    }
-
-    /** Attaches the description tooltip to the control, then wraps the row. */
-    private OptionRow row(Component label, String tooltipKey, AbstractWidget control) {
-        if (tooltipKey != null) {
-            control.setTooltip(Tooltip.create(Component.translatable(tooltipKey)));
-        }
-
-        return new WidgetRow(label, control);
-    }
-
-    // ------------------------------------------------------------------ list and rows
-
-    /** Scrollable option list; rows are rebuilt on tab change. */
-    private class OptionList extends ContainerObjectSelectionList<OptionRow> {
-
-        OptionList(Minecraft mc, int width, int height, int y) {
-            super(mc, width, height, y, ROW_HEIGHT);
-        }
-
-        void rebuild(List<OptionRow> rows) {
-            clearEntries();
-            setScrollAmount(0);
-            rows.forEach(this::addEntry);
-        }
-
-        @Override
-        public int getRowWidth() {
-            return Math.min(ROW_WIDTH, width - 40);
-        }
-
-        @Override
-        protected int getScrollbarPosition() {
-            return width / 2 + getRowWidth() / 2 + 10;
-        }
-    }
-
-    /** Base of every settings row. */
-    private abstract static class OptionRow extends ContainerObjectSelectionList.Entry<OptionRow> {}
-
-    /** Label on the left, one control (toggle/slider/cycle) on the right. */
-    private class WidgetRow extends OptionRow {
-
-        private final Component label;
-        private final AbstractWidget control;
-
-        WidgetRow(Component label, AbstractWidget control) {
-            this.label = label;
-            this.control = control;
-        }
-
-        @Override
-        public void render(
-                @NotNull GuiGraphics gg,
-                int index,
-                int top,
-                int left,
-                int width,
-                int height,
-                int mouseX,
-                int mouseY,
-                boolean hovering,
-                float partialTick) {
-            gg.drawString(font, label, left, top + 6, UiColors.TEXT);
-            control.setPosition(left + width - control.getWidth(), top);
-            control.render(gg, mouseX, mouseY, partialTick);
-        }
-
-        @Override
-        public @NotNull List<? extends GuiEventListener> children() {
-            return List.of(control);
-        }
-
-        @Override
-        public @NotNull List<? extends NarratableEntry> narratables() {
-            return List.of(control);
-        }
-    }
-
-    /** Section header (ops tab groupings, addon mod names). */
-    private class HeaderRow extends OptionRow {
-
-        private final Component label;
-
-        HeaderRow(Component label) {
-            this.label = label;
-        }
-
-        @Override
-        public void render(
-                @NotNull GuiGraphics gg,
-                int index,
-                int top,
-                int left,
-                int width,
-                int height,
-                int mouseX,
-                int mouseY,
-                boolean hovering,
-                float partialTick) {
-            gg.drawCenteredString(font, label, left + width / 2, top + 8, UiColors.TEXT_TITLE);
-        }
-
-        @Override
-        public @NotNull List<? extends GuiEventListener> children() {
-            return List.of();
-        }
-
-        @Override
-        public @NotNull List<? extends NarratableEntry> narratables() {
-            return List.of();
-        }
-    }
-
-    /** Plain centered message ("waiting for the server config"). */
-    private class InfoRow extends OptionRow {
-
-        private final Component label;
-
-        InfoRow(Component label) {
-            this.label = label;
-        }
-
-        @Override
-        public void render(
-                @NotNull GuiGraphics gg,
-                int index,
-                int top,
-                int left,
-                int width,
-                int height,
-                int mouseX,
-                int mouseY,
-                boolean hovering,
-                float partialTick) {
-            gg.drawCenteredString(font, label, left + width / 2, top + 8, 0xAAAAAA);
-        }
-
-        @Override
-        public @NotNull List<? extends GuiEventListener> children() {
-            return List.of();
-        }
-
-        @Override
-        public @NotNull List<? extends NarratableEntry> narratables() {
-            return List.of();
-        }
     }
 
     /**
@@ -775,38 +572,6 @@ public class MapSettingsScreen extends Screen {
         @Override
         public @NotNull List<? extends NarratableEntry> narratables() {
             return boxes;
-        }
-    }
-
-    /** Int slider over [min, max] with a custom value display. */
-    private static class IntSlider extends AbstractSliderButton {
-
-        private final int min;
-        private final int max;
-        private final IntFunction<Component> display;
-        private final IntConsumer set;
-
-        IntSlider(int min, int max, int current, IntFunction<Component> display, IntConsumer set) {
-            super(0, 0, CONTROL_WIDTH, 20, Component.empty(), (current - min) / (double) (max - min));
-            this.min = min;
-            this.max = max;
-            this.display = display;
-            this.set = set;
-            updateMessage();
-        }
-
-        private int intValue() {
-            return min + (int) Math.round(value * (max - min));
-        }
-
-        @Override
-        protected void updateMessage() {
-            setMessage(display.apply(intValue()));
-        }
-
-        @Override
-        protected void applyValue() {
-            set.accept(intValue());
         }
     }
 

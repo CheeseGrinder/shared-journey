@@ -4,7 +4,7 @@ import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
-import fr.cheesegrinder.sharedjourney.client.gui.FullMapScreen;
+import fr.cheesegrinder.sharedjourney.client.gui.screen.FullMapScreen;
 import fr.cheesegrinder.sharedjourney.common.network.TrainPathPayloads;
 
 import net.minecraft.client.Minecraft;
