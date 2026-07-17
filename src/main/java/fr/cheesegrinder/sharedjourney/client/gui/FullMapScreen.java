@@ -605,8 +605,12 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         }
 
         // Create's train map toggle widget (drawn top-left by its overlay):
-        // its native handler only knows about JM's screen.
+        // its native handler only knows about JM's screen. Suppress the
+        // matching release so it doesn't fall through to handleLeftClick —
+        // otherwise repeated toggling selects the block under the widget
+        // and a double toggle opens the waypoint creation form.
         if (button == 0 && CreateTrainMapBridge.handleToggleClick((int) mouseX, (int) mouseY)) {
+            suppressNextRelease = true;
             return true;
         }
 
