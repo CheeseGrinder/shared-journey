@@ -17,6 +17,7 @@ import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientSetupEvents;
+import fr.cheesegrinder.sharedjourney.client.render.DebugOverlay;
 import fr.cheesegrinder.sharedjourney.client.render.EntityDots;
 import fr.cheesegrinder.sharedjourney.client.render.MapMarkerRenderer;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
@@ -1117,6 +1118,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         // as the bridged overlays, but never gated by zoom or layer.
         NeoForge.EVENT_BUS.post(new MapRenderEvent(gg, this, partialTick));
 
+        // Navigation annotations (waypoints, markers, players, radar)
+        // above the map AND the plugin overlays: a waypoint must never
+        // hide under a Create rail line.
+        renderMapAnnotations(gg);
+
         // Player arrow ABOVE the map and the plugin overlays.
         if (mc.player != null) {
             EntityDots.drawPlayerArrow(
@@ -1175,6 +1181,20 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         // Context menu last: always on top.
         if (contextMenu != null) {
             contextMenu.render(gg, mouseX, mouseY);
+        }
+
+        // Debug overlay above absolutely everything (it raises its own z):
+        // drawn after the context menu so it wins even over it.
+        if (DebugOverlay.enabled && mc.level != null) {
+            DebugOverlay.render(
+                    gg,
+                    width,
+                    height,
+                    "fullscreen",
+                    zoom,
+                    layer,
+                    currentBand(),
+                    mc.level.dimension().location());
         }
     }
 
@@ -1462,10 +1482,36 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             gg.renderOutline(sx0, sy0, Math.max(1, sx1 - sx0), Math.max(1, sy1 - sy0), 0xFFE0E0E0);
         }
 
+        if (!missing.isEmpty()) {
+            PacketDistributor.sendToServer(new RegionSyncPayloads.RegionRequestPayload(missing, knownVersions));
+        }
+    }
+
+    /**
+     * Navigation annotations (API markers, waypoints, other players'
+     * heads, entity radar), drawn AFTER the bridged plugin overlays
+     * (Create rails, RNS deposits) so they stay on top: the waypoint
+     * diamonds and player heads are the map's primary navigation aids and
+     * must not hide under a rail line. Raised on z above the plugin
+     * overlay depth (icons drawn via renderItem/sprites write depth up to
+     * ~150) but below the UI chrome (z=200) — a z=0 draw painted after the
+     * rails would still lose the depth test to them.
+     */
+    private void renderMapAnnotations(GuiGraphics gg) {
+        var mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null) {
+            return;
+        }
+
+        var dim = mc.level.dimension();
+        var pose = gg.pose();
+        pose.pushPose();
+        pose.translate(0, 0, 160);
+
         // Declarative API markers (api.client.MapMarkerApi), in screen
-        // coordinates: above the tiles/grid/selection, below the
-        // waypoints and player markers (internal navigation keeps visual
-        // priority). Clamped markers are pinned to the screen edge.
+        // coordinates: below the waypoints and player markers (internal
+        // navigation keeps visual priority). Clamped markers are pinned
+        // to the screen edge.
         for (MapMarker marker : MapMarkerStore.collect(this)) {
             double msx = screenX(marker.x());
             double msy = screenY(marker.z());
@@ -1559,9 +1605,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             }
         }
 
-        if (!missing.isEmpty()) {
-            PacketDistributor.sendToServer(new RegionSyncPayloads.RegionRequestPayload(missing, knownVersions));
-        }
+        pose.popPose();
     }
 
     /**

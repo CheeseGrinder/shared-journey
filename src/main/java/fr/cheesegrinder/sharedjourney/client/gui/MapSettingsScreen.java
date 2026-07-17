@@ -6,6 +6,7 @@ import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
+import fr.cheesegrinder.sharedjourney.client.render.DebugOverlay;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.common.config.PrivacyServerConfig;
 import fr.cheesegrinder.sharedjourney.common.network.OpsConfigPayloads;
@@ -71,7 +72,9 @@ public class MapSettingsScreen extends Screen {
 
     /**
      * Settings tabs; ADDONS only exists when a bridged mod is present,
-     * SERVER only for ops (permission level 2+).
+     * SERVER only for ops (permission level 2+). DEBUG is ops-only too but
+     * has no top-bar button: it is reached from the Debug… button and
+     * swaps the content list like a hidden tab.
      */
     private enum Tab {
         MINIMAP,
@@ -79,7 +82,8 @@ public class MapSettingsScreen extends Screen {
         MAP,
         WAYPOINTS,
         ADDONS,
-        SERVER
+        SERVER,
+        DEBUG
     }
 
     private final Screen parent;
@@ -88,6 +92,8 @@ public class MapSettingsScreen extends Screen {
     private final Map<Tab, Button> tabButtons = new EnumMap<>(Tab.class);
     private Button doneButton;
     private Button applyButton;
+    /** Bottom-left entry to the DEBUG content; null for non-ops. */
+    private Button debugButton;
 
     /** Ops working copy (null until the server snapshot arrives). */
     private OpsState ops;
@@ -136,12 +142,24 @@ public class MapSettingsScreen extends Screen {
         applyButton = addRenderableWidget(Button.builder(Component.translatable(Lang.SETTINGS_APPLY), b -> applyOps())
                 .bounds(width / 2 + 2, height - 26, 100, 20)
                 .build());
+        // Op-only entry to the DEBUG content (bottom-left, clear of the
+        // centered Done/Apply pair): swaps the list like a hidden tab
+        // rather than opening a separate screen. English: op tooling.
+        if (isOp()) {
+            debugButton = addRenderableWidget(Button.builder(Component.literal("Debug…"), b -> selectTab(Tab.DEBUG))
+                    .bounds(6, height - 26, 70, 20)
+                    .build());
+        }
         selectTab(tab);
     }
 
     private void selectTab(Tab target) {
         tab = target;
         tabButtons.forEach((t, b) -> b.active = t != target);
+        if (debugButton != null) {
+            debugButton.active = target != Tab.DEBUG;
+        }
+
         if (target == Tab.SERVER && !opsRequested) {
             opsRequested = true;
             PacketDistributor.sendToServer(new OpsConfigPayloads.OpsConfigRequestPayload());
@@ -163,6 +181,7 @@ public class MapSettingsScreen extends Screen {
                     case WAYPOINTS -> waypointRows();
                     case ADDONS -> addonRows();
                     case SERVER -> serverRows();
+                    case DEBUG -> debugRows();
                 });
     }
 
@@ -347,6 +366,21 @@ public class MapSettingsScreen extends Screen {
                     Lang.ACTION_SHOW_DEPOSITS, "showDepositOverlay", MapClientConfig.SHOW_DEPOSIT_OVERLAY));
         }
 
+        return rows;
+    }
+
+    /**
+     * Op-only rendering diagnostics (reached via the Debug… button, not a
+     * top-bar tab). English: op tooling. The overlay flag is runtime only.
+     */
+    private List<OptionRow> debugRows() {
+        List<OptionRow> rows = new ArrayList<>();
+        rows.add(new HeaderRow(Component.literal("Rendering")));
+        rows.add(toggle(
+                Component.literal("Rendering overlay"),
+                null,
+                () -> DebugOverlay.enabled,
+                v -> DebugOverlay.enabled = v));
         return rows;
     }
 

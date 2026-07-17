@@ -185,17 +185,42 @@ public final class MinimapRenderer {
     private static float currentZoom() {
         if (zoom < 0f) {
             zoom = MinimapClientConfig.MINIMAP_ZOOM_DEFAULT.get().floatValue();
+            if (zoom >= 1f) {
+                // Same whole-pixel rule as the zoom steps below.
+                zoom = Math.round(zoom);
+            }
         }
 
         return zoom;
     }
 
+    /**
+     * Zoom steps: x1.25 below 1.0, whole numbers (1, 2, 3, 4) above.
+     * A magnified zoom MUST be a whole number of GUI pixels per block:
+     * fractional ratios (the old 1.25-based ladder) put pixel centers on
+     * texel boundaries under NEAREST sampling, and whole texel rows of
+     * the map tiles and of Create's 1-2 px wide rails then flipped side
+     * as the anchor moved — the black/pink rail flicker at the highest
+     * zooms. An integer ratio (the anchor is already snapped to physical
+     * pixels) makes every texel cover exactly N pixels. Below 1.0 the
+     * mismatch is at most one physical pixel and reads as noise-free.
+     */
     public static void zoomIn() {
-        zoom = Math.min(ZOOM_MAX, currentZoom() * 1.25f);
+        float z = currentZoom();
+        if (z >= 1f) {
+            zoom = Math.min(ZOOM_MAX, (float) Math.floor(z) + 1f);
+        } else {
+            zoom = Math.min(1f, z * 1.25f);
+        }
     }
 
     public static void zoomOut() {
-        zoom = Math.max(ZOOM_MIN, currentZoom() / 1.25f);
+        float z = currentZoom();
+        if (z > 1f) {
+            zoom = Math.max(1f, (float) Math.ceil(z) - 1f);
+        } else {
+            zoom = Math.max(ZOOM_MIN, z / 1.25f);
+        }
     }
 
     public static int currentCaveBand() {
@@ -586,6 +611,10 @@ public final class MinimapRenderer {
             if (MinimapClientConfig.SHOW_COORDS.get()) {
                 drawSmallCentered(gg, mc, coords, cx, y - 27, 0xCCCCCC);
             }
+        }
+
+        if (DebugOverlay.enabled) {
+            DebugOverlay.render(gg, sw, sh, "minimap", zoomNow, layer, band, dim.location());
         }
     }
 

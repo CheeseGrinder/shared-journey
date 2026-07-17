@@ -315,7 +315,14 @@ public final class CreateTrainMapBridge {
                         Mth.floor(-screenH / 2f / scale + centerZ),
                         Mth.floor(screenW / scale),
                         Mth.floor(screenH / scale));
-                tooltip = (List<?>) renderAndPick.invokeExact(gg, pickX, pickZ, false, bounds);
+                // 4th argument = LINEAR filtering of the rail buffer.
+                // Create's own FTBChunks path computes it the same way
+                // (its JourneyMap path hardcodes false): smooth under
+                // minification — a block smaller than one physical
+                // pixel — and keep crisp NEAREST under magnification.
+                boolean linearFiltering =
+                        scale * Minecraft.getInstance().getWindow().getGuiScale() < 1.0;
+                tooltip = (List<?>) renderAndPick.invokeExact(gg, pickX, pickZ, linearFiltering, bounds);
 
                 // Hovered or followed train: its remaining navigation
                 // route, drawn in the same world-coordinate pose (the

@@ -27,24 +27,68 @@ quantifié 4 blocs) ; son render type `TRAIN_MAP` est `NO_TRANSPARENCY` + shader
 techniquement : miroir filtré des sections 128×128 + swap du champ `maps` pendant
 `renderAndPick` (icônes/pick intacts), hauteurs de surface via le sidecar INFO._
 
-- [ ] **P5 · ★★☆☆☆ — Shaders** : deux volets à scoper (proposition utilisateur du
-  2026-07-17) : (1) **rendu** — approche JourneyMap (draw avec ses propres shaders) pour
-  des formes plus propres (anti-aliasing) ; inclut le bug connu du **flickering de
-  l'overlay des rails Create aux 3 plus hauts niveaux de zoom de la minimap** (alternance
-  noir/rose : bordure sombre vs cœur du rail, vraisemblablement l'échantillonnage du
-  buffer de rails sous magnification — à diagnostiquer dans ce volet plutôt qu'en fix
-  isolé, décision utilisateur) ; (2) **génération** — à clarifier au scoping (la
-  génération des tuiles est côté serveur, sans contexte GPU sur un serveur dédié :
-  vérifier ce qui est réellement shaderisable et où).
+- [ ] **P5 · ★★☆☆☆ — Shaders, tranche 2 (optionnelle, seule chose qui tuerait le flicker
+  résiduel)** : minification AA du buffer de rails Create (lignes fines qui clignotent aux
+  bas zooms, cf. tranche 1 résiduel (b)). Deux options à trancher au scoping : (1)
+  **mipmaps** sur la `DynamicTexture` de Create — elle est allouée `new
+  DynamicTexture(128,128,true)` (stockage mip prévu) mais `upload()` ne remplit que le
+  niveau 0 et le render type `TRAIN_MAP` a `mipmap=false` ; il faudrait, par réflexion,
+  régénérer la chaîne mip (`glGenerateMipmap`) après upload + forcer le min filter en
+  `LINEAR_MIPMAP` → hacky, entre dans les internes de Create ; (2) **render type maison
+  texel-AA** qui échantillonne le buffer avec un fragment shader à moyennage de zone
+  (box/summed-area) — plus propre mais c'est du vrai boulot de shader. Précédent de render
+  type custom : `SmoothIconRenderType` (WaypointBeaconRenderer). _Scoping du 2026-07-17
+  (recherche → proposition → validation) : volet « génération » ÉCARTÉ (rendu serveur =
+  CPU pur sur workers, aucun contexte GL sur serveur dédié, goulot = `getChunkNow` main
+  thread) ; core shaders SDF pour les formes vectorielles ÉCARTÉS (l'AA « feather »
+  vertex-color de la minimap fait déjà le travail ; la flèche joueur = asset du P3).
+  Acquis Create (désassemblage 6.0.10) : `TRAIN_MAP` = shader TEXTE vanilla +
+  `TextureStateShard(texture, blur, false)` ; le 4e booléen de `renderAndPick` EST ce
+  `blur` (LINEAR du buffer), câblé en tranche 1 ; les chemins JM/Xaero le codent `false`,
+  FTBChunks calcule `linear = taillePixelsRégion × guiScale < 512`._
 ## Ordre recommandé
 
-1. **Shaders** (P5) : recherche → proposition → validation avant toute implémentation.
-2. **Marqueur du joueur** dès que l'asset est fourni.
+1. **Marqueur du joueur** dès que l'asset est fourni.
+2. **Shaders tranche 2** (P5) : seulement si l'A/B en jeu du fix flickering laisse un
+   shimmer résiduel gênant (rotation, dézoom).
 
 ## Fait (résumé — détails dans l'historique git)
 
 ### Chantiers récents (2026-07)
 
+- **Flickering des rails Create — tranche 1 (2026-07-17, PARTIEL, validé en jeu)** : deux
+  mécanismes distincts, tranche 1 en traite un, pas l'autre. (a) **Magnification à ratio
+  fractionnaire** (ancien souci supposé) : zooms minimap en ×1.25 → texel→pixel non entier
+  → en NEAREST le rail bascule cœur(rose)/contour(noir) au déplacement de l'ancre.
+  **Traité** : échelle de zoom minimap refaite (×1.25 sous 1.0, **entiers 1/2/3/4
+  au-dessus** — ratio physique entier avec l'ancre snappée pixel ; le plein écran en ×2
+  ne l'avait jamais) + zoomDefault arrondi au seed + le bridge passe le 4e booléen de
+  `renderAndPick` (filtrage LINEAR du buffer) selon la règle FTBChunks de Create. (b)
+  **Minification de lignes fines** (RÉSIDUEL, non résolu, CONFIRMÉ en jeu 2026-07-17) :
+  aux bas zooms (minimap : ~0.25 à 0.5 px/bloc ; plein écran : labels 256/512), le rail
+  fait moins d'un pixel physique de large ; en pannant, le texel échantillonné change → la
+  ligne clignote. `z×gui` y est `[aligned]` (vérifié via l'overlay de debug) donc ce n'est
+  PAS un souci d'alignement de grille : c'est de l'aliasing de minification pur. Le LINEAR
+  bilinéaire niveau-0 ne suffit pas : il faut des **mipmaps** (pré-moyennage) ou un
+  downsample AA dans un fragment shader. Non fait — cf. tranche 2. Borné et de faible
+  impact (au cran d'en dessous les rails sont invisibles, au-dessus c'est net) : décision
+  utilisateur « pas grave » le 2026-07-17.
+- **Contenu de debug OP (2026-07-17)** : un bouton « Debug… » OP-only (`hasPermissions(2)`)
+  en bas à gauche de `MapSettingsScreen` bascule le contenu vers un onglet CACHÉ `DEBUG`
+  (pas de bouton dans la barre du haut, atteint seulement par ce bouton) — rangées façon
+  onglet Addons, toggle ON/OFF (pas de modal séparé, décision utilisateur). Toggle
+  « Rendering overlay » = flag runtime `DebugOverlay.enabled` (non persisté, reset par
+  session). L'overlay (bord gauche, milieu) affiche zoom px/bloc, guiScale, `z×gui` + tag
+  `[aligned]`/`[fractional]`, couche/bande/dim, région joueur, fps — sur la minimap et le
+  plein écran. Anglais (outillage op). Pas de hotkey (peu de monde en a besoin).
+- **Waypoints sous les rails sur le plein écran — fix (2026-07-17)** : `renderBackgroundLayers`
+  dessinait les annotations (marqueurs API, waypoints, têtes de joueurs, radar) AVANT
+  `CreateTrainMapBridge.renderMap`, et un draw à z=0 perd le test de profondeur face aux
+  overlays de plugin (icônes via renderItem/sprites écrivent la profondeur jusqu'à ~150)
+  même peint après. Extraites dans `renderMapAnnotations`, appelée après les rails et
+  remontée à z=160 (au-dessus des overlays plugin, sous le chrome UI z=200) — mêmes
+  bornes que la flèche joueur, déjà au-dessus. La minimap était déjà correcte (waypoints
+  dessinés après `fireMinimapRender`).
 - **Fluidité/netteté minimap + icônes waypoint in-world (2026-07-17, validé en jeu)** :
   suites de la validation P4. (1) **Mouvement minimap** : ancre sur la position
   INTERPOLÉE (`getPosition(partialTick)` — la position de tick à 20 Hz donnait des
