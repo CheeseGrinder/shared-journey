@@ -44,6 +44,16 @@ techniquement : miroir filtré des sections 128×128 + swap du champ `maps` pend
 
 ### Chantiers récents (2026-07)
 
+- **CI + release GitHub Actions (2026-07-17)** : `build.yml` (push/PR main : build Gradle
+  + jars en artefacts) et `release.yml` (dispatch manuel, inspiré du workflow poppy-ui) —
+  bump semver de `mod_version` via `npx semver` (major/minor/patch + pré-release
+  rc/beta/alpha/dev ; montée d'échelle sur la même base : `1.1.0-beta.1` + rc →
+  `1.1.0-rc.0` ; `none` finalise la pré-release), commit + tag `vX`, GitHub release avec
+  changelog par commits conventionnels (stable + rc uniquement), publish Modrinth via
+  `mc-publish` (release/beta/alpha ; `dev` = tag + artefacts seulement, jamais publié).
+  Modrinth attend la variable de repo `MODRINTH_ID` et le secret `MODRINTH_TOKEN` (skip
+  propre tant qu'ils manquent). `mod_version` passé à `1.0.0-dev.0` : la première release
+  stable sortira en `1.0.0` ; bit exécutable de `gradlew` corrigé dans l'index git.
 - **Protocole réseau remis à « 1 » (2026-07-17)** : les bumps v2→v9 ne servaient qu'à
   invalider les builds de dev entre eux ; le mod n'étant pas publié, on repart de « 1 »
   pour la release initiale. **À partir de la publication : re-bumper à CHAQUE changement

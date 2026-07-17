@@ -1,0 +1,20 @@
+{
+  "categories": [
+    { "title": "✨ Features", "labels": ["feat", "feature"] },
+    { "title": "🐛 Bug Fixes", "labels": ["fix", "bug", "bugfix"] },
+    { "title": "🎨 Style", "labels": ["style"] },
+    { "title": "📝 Documentation", "labels": ["docs", "doc"] },
+    { "title": "🔧 Chore", "labels": ["chore"] },
+    { "title": "⚡️ Performance", "labels": ["perf", "performance"] },
+    { "title": "🧹 Refactor", "labels": ["refactor"] },
+    { "title": "🚀 CI", "labels": ["ci"] },
+    { "title": "🏗️ Build", "labels": ["build"] }
+  ],
+  "label_extractor": [
+    {
+      "pattern": "^(\\w+)(\\(.+\\))?!?:.*",
+      "target": "$1",
+      "on_property": "title"
+    }
+  ]
+}

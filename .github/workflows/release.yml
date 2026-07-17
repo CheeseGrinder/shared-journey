@@ -1,0 +1,206 @@
+# Release: semver bump of mod_version (gradle.properties), build, git
+# tag + GitHub release (with changelog for stable/rc), and Modrinth
+# publish. Same version flow as poppy-ui's release workflow, adapted
+# from npm to Gradle.
+#
+# Channels:
+#   none  -> stable release   (GitHub release + Modrinth "release")
+#   rc    -> release candidate (GitHub pre-release + Modrinth "beta")
+#   beta  -> Modrinth "beta" only
+#   alpha -> Modrinth "alpha" only
+#   dev   -> git tag + workflow artifacts only (nothing published)
+#
+# Modrinth needs the MODRINTH_ID repository variable (project id/slug)
+# and the MODRINTH_TOKEN secret (PAT with the "create version" scope);
+# the publish job skips itself cleanly while they are missing.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+      pre_release:
+        description: 'Pre-release identifier'
+        required: false
+        type: choice
+        options:
+          - none
+          - rc
+          - beta
+          - alpha
+          - dev
+        default: 'none'
+
+permissions:
+  contents: write
+
+concurrency: release
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      next-version: ${{ steps.next.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Calculate next version
+        id: next
+        # npm-compatible semver increments (npx semver):
+        #   none  -> plain bump, which FINALIZES a pre-release
+        #            (1.1.0-rc.2 + patch -> 1.1.0);
+        #   pre on a pre-release -> continue or CLIMB the ladder on the
+        #            same base (1.1.0-beta.1 + beta -> 1.1.0-beta.2,
+        #            1.1.0-beta.1 + rc -> 1.1.0-rc.0);
+        #   pre on a stable -> pre<bump> (1.1.0 + minor/beta -> 1.2.0-beta.0).
+        run: |
+          current="$(grep '^mod_version=' gradle.properties | cut -d= -f2 | tr -d '[:space:]')"
+          bump='${{ inputs.bump }}'
+          pre='${{ inputs.pre_release }}'
+          if [ "$pre" = 'none' ]; then
+            next="$(npx --yes semver@7 -i "$bump" "$current")"
+          else
+            case "$current" in
+              *-*) increment='prerelease' ;;
+              *) increment="pre$bump" ;;
+            esac
+            next="$(npx --yes semver@7 -i "$increment" --preid "$pre" "$current")"
+          fi
+          echo "📦 $current -> $next (bump: $bump, pre-release: $pre)"
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+
+  build:
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Set version
+        run: sed -i 's/^mod_version=.*/mod_version=${{ needs.version.outputs.next-version }}/' gradle.properties
+
+      - name: Build
+        run: ./gradlew build --console=plain
+
+      - name: Upload mod jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: sharedjourney
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+      - name: Upload jmshim jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: sharedjourney-jmshim
+          path: jmshim/build/libs/*.jar
+          if-no-files-found: error
+
+  github-release:
+    runs-on: ubuntu-latest
+    needs: [version, build]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit version bump and tag
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          sed -i 's/^mod_version=.*/mod_version=${{ needs.version.outputs.next-version }}/' gradle.properties
+          git add gradle.properties
+          git commit -m 'chore(release): bump to ${{ needs.version.outputs.next-version }}'
+          git tag 'v${{ needs.version.outputs.next-version }}'
+          git push origin HEAD
+          git push origin 'v${{ needs.version.outputs.next-version }}'
+
+      - name: Download jars
+        if: inputs.pre_release == 'none' || inputs.pre_release == 'rc'
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate changelog
+        id: changelog
+        if: inputs.pre_release == 'none' || inputs.pre_release == 'rc'
+        uses: mikepenz/release-changelog-builder-action@v5
+        with:
+          # COMMIT mode: commits land on main directly (no PR labels);
+          # categories come from the conventional-commit prefix.
+          mode: COMMIT
+          configuration: .github/changelog-config.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub release
+        if: inputs.pre_release == 'none' || inputs.pre_release == 'rc'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.next-version }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          prerelease: ${{ inputs.pre_release != 'none' }}
+          files: artifacts/*.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  modrinth:
+    runs-on: ubuntu-latest
+    needs: [version, build, github-release]
+    if: inputs.pre_release != 'dev'
+    steps:
+      - name: Check Modrinth configuration
+        id: config
+        run: |
+          if [ -n '${{ vars.MODRINTH_ID }}' ] && [ -n '${{ secrets.MODRINTH_TOKEN }}' ]; then
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+          else
+            echo '::warning::MODRINTH_ID variable or MODRINTH_TOKEN secret missing: Modrinth publish skipped.'
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download mod jar
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: sharedjourney
+          path: mod
+
+      - name: Download jmshim jar
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: sharedjourney-jmshim
+          path: jmshim
+
+      - name: Publish to Modrinth
+        if: steps.config.outputs.configured == 'true'
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: ${{ vars.MODRINTH_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          # First file = primary version file; the jmshim companion jar
+          # rides along as an additional file.
+          files: |
+            mod/*.jar
+            jmshim/*.jar
+          name: Shared Journey ${{ needs.version.outputs.next-version }}
+          version: ${{ needs.version.outputs.next-version }}
+          version-type: ${{ inputs.pre_release == 'none' && 'release' || (inputs.pre_release == 'alpha' && 'alpha' || 'beta') }}
+          loaders: neoforge
+          game-versions: '1.21.1'
