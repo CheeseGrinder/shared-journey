@@ -1,7 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.WaypointPayloads;
 
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -69,24 +69,24 @@ public final class PlayerWaypointService {
 
     /** Full send at login: one upsert per waypoint the player owns. */
     public static void sendAllTo(ServerPlayer player) {
-        for (Payloads.PlayerWaypointPayload wp : load(player.getUUID())) {
+        for (WaypointPayloads.PlayerWaypointPayload wp : load(player.getUUID())) {
             PacketDistributor.sendToPlayer(player, wp);
         }
     }
 
     // ------------------------------------------------------------------ client requests
 
-    public static void handleUpsert(Player player, Payloads.PlayerWaypointPayload payload) {
+    public static void handleUpsert(Player player, WaypointPayloads.PlayerWaypointPayload payload) {
         if (!(player instanceof ServerPlayer sp)) {
             return;
         }
 
-        Payloads.PlayerWaypointPayload sanitized = sanitize(payload);
+        WaypointPayloads.PlayerWaypointPayload sanitized = sanitize(payload);
         if (sanitized == null) {
             return;
         }
 
-        Map<UUID, Payloads.PlayerWaypointPayload> waypoints = indexById(load(sp.getUUID()));
+        Map<UUID, WaypointPayloads.PlayerWaypointPayload> waypoints = indexById(load(sp.getUUID()));
         if (!waypoints.containsKey(sanitized.id()) && waypoints.size() >= MAX_WAYPOINTS_PER_PLAYER) {
             LOGGER.warn(
                     "Player waypoint limit reached ({}) for {}, upsert ignored",
@@ -100,12 +100,12 @@ public final class PlayerWaypointService {
         PacketDistributor.sendToPlayer(sp, sanitized);
     }
 
-    public static void handleRemove(Player player, Payloads.PlayerWaypointRemovePayload payload) {
+    public static void handleRemove(Player player, WaypointPayloads.PlayerWaypointRemovePayload payload) {
         if (!(player instanceof ServerPlayer sp)) {
             return;
         }
 
-        Map<UUID, Payloads.PlayerWaypointPayload> waypoints = indexById(load(sp.getUUID()));
+        Map<UUID, WaypointPayloads.PlayerWaypointPayload> waypoints = indexById(load(sp.getUUID()));
         if (waypoints.remove(payload.id()) == null) {
             return;
         }
@@ -114,16 +114,17 @@ public final class PlayerWaypointService {
         PacketDistributor.sendToPlayer(sp, payload);
     }
 
-    private static Map<UUID, Payloads.PlayerWaypointPayload> indexById(List<Payloads.PlayerWaypointPayload> list) {
-        Map<UUID, Payloads.PlayerWaypointPayload> map = new LinkedHashMap<>();
-        for (Payloads.PlayerWaypointPayload wp : list) {
+    private static Map<UUID, WaypointPayloads.PlayerWaypointPayload> indexById(
+            List<WaypointPayloads.PlayerWaypointPayload> list) {
+        Map<UUID, WaypointPayloads.PlayerWaypointPayload> map = new LinkedHashMap<>();
+        for (WaypointPayloads.PlayerWaypointPayload wp : list) {
             map.put(wp.id(), wp);
         }
         return map;
     }
 
     /** Rejects unusable data, trims and caps what can be. */
-    private static Payloads.PlayerWaypointPayload sanitize(Payloads.PlayerWaypointPayload p) {
+    private static WaypointPayloads.PlayerWaypointPayload sanitize(WaypointPayloads.PlayerWaypointPayload p) {
         String name = p.name() == null ? "" : p.name().trim();
         if (name.isEmpty()) {
             return null;
@@ -140,7 +141,7 @@ public final class PlayerWaypointService {
             group = group.substring(0, MAX_GROUP_LENGTH);
         }
 
-        return new Payloads.PlayerWaypointPayload(
+        return new WaypointPayloads.PlayerWaypointPayload(
                 p.id(), name, p.dimension(), p.x(), p.y(), p.z(), 0xFFFFFF & p.colorRgb(), group);
     }
 
@@ -150,8 +151,8 @@ public final class PlayerWaypointService {
         return root.resolve(playerId + ".json");
     }
 
-    private static List<Payloads.PlayerWaypointPayload> load(UUID playerId) {
-        List<Payloads.PlayerWaypointPayload> result = new ArrayList<>();
+    private static List<WaypointPayloads.PlayerWaypointPayload> load(UUID playerId) {
+        List<WaypointPayloads.PlayerWaypointPayload> result = new ArrayList<>();
         if (root == null) {
             return result;
         }
@@ -175,7 +176,7 @@ public final class PlayerWaypointService {
                     continue;
                 }
 
-                result.add(new Payloads.PlayerWaypointPayload(
+                result.add(new WaypointPayloads.PlayerWaypointPayload(
                         UUID.fromString(o.get("id").getAsString()),
                         o.get("name").getAsString(),
                         dim,
@@ -191,13 +192,13 @@ public final class PlayerWaypointService {
         return result;
     }
 
-    private static void save(UUID playerId, Collection<Payloads.PlayerWaypointPayload> waypoints) {
+    private static void save(UUID playerId, Collection<WaypointPayloads.PlayerWaypointPayload> waypoints) {
         if (root == null) {
             return;
         }
 
         JsonArray arr = new JsonArray();
-        for (Payloads.PlayerWaypointPayload wp : waypoints) {
+        for (WaypointPayloads.PlayerWaypointPayload wp : waypoints) {
             JsonObject o = new JsonObject();
             o.addProperty("id", wp.id().toString());
             o.addProperty("name", wp.name());

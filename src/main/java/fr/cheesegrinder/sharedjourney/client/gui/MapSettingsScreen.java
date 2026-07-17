@@ -8,7 +8,8 @@ import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.common.config.PrivacyServerConfig;
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.OpsConfigPayloads;
+import fr.cheesegrinder.sharedjourney.common.network.PlayerVisibilityPayloads;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
 
 import net.minecraft.client.Minecraft;
@@ -91,7 +92,7 @@ public class MapSettingsScreen extends Screen {
     /** Ops working copy (null until the server snapshot arrives). */
     private OpsState ops;
     /** Snapshot the ops rows were built from (arrival/echo detection). */
-    private Payloads.OpsConfigPayload shownOps;
+    private OpsConfigPayloads.OpsConfigPayload shownOps;
 
     private boolean opsRequested;
 
@@ -143,7 +144,7 @@ public class MapSettingsScreen extends Screen {
         tabButtons.forEach((t, b) -> b.active = t != target);
         if (target == Tab.SERVER && !opsRequested) {
             opsRequested = true;
-            PacketDistributor.sendToServer(new Payloads.OpsConfigRequestPayload());
+            PacketDistributor.sendToServer(new OpsConfigPayloads.OpsConfigRequestPayload());
         }
 
         boolean server = target == Tab.SERVER;
@@ -168,7 +169,7 @@ public class MapSettingsScreen extends Screen {
     @Override
     public void render(@NotNull GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         // Server snapshot arrived (or apply echo): refresh the working copy.
-        Payloads.OpsConfigPayload snapshot = ClientMapCache.opsConfig;
+        OpsConfigPayloads.OpsConfigPayload snapshot = ClientMapCache.opsConfig;
         if (tab == Tab.SERVER && snapshot != null && snapshot != shownOps) {
             shownOps = snapshot;
             ops = OpsState.from(snapshot);
@@ -265,7 +266,7 @@ public class MapSettingsScreen extends Screen {
                 RadarClientConfig.HIDE_FROM_MAP::get,
                 v -> {
                     RadarClientConfig.HIDE_FROM_MAP.set(v);
-                    PacketDistributor.sendToServer(new Payloads.MapVisibilityPayload(v));
+                    PacketDistributor.sendToServer(new PlayerVisibilityPayloads.MapVisibilityPayload(v));
                 }));
         return rows;
     }
@@ -799,7 +800,7 @@ public class MapSettingsScreen extends Screen {
         boolean storageServer;
         PrivacyServerConfig.HiddenAreaPolicy policy;
 
-        static OpsState from(Payloads.OpsConfigPayload p) {
+        static OpsState from(OpsConfigPayloads.OpsConfigPayload p) {
             OpsState s = new OpsState();
             for (String name : p.defaultLayers()) {
                 addLayer(s.defaultLayers, name);
@@ -864,14 +865,14 @@ public class MapSettingsScreen extends Screen {
             }
         }
 
-        Payloads.OpsConfigPayload toPayload() {
+        OpsConfigPayloads.OpsConfigPayload toPayload() {
             List<String> shared = new ArrayList<>();
             layersByDim.forEach((dim, set) ->
                     shared.add(dim + "=" + set.stream().map(MapLayer::name).collect(Collectors.joining(","))));
             int lo = Math.min(bandMin, bandMax);
             int hi = Math.max(bandMin, bandMax);
             List<Integer> bands = IntStream.rangeClosed(lo, hi).boxed().toList();
-            return new Payloads.OpsConfigPayload(
+            return new OpsConfigPayloads.OpsConfigPayload(
                     defaultLayers.stream().map(MapLayer::name).toList(),
                     shared,
                     bands,

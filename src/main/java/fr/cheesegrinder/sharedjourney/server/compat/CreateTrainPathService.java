@@ -1,6 +1,6 @@
 package fr.cheesegrinder.sharedjourney.server.compat;
 
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.TrainPathPayloads;
 
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
@@ -81,7 +81,7 @@ public final class CreateTrainPathService {
     private CreateTrainPathService() {}
 
     /** Handles a hovered-train path request; replies with the polyline (or nothing). */
-    public static void handleRequest(Player playerRaw, Payloads.TrainPathRequestPayload payload) {
+    public static void handleRequest(Player playerRaw, TrainPathPayloads.TrainPathRequestPayload payload) {
         if (!(playerRaw instanceof ServerPlayer player)) {
             return;
         }
@@ -110,7 +110,7 @@ public final class CreateTrainPathService {
                 xs[i] = points.get(i)[0];
                 zs[i] = points.get(i)[1];
             }
-            PacketDistributor.sendToPlayer(player, new Payloads.TrainPathPayload(payload.trainId(), xs, zs));
+            PacketDistributor.sendToPlayer(player, new TrainPathPayloads.TrainPathPayload(payload.trainId(), xs, zs));
         } catch (Throwable t) {
             LOGGER.warn("[Bridge JM] Create train path lookup failed, disabling: {}", t.toString());
             available = false;

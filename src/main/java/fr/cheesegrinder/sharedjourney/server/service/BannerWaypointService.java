@@ -1,6 +1,6 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.WaypointPayloads;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
@@ -41,7 +41,7 @@ public final class BannerWaypointService {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    private static final Map<UUID, Payloads.BannerWaypointPayload> WAYPOINTS = new ConcurrentHashMap<>();
+    private static final Map<UUID, WaypointPayloads.BannerWaypointPayload> WAYPOINTS = new ConcurrentHashMap<>();
 
     private static Path file;
 
@@ -62,7 +62,7 @@ public final class BannerWaypointService {
 
     /** Full send at login: one upsert per known banner waypoint. */
     public static void sendAllTo(ServerPlayer player) {
-        for (Payloads.BannerWaypointPayload wp : WAYPOINTS.values()) {
+        for (WaypointPayloads.BannerWaypointPayload wp : WAYPOINTS.values()) {
             PacketDistributor.sendToPlayer(player, wp);
         }
     }
@@ -75,7 +75,7 @@ public final class BannerWaypointService {
             return;
         }
 
-        Payloads.BannerWaypointPayload wp = new Payloads.BannerWaypointPayload(
+        WaypointPayloads.BannerWaypointPayload wp = new WaypointPayloads.BannerWaypointPayload(
                 bannerId(dimension, pos),
                 name,
                 dimension.location(),
@@ -96,7 +96,7 @@ public final class BannerWaypointService {
         }
 
         save();
-        PacketDistributor.sendToAllPlayers(new Payloads.BannerWaypointRemovePayload(id));
+        PacketDistributor.sendToAllPlayers(new WaypointPayloads.BannerWaypointRemovePayload(id));
     }
 
     /** Deterministic id from the banner's position: stable across restarts. */
@@ -127,7 +127,7 @@ public final class BannerWaypointService {
                     continue;
                 }
 
-                Payloads.BannerWaypointPayload wp = new Payloads.BannerWaypointPayload(
+                WaypointPayloads.BannerWaypointPayload wp = new WaypointPayloads.BannerWaypointPayload(
                         UUID.fromString(o.get("id").getAsString()),
                         o.get("name").getAsString(),
                         dim,
@@ -148,7 +148,7 @@ public final class BannerWaypointService {
         }
 
         JsonArray arr = new JsonArray();
-        for (Payloads.BannerWaypointPayload wp : WAYPOINTS.values()) {
+        for (WaypointPayloads.BannerWaypointPayload wp : WAYPOINTS.values()) {
             JsonObject o = new JsonObject();
             o.addProperty("id", wp.id().toString());
             o.addProperty("name", wp.name());

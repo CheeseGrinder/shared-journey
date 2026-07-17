@@ -5,7 +5,7 @@ import fr.cheesegrinder.sharedjourney.common.config.PrivacyServerConfig;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
 import fr.cheesegrinder.sharedjourney.common.config.SyncServerConfig;
 import fr.cheesegrinder.sharedjourney.common.config.WaypointServerConfig;
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.OpsConfigPayloads;
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -35,7 +35,7 @@ public final class OpsConfigService {
 
     // ------------------------------------------------------------------ payload handlers
 
-    public static void handleRequest(Player playerRaw, Payloads.OpsConfigRequestPayload payload) {
+    public static void handleRequest(Player playerRaw, OpsConfigPayloads.OpsConfigRequestPayload payload) {
         if (!(playerRaw instanceof ServerPlayer player) || !player.hasPermissions(2)) {
             return;
         }
@@ -43,7 +43,7 @@ public final class OpsConfigService {
         PacketDistributor.sendToPlayer(player, snapshot());
     }
 
-    public static void handleUpdate(Player playerRaw, Payloads.OpsConfigPayload payload) {
+    public static void handleUpdate(Player playerRaw, OpsConfigPayloads.OpsConfigPayload payload) {
         if (!(playerRaw instanceof ServerPlayer player) || !player.hasPermissions(2)) {
             LOGGER.warn("SharedJourney: ignored an ops config update from a non-op sender");
             return;
@@ -68,8 +68,8 @@ public final class OpsConfigService {
     // ------------------------------------------------------------------ snapshot / apply
 
     /** Editable server config, as currently loaded. */
-    public static Payloads.OpsConfigPayload snapshot() {
-        return new Payloads.OpsConfigPayload(
+    public static OpsConfigPayloads.OpsConfigPayload snapshot() {
+        return new OpsConfigPayloads.OpsConfigPayload(
                 new ArrayList<>(LayersServerConfig.DEFAULT_LAYERS.get()),
                 new ArrayList<>(LayersServerConfig.SHARED_LAYERS.get()),
                 new ArrayList<>(LayersServerConfig.CAVE_BANDS.get()),
@@ -89,7 +89,7 @@ public final class OpsConfigService {
      * Applies an update, dropping invalid layer entries and clamping every
      * numeric value into the same bounds as the config definitions.
      */
-    private static void apply(Payloads.OpsConfigPayload p) {
+    private static void apply(OpsConfigPayloads.OpsConfigPayload p) {
         List<String> defaultLayers = p.defaultLayers().stream()
                 .filter(LayersServerConfig::isValidLayer)
                 .toList();

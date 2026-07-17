@@ -25,7 +25,9 @@ import fr.cheesegrinder.sharedjourney.client.render.WaypointIcons;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.MapMarkerStore;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.PlayerVisibilityPayloads;
+import fr.cheesegrinder.sharedjourney.common.network.RegenPayloads;
+import fr.cheesegrinder.sharedjourney.common.network.RegionSyncPayloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
 
@@ -387,7 +389,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             ClientConfig.SPEC.save();
             if (value == RadarClientConfig.HIDE_FROM_MAP) {
                 // Server-enforced preference: send immediately.
-                PacketDistributor.sendToServer(new Payloads.MapVisibilityPayload(value.get()));
+                PacketDistributor.sendToServer(new PlayerVisibilityPayloads.MapVisibilityPayload(value.get()));
             }
 
             refreshToolbar();
@@ -1235,7 +1237,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
      * is hidden behind this fullscreen screen, so the map draws its own.
      */
     private void renderRegenProgress(GuiGraphics gg) {
-        Payloads.RegenProgressPayload progress = ClientMapCache.regenProgress;
+        RegenPayloads.RegenProgressPayload progress = ClientMapCache.regenProgress;
         if (progress == null) {
             return;
         }
@@ -1531,7 +1533,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         }
 
         if (!missing.isEmpty()) {
-            PacketDistributor.sendToServer(new Payloads.RegionRequestPayload(missing, knownVersions));
+            PacketDistributor.sendToServer(new RegionSyncPayloads.RegionRequestPayload(missing, knownVersions));
         }
     }
 

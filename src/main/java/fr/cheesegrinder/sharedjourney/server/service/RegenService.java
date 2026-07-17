@@ -2,7 +2,7 @@ package fr.cheesegrinder.sharedjourney.server.service;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.RegenPayloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
 
@@ -284,7 +284,7 @@ public final class RegenService {
         maskBroadcastIn = 0;
         progressBroadcastIn = 0;
         localViewer = null;
-        PacketDistributor.sendToAllPlayers(new Payloads.RegenStatePayload(true));
+        PacketDistributor.sendToAllPlayers(new RegenPayloads.RegenStatePayload(true));
     }
 
     /**
@@ -345,9 +345,9 @@ public final class RegenService {
             return;
         }
 
-        PacketDistributor.sendToPlayer(player, new Payloads.RegenStatePayload(true));
+        PacketDistributor.sendToPlayer(player, new RegenPayloads.RegenStatePayload(true));
         doneMasks.forEach((key, mask) -> PacketDistributor.sendToPlayer(
-                player, new Payloads.RegenChunksPayload(key.dim().location(), key.rx(), key.rz(), mask)));
+                player, new RegenPayloads.RegenChunksPayload(key.dim().location(), key.rx(), key.rz(), mask)));
     }
 
     /** Records a re-rendered chunk in its region's progress mask. */
@@ -356,7 +356,7 @@ public final class RegenService {
                 dim, Math.floorDiv(cx, RegionKey.REGION_CHUNKS), Math.floorDiv(cz, RegionKey.REGION_CHUNKS));
         int bit = Math.floorMod(cz, RegionKey.REGION_CHUNKS) * RegionKey.REGION_CHUNKS
                 + Math.floorMod(cx, RegionKey.REGION_CHUNKS);
-        long[] mask = doneMasks.computeIfAbsent(key, k -> new long[Payloads.RegenChunksPayload.MASK_WORDS]);
+        long[] mask = doneMasks.computeIfAbsent(key, k -> new long[RegenPayloads.RegenChunksPayload.MASK_WORDS]);
         mask[bit >> 6] |= 1L << (bit & 63);
         dirtyMasks.add(key);
     }
@@ -370,7 +370,7 @@ public final class RegenService {
         maskBroadcastIn = 20;
         for (MaskKey key : dirtyMasks) {
             PacketDistributor.sendToAllPlayers(
-                    new Payloads.RegenChunksPayload(key.dim().location(), key.rx(), key.rz(), doneMasks.get(key)));
+                    new RegenPayloads.RegenChunksPayload(key.dim().location(), key.rx(), key.rz(), doneMasks.get(key)));
         }
         dirtyMasks.clear();
     }
@@ -386,11 +386,11 @@ public final class RegenService {
         }
 
         progressBroadcastIn = 20;
-        sendProgress(new Payloads.RegenProgressPayload(true, done, total));
+        sendProgress(new RegenPayloads.RegenProgressPayload(true, done, total));
     }
 
     /** Routes a progress payload to its audience (all, or the local viewer). */
-    private static void sendProgress(Payloads.RegenProgressPayload payload) {
+    private static void sendProgress(RegenPayloads.RegenProgressPayload payload) {
         if (localViewer == null) {
             PacketDistributor.sendToAllPlayers(payload);
         } else if (!localViewer.hasDisconnected()) {
@@ -455,9 +455,9 @@ public final class RegenService {
         // (guarded: cancel can run during server shutdown, when
         // broadcasting is no longer possible).
         if (ServerLifecycleHooks.getCurrentServer() != null) {
-            sendProgress(new Payloads.RegenProgressPayload(false, done, total));
+            sendProgress(new RegenPayloads.RegenProgressPayload(false, done, total));
             if (localViewer == null) {
-                PacketDistributor.sendToAllPlayers(new Payloads.RegenStatePayload(false));
+                PacketDistributor.sendToAllPlayers(new RegenPayloads.RegenStatePayload(false));
             }
         }
 

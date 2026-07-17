@@ -1,7 +1,7 @@
 package fr.cheesegrinder.sharedjourney.client.service;
 
 import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.RegionSyncPayloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
@@ -154,7 +154,7 @@ public final class DiskCache {
      * out entirely: declared "not owned", the server re-pushes them. Runs on
      * the single writer thread so no store() interleaves with the reads.
      */
-    public static void hashedIndexSnapshot(Consumer<Map<RegionKey, Payloads.IndexEntry>> callback) {
+    public static void hashedIndexSnapshot(Consumer<Map<RegionKey, RegionSyncPayloads.IndexEntry>> callback) {
         Path root = currentRoot;
         if (root == null) {
             callback.accept(Map.of());
@@ -163,11 +163,11 @@ public final class DiskCache {
 
         Map<RegionKey, Long> snapshot = index.snapshot();
         WRITER.execute(() -> {
-            Map<RegionKey, Payloads.IndexEntry> out = new HashMap<>(snapshot.size());
+            Map<RegionKey, RegionSyncPayloads.IndexEntry> out = new HashMap<>(snapshot.size());
             snapshot.forEach((key, version) -> {
                 try {
                     byte[] bytes = Files.readAllBytes(pathOf(root, key));
-                    out.put(key, new Payloads.IndexEntry(version, Hashing.sha256Hex(bytes)));
+                    out.put(key, new RegionSyncPayloads.IndexEntry(version, Hashing.sha256Hex(bytes)));
                 } catch (IOException ignored) {
                     // Missing or unreadable file: left out, re-pushed.
                 }

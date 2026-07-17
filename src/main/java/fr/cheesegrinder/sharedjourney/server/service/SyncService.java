@@ -5,7 +5,8 @@ import fr.cheesegrinder.sharedjourney.common.config.CommonConfig;
 import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
 import fr.cheesegrinder.sharedjourney.common.config.SyncServerConfig;
 import fr.cheesegrinder.sharedjourney.common.config.WaypointServerConfig;
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.PlayerVisibilityPayloads;
+import fr.cheesegrinder.sharedjourney.common.network.RegionSyncPayloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 
 import net.minecraft.resources.ResourceLocation;
@@ -70,7 +71,7 @@ public final class SyncService {
      * tampered (or corrupted) cache file — it is NOT seeded, so the delta
      * re-pushes the authoritative bytes.
      */
-    public static void handleClientIndex(Player playerRaw, Payloads.ClientIndexPayload payload) {
+    public static void handleClientIndex(Player playerRaw, RegionSyncPayloads.ClientIndexPayload payload) {
         if (!(playerRaw instanceof ServerPlayer player)) {
             return;
         }
@@ -81,10 +82,10 @@ public final class SyncService {
             return;
         }
 
-        Map<RegionKey, Payloads.IndexEntry> clientIndex = payload.decodeIndex(50_000);
+        Map<RegionKey, RegionSyncPayloads.IndexEntry> clientIndex = payload.decodeIndex(50_000);
         int tampered = 0;
-        for (Map.Entry<RegionKey, Payloads.IndexEntry> e : clientIndex.entrySet()) {
-            Payloads.IndexEntry entry = e.getValue();
+        for (Map.Entry<RegionKey, RegionSyncPayloads.IndexEntry> e : clientIndex.entrySet()) {
+            RegionSyncPayloads.IndexEntry entry = e.getValue();
             if (mgr.isTampered(e.getKey(), entry.version(), entry.sha256())) {
                 tampered++;
                 continue;
@@ -123,7 +124,7 @@ public final class SyncService {
         }
         PacketDistributor.sendToPlayer(
                 player,
-                new Payloads.LayerSettingsPayload(
+                new RegionSyncPayloads.LayerSettingsPayload(
                         map,
                         new ArrayList<>(LayersServerConfig.CAVE_BANDS.get()),
                         SyncServerConfig.RADAR_MAX_RADIUS.get(),
@@ -286,7 +287,8 @@ public final class SyncService {
             System.arraycopy(st.currentData, st.currentOffset, slice, 0, len);
 
             PacketDistributor.sendToPlayer(
-                    player, new Payloads.RegionDataPayload(st.currentKey, st.currentVersion, part, total, slice));
+                    player,
+                    new RegionSyncPayloads.RegionDataPayload(st.currentKey, st.currentVersion, part, total, slice));
 
             st.currentOffset += len;
             budget -= len;
@@ -304,7 +306,7 @@ public final class SyncService {
 
     // ------------------------------------------------------------------ fullscreen requests
 
-    public static void handleRegionRequest(Player playerRaw, Payloads.RegionRequestPayload payload) {
+    public static void handleRegionRequest(Player playerRaw, RegionSyncPayloads.RegionRequestPayload payload) {
         if (!(playerRaw instanceof ServerPlayer player)) {
             return;
         }
@@ -358,20 +360,20 @@ public final class SyncService {
 
     /** Broadcasts the position (dimension, x, z) of every non-hidden player. */
     private static void broadcastPlayerPositions(MinecraftServer server) {
-        List<Payloads.PlayerPositionsPayload.PlayerPos> players = new ArrayList<>();
+        List<PlayerVisibilityPayloads.PlayerPositionsPayload.PlayerPos> players = new ArrayList<>();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (HIDDEN_PLAYERS.contains(player.getUUID())) {
                 continue;
             }
 
-            players.add(new Payloads.PlayerPositionsPayload.PlayerPos(
+            players.add(new PlayerVisibilityPayloads.PlayerPositionsPayload.PlayerPos(
                     player.getUUID(), player.level().dimension().location(), player.getX(), player.getZ()));
         }
-        PacketDistributor.sendToAllPlayers(new Payloads.PlayerPositionsPayload(players));
+        PacketDistributor.sendToAllPlayers(new PlayerVisibilityPayloads.PlayerPositionsPayload(players));
     }
 
     /** "Hidden from the map" preference received from a client: applied and broadcast. */
-    public static void handleMapVisibility(Player playerRaw, Payloads.MapVisibilityPayload payload) {
+    public static void handleMapVisibility(Player playerRaw, PlayerVisibilityPayloads.MapVisibilityPayload payload) {
         if (!(playerRaw instanceof ServerPlayer player)) {
             return;
         }
@@ -399,7 +401,8 @@ public final class SyncService {
 
     /** Sends the current hidden player list to a joining player. */
     public static void sendHiddenPlayers(ServerPlayer player) {
-        PacketDistributor.sendToPlayer(player, new Payloads.HiddenPlayersPayload(List.copyOf(HIDDEN_PLAYERS)));
+        PacketDistributor.sendToPlayer(
+                player, new PlayerVisibilityPayloads.HiddenPlayersPayload(List.copyOf(HIDDEN_PLAYERS)));
     }
 
     /** Cleared on disconnect (the preference is sent again on reconnect). */
@@ -410,7 +413,8 @@ public final class SyncService {
     }
 
     private static void broadcastHiddenPlayers() {
-        PacketDistributor.sendToAllPlayers(new Payloads.HiddenPlayersPayload(List.copyOf(HIDDEN_PLAYERS)));
+        PacketDistributor.sendToAllPlayers(
+                new PlayerVisibilityPayloads.HiddenPlayersPayload(List.copyOf(HIDDEN_PLAYERS)));
     }
 
     // ------------------------------------------------------------------ administration / stats

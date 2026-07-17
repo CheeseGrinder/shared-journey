@@ -2,7 +2,9 @@ package fr.cheesegrinder.sharedjourney.client.service;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.OpsConfigPayloads;
+import fr.cheesegrinder.sharedjourney.common.network.PlayerVisibilityPayloads;
+import fr.cheesegrinder.sharedjourney.common.network.RegenPayloads;
 import fr.cheesegrinder.sharedjourney.common.region.HoverRegionData;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 
@@ -60,18 +62,19 @@ public final class ClientMapCache {
      * screen (null until the server answers an OpsConfigRequestPayload —
      * i.e. for every non-op player).
      */
-    public static volatile Payloads.OpsConfigPayload opsConfig;
+    public static volatile OpsConfigPayloads.OpsConfigPayload opsConfig;
     /** Players who asked to be hidden from the map (broadcast by the server). */
     public static volatile Set<UUID> hiddenPlayers = Set.of();
     /** Positions of (non-hidden) players broadcast by the server (~1x/s). */
-    public static volatile Map<UUID, Payloads.PlayerPositionsPayload.PlayerPos> playerPositions = Map.of();
+    public static volatile Map<UUID, PlayerVisibilityPayloads.PlayerPositionsPayload.PlayerPos> playerPositions =
+            Map.of();
     /** Server regen running: the map veils chunks absent from regenDoneMasks. */
     public static volatile boolean regenActive;
     /**
      * Numeric regen progress (full regen, or a local re-render this player
      * requested), for the fullscreen map's progress bar. Null when idle.
      */
-    public static volatile Payloads.RegenProgressPayload regenProgress;
+    public static volatile RegenPayloads.RegenProgressPayload regenProgress;
 
     /** A map region position (chunk progress masks are layer-agnostic). */
     public record RegionPos(ResourceLocation dimension, int rx, int rz) {}

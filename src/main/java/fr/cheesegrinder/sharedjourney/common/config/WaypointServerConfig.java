@@ -5,7 +5,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 /**
  * "waypoints" section of the server config: server-wide toggles for the
  * waypoint feature. Pushed to clients alongside the layer settings
- * (see {@code Payloads.LayerSettingsPayload}), at login and on reload.
+ * (see {@code RegionSyncPayloads.LayerSettingsPayload}), at login and on reload.
  */
 public final class WaypointServerConfig {
 

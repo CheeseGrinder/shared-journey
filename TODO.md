@@ -22,19 +22,15 @@ consommateur en a besoin)._
 
 ### Robustesse / perf (P4+)
 
-- [x] **P4 · ★★★☆☆ — Overlay des rails Create en souterrain** (recherche) : l'overlay reste
-  affiché en surface quand la voie est enterrée et n'apparaît pas sur les couches CAVE.
-  Corréler les pixels du `TrainMapRenderer` avec la couche affichée et les hauteurs
-  (sidecar INFO ?) pour masquer en surface et/ou afficher dans la bande CAVE.
-- [ ] **P4 · ★★☆☆☆ — Découpage de `Payloads.java`** : fichier devenu illisible (~920 lignes,
-  8 groupes fonctionnels + registration). Découpage par groupe fonctionnel (pas
-  client/server — payloads `common`, plusieurs bidirectionnels, un split par direction
-  casserait la cohérence payload+codec) : `RegionSyncPayloads` (LayerSettings, RegionData,
-  ClientIndex, RegionRequest), `PlayerVisibilityPayloads` (MapVisibility, HiddenPlayers,
-  PlayerPositions), `RegenPayloads` (RegenState, RegenChunks, RegenProgress),
-  `TrainPathPayloads`, `WaypointPayloads` (public + player + banner), `OpsConfigPayloads` ;
-  `Payloads` devient un orchestrateur mince (`Hooks`, `id()`, `register()` qui délègue à
-  chaque groupe).
+_Overlay des rails Create en souterrain : implémenté puis **reverté le 2026-07-17**
+(décision utilisateur — rendu décevant, pertinence faible en pratique, coût élevé).
+Acquis de recherche si le sujet revient : Create encode le Y de la voie dans le canal
+ALPHA de son buffer de rails (`TrainMapManager.markY` : `alpha = 32 + (y − minY)/4`,
+quantifié 4 blocs) ; son render type `TRAIN_MAP` est `NO_TRANSPARENCY` + shader texte
+(alpha = données, pas opacité — discard < 0.1, sinon opaque) ; approche validée
+techniquement : miroir filtré des sections 128×128 + swap du champ `maps` pendant
+`renderAndPick` (icônes/pick intacts), hauteurs de surface via le sidecar INFO._
+
 - [ ] **P4 · ★★☆☆☆ — Optimisation** : allocations par frame, réflexion dans les chemins
   chauds des bridges, caches.
 - [ ] **P5 · ★★☆☆☆ — Rendu via shader** : étudier l'approche JourneyMap (draw avec ses
@@ -42,13 +38,28 @@ consommateur en a besoin)._
 ## Ordre recommandé
 
 1. **Chantier UI icônes** dès que les assets sont fournis (losange in-world, marqueur joueur).
-2. **Robustesse** : rails Create souterrains.
-3. **Optimisation** (P4), puis shaders (P5).
+2. **Optimisation** (P4), puis shaders (P5).
 
 ## Fait (résumé — détails dans l'historique git)
 
 ### Chantiers récents (2026-07)
 
+- **Protocole réseau remis à « 1 » (2026-07-17)** : les bumps v2→v9 ne servaient qu'à
+  invalider les builds de dev entre eux ; le mod n'étant pas publié, on repart de « 1 »
+  pour la release initiale. **À partir de la publication : re-bumper à CHAQUE changement
+  de format de fil.** Les mentions « protocole vN » de l'historique ci-dessous sont
+  antérieures à cette remise à zéro.
+- **Découpage de `Payloads.java` (2026-07-17)** : 917 → 86 lignes. Records déplacés tels
+  quels (ids réseau, codecs et format de fil inchangés) dans six
+  groupes fonctionnels : `RegionSyncPayloads` (LayerSettings, RegionData, IndexEntry,
+  ClientIndex, RegionRequest), `PlayerVisibilityPayloads` (MapVisibility, HiddenPlayers,
+  PlayerPositions), `RegenPayloads` (State, Chunks, Progress), `TrainPathPayloads`,
+  `WaypointPayloads` (public + player + banner), `OpsConfigPayloads`. Chaque groupe porte
+  son `register(PayloadRegistrar)` (package-private) avec ses handlers ; `Payloads` reste
+  l'orchestrateur mince : `Hooks` (inchangé — toujours câblé par les entry points, le
+  patron d'indirection est intact), `id()` partagé (package-private) et `register()` qui
+  délègue aux six groupes sur le registrar versionné. Les 20 enregistrements réseau
+  vérifiés à l'identique.
 - **Fin de l'API publique (2026-07-16, YAGNI levé sur décision utilisateur)** : quatre
   tranches. (1) **Waypoints v2** : gestion des groupes exposée dans `WaypointApi`
   (`createGroup`/`renameGroup`/`deleteGroup`/`isGroupEditable`/`isGroupVisible`/

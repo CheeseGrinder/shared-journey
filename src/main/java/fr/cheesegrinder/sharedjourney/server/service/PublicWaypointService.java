@@ -1,6 +1,6 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.WaypointPayloads;
 
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -43,7 +43,7 @@ public final class PublicWaypointService {
     private static final int MAX_WAYPOINTS = 1024;
 
     /** The payload record carries exactly the shared fields: reused as storage. */
-    private static final Map<UUID, Payloads.PublicWaypointPayload> WAYPOINTS = new ConcurrentHashMap<>();
+    private static final Map<UUID, WaypointPayloads.PublicWaypointPayload> WAYPOINTS = new ConcurrentHashMap<>();
 
     private static Path file;
 
@@ -65,15 +65,15 @@ public final class PublicWaypointService {
 
     /** Full send at login: one upsert per waypoint. */
     public static void sendAllTo(ServerPlayer player) {
-        for (Payloads.PublicWaypointPayload wp : WAYPOINTS.values()) {
+        for (WaypointPayloads.PublicWaypointPayload wp : WAYPOINTS.values()) {
             PacketDistributor.sendToPlayer(player, wp);
         }
     }
 
     // ------------------------------------------------------------------ client requests
 
-    public static void handleUpsert(Player player, Payloads.PublicWaypointPayload payload) {
-        Payloads.PublicWaypointPayload sanitized = sanitize(payload);
+    public static void handleUpsert(Player player, WaypointPayloads.PublicWaypointPayload payload) {
+        WaypointPayloads.PublicWaypointPayload sanitized = sanitize(payload);
         if (sanitized == null) {
             return;
         }
@@ -90,7 +90,7 @@ public final class PublicWaypointService {
         PacketDistributor.sendToAllPlayers(sanitized);
     }
 
-    public static void handleRemove(Player player, Payloads.PublicWaypointRemovePayload payload) {
+    public static void handleRemove(Player player, WaypointPayloads.PublicWaypointRemovePayload payload) {
         if (WAYPOINTS.remove(payload.id()) == null) {
             return;
         }
@@ -100,7 +100,7 @@ public final class PublicWaypointService {
     }
 
     /** Rejects unusable data, trims and caps what can be. */
-    private static Payloads.PublicWaypointPayload sanitize(Payloads.PublicWaypointPayload p) {
+    private static WaypointPayloads.PublicWaypointPayload sanitize(WaypointPayloads.PublicWaypointPayload p) {
         String name = p.name() == null ? "" : p.name().trim();
         if (name.isEmpty()) {
             return null;
@@ -109,7 +109,7 @@ public final class PublicWaypointService {
         if (name.length() > MAX_NAME_LENGTH) {
             name = name.substring(0, MAX_NAME_LENGTH);
         }
-        return new Payloads.PublicWaypointPayload(
+        return new WaypointPayloads.PublicWaypointPayload(
                 p.id(), name, p.dimension(), p.x(), p.y(), p.z(), 0xFFFFFF & p.colorRgb());
     }
 
@@ -139,7 +139,7 @@ public final class PublicWaypointService {
                     continue;
                 }
 
-                Payloads.PublicWaypointPayload wp = new Payloads.PublicWaypointPayload(
+                WaypointPayloads.PublicWaypointPayload wp = new WaypointPayloads.PublicWaypointPayload(
                         UUID.fromString(o.get("id").getAsString()),
                         o.get("name").getAsString(),
                         dim,
@@ -160,7 +160,7 @@ public final class PublicWaypointService {
         }
 
         JsonArray arr = new JsonArray();
-        for (Payloads.PublicWaypointPayload wp : WAYPOINTS.values()) {
+        for (WaypointPayloads.PublicWaypointPayload wp : WAYPOINTS.values()) {
             JsonObject o = new JsonObject();
             o.addProperty("id", wp.id().toString());
             o.addProperty("name", wp.name());

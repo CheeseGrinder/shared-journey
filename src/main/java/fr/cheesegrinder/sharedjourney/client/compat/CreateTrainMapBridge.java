@@ -5,7 +5,7 @@ import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
 import fr.cheesegrinder.sharedjourney.client.gui.FullMapScreen;
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.TrainPathPayloads;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -428,7 +428,7 @@ public final class CreateTrainMapBridge {
         }
 
         lastPathRequestAt = now;
-        PacketDistributor.sendToServer(new Payloads.TrainPathRequestPayload(trainId));
+        PacketDistributor.sendToServer(new TrainPathPayloads.TrainPathRequestPayload(trainId));
     }
 
     /**

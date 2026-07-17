@@ -3,7 +3,7 @@ package fr.cheesegrinder.sharedjourney.client.service;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.api.event.WaypointEvent;
 import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.WaypointPayloads;
 
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
@@ -451,7 +451,7 @@ public final class WaypointStore {
     // ------------------------------------------------------------------ public waypoints
 
     /** Server broadcast: upsert of a public waypoint (login or edit). */
-    public static void acceptPublicUpsert(Payloads.PublicWaypointPayload p) {
+    public static void acceptPublicUpsert(WaypointPayloads.PublicWaypointPayload p) {
         Waypoint wp = normalizedPublic(
                 p.id(), p.name(), p.dimension(), p.x(), p.y(), p.z(), p.colorRgb(), !HIDDEN_IDS.contains(p.id()));
         WAYPOINTS.put(wp.id(), wp);
@@ -494,18 +494,18 @@ public final class WaypointStore {
     }
 
     private static void sendPublicUpsert(Waypoint wp) {
-        PacketDistributor.sendToServer(new Payloads.PublicWaypointPayload(
+        PacketDistributor.sendToServer(new WaypointPayloads.PublicWaypointPayload(
                 wp.id(), wp.name(), wp.dimension(), wp.x(), wp.y(), wp.z(), wp.colorRgb()));
     }
 
     private static void sendPublicRemove(UUID id) {
-        PacketDistributor.sendToServer(new Payloads.PublicWaypointRemovePayload(id));
+        PacketDistributor.sendToServer(new WaypointPayloads.PublicWaypointRemovePayload(id));
     }
 
     // ------------------------------------------------------------------ player-managed waypoints
 
     /** Server echo: upsert of one of THIS player's own waypoints (login or edit). */
-    public static void acceptPlayerUpsert(Payloads.PlayerWaypointPayload p) {
+    public static void acceptPlayerUpsert(WaypointPayloads.PlayerWaypointPayload p) {
         Waypoint wp = normalizedPlayerManaged(
                 p.id(),
                 p.name(),
@@ -538,12 +538,12 @@ public final class WaypointStore {
     }
 
     private static void sendPlayerUpsert(Waypoint wp) {
-        PacketDistributor.sendToServer(new Payloads.PlayerWaypointPayload(
+        PacketDistributor.sendToServer(new WaypointPayloads.PlayerWaypointPayload(
                 wp.id(), wp.name(), wp.dimension(), wp.x(), wp.y(), wp.z(), wp.colorRgb(), wp.group()));
     }
 
     private static void sendPlayerRemove(UUID id) {
-        PacketDistributor.sendToServer(new Payloads.PlayerWaypointRemovePayload(id));
+        PacketDistributor.sendToServer(new WaypointPayloads.PlayerWaypointRemovePayload(id));
     }
 
     // ------------------------------------------------------------------ banner waypoints
@@ -553,7 +553,7 @@ public final class WaypointStore {
      * a re-broadcast). Read-only client-side: there is no C2S counterpart,
      * the server alone detects named banners in the world.
      */
-    public static void acceptBannerUpsert(Payloads.BannerWaypointPayload p) {
+    public static void acceptBannerUpsert(WaypointPayloads.BannerWaypointPayload p) {
         Waypoint wp = normalizedBanner(
                 p.id(), p.name(), p.dimension(), p.x(), p.y(), p.z(), p.colorRgb(), !HIDDEN_IDS.contains(p.id()));
         WAYPOINTS.put(wp.id(), wp);

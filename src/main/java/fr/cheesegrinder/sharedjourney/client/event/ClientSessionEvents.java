@@ -6,7 +6,8 @@ import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.DiskCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
-import fr.cheesegrinder.sharedjourney.common.network.Payloads;
+import fr.cheesegrinder.sharedjourney.common.network.PlayerVisibilityPayloads;
+import fr.cheesegrinder.sharedjourney.common.network.RegionSyncPayloads;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.Level;
@@ -33,11 +34,11 @@ public final class ClientSessionEvents {
         // recomputed off-thread (server-side integrity check). The server
         // only sends back missing, newer or tampered regions.
         DiskCache.hashedIndexSnapshot(entries -> {
-            byte[] encoded = Payloads.ClientIndexPayload.encodeIndex(entries);
+            byte[] encoded = RegionSyncPayloads.ClientIndexPayload.encodeIndex(entries);
             Minecraft mc = Minecraft.getInstance();
             mc.execute(() -> {
                 if (mc.getConnection() != null) {
-                    PacketDistributor.sendToServer(new Payloads.ClientIndexPayload(encoded));
+                    PacketDistributor.sendToServer(new RegionSyncPayloads.ClientIndexPayload(encoded));
                 }
             });
         });
@@ -47,7 +48,8 @@ public final class ClientSessionEvents {
         JourneyMapBridge.fireMappingEvent(true, event.getPlayer().level().dimension());
 
         // Visibility preference on the other players' map.
-        PacketDistributor.sendToServer(new Payloads.MapVisibilityPayload(RadarClientConfig.HIDE_FROM_MAP.get()));
+        PacketDistributor.sendToServer(
+                new PlayerVisibilityPayloads.MapVisibilityPayload(RadarClientConfig.HIDE_FROM_MAP.get()));
     }
 
     @SubscribeEvent
