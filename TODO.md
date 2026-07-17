@@ -4,15 +4,11 @@ Priorités : **P0** (critique) → **P5** (plus tard). Valeur : ★☆☆☆☆ 
 
 ## À faire
 
-### Chantier UI — partie icônes (en attente des assets, pas encore fournis)
+### Chantier UI — partie icônes
 
-- [ ] **P3 · ★★★☆☆ — Icône in-world des waypoints (losange JM)** : losange à la position du
-  waypoint, TOUJOURS visible (pas de cône de visée, contrairement au label), masqué hors des
-  bornes `beaconMinDistance`/`beaconMaxDistance`. D'abord vectoriel, puis texture PNG
-  (personnalisable par resource pack).
 - [ ] **P3 · ★★★☆☆ — Asset dédié pour le marqueur du joueur** : remplacer le triangle
   vectoriel (`EntityDots.drawPlayerArrow`) par une texture (style JourneyMap), minimap +
-  plein écran.
+  plein écran. En attente de l'asset, pas encore fourni.
 
 ### API publique
 
@@ -37,13 +33,24 @@ techniquement : miroir filtré des sections 128×128 + swap du champ `maps` pend
   propres shaders) pour des formes plus propres (anti-aliasing).
 ## Ordre recommandé
 
-1. **Chantier UI icônes** dès que les assets sont fournis (losange in-world, marqueur joueur).
+1. **Marqueur du joueur** dès que l'asset est fourni.
 2. **Optimisation** (P4), puis shaders (P5).
 
 ## Fait (résumé — détails dans l'historique git)
 
 ### Chantiers récents (2026-07)
 
+- **Icône in-world des waypoints (2026-07-17)** : billboard face caméra à l'ancre du label
+  (`WaypointBeaconRenderer.drawIcon`), sprite `WaypointIcons` (losange/mort/bannière —
+  déjà des PNG teintés à la volée, donc personnalisation resource pack acquise ; l'étape
+  « vectoriel d'abord » du TODO était obsolète), TOUJOURS visible dans les bornes
+  `beaconMinDistance`/`beaconMaxDistance` (pas de cône de visée, render type
+  `textSeeThrough` : visible à travers les blocs), même formule de taille apparente
+  constante + clamp render distance que le label ; le label (visée) s'affiche au-dessus
+  de l'icône. Toggle : ride `waypointBeacons` (décision utilisateur, pas de nouvelle
+  config). Bonus barre d'actions gauche de la FS map : le bouton « Waypoints » troque
+  l'item name tag contre le losange teinté émeraude (`IconButton` accepte désormais un
+  sprite `ResourceLocation` + teinte en plus des `ItemStack`).
 - **CI + release GitHub Actions (2026-07-17)** : `build.yml` (push/PR main : build Gradle
   + jars en artefacts) et `release.yml` (dispatch manuel, inspiré du workflow poppy-ui) —
   bump semver de `mod_version` via `npx semver` (major/minor/patch + pré-release

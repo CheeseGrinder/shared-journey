@@ -30,16 +30,26 @@ import java.util.List;
 
 /**
  * In-world waypoint beacons: VANILLA beacon beam (animated texture, opaque
- * core + halo) tinted with the waypoint's color, and a floating label
- * (name + distance) visible through blocks, shown only while the player
- * aims near the waypoint (JourneyMap-like).
+ * core + halo) tinted with the waypoint's color, a camera-facing waypoint
+ * icon ({@link WaypointIcons} sprite, always visible through blocks), and
+ * a floating label (name + distance) shown only while the player aims
+ * near the waypoint (JourneyMap-like).
  * Shown between the client config's min and max distances.
  */
 @EventBusSubscriber(modid = SharedJourneyConstants.MOD_ID, value = Dist.CLIENT)
 public final class WaypointBeaconRenderer {
 
-    /** Label anchor height above the waypoint (blocks). */
+    /** Icon/label anchor height above the waypoint (blocks). */
     private static final double LABEL_HEIGHT_BLOCKS = 1.2;
+
+    /** Icon half-extent in label-space units (the sprite spans 16 units, glyphs are 9). */
+    private static final float ICON_HALF_EXTENT = WaypointIcons.SIZE / 2.0f;
+
+    /**
+     * Label baseline in label-space units: raised above the icon (icon top
+     * is at -{@link #ICON_HALF_EXTENT}, the background pad reaches y0 + 9).
+     */
+    private static final float LABEL_BASELINE = -(ICON_HALF_EXTENT + 10.0f);
 
     /** Distance (blocks) where the far-label size boost starts. */
     private static final float LABEL_BOOST_START_BLOCKS = 32.0f;
@@ -111,38 +121,42 @@ public final class WaypointBeaconRenderer {
         }
         buffers.endBatch();
 
-        if (WaypointClientConfig.SHOW_WAYPOINT_NAMES.get()) {
-            Vector3f look = event.getCamera().getLookVector();
-            for (Waypoint wp : shown) {
-                double dx = wp.x() + 0.5 - cam.x;
-                double dy = wp.y() + LABEL_HEIGHT_BLOCKS - cam.y;
-                double dz = wp.z() + 0.5 - cam.z;
-                double realDist = Math.sqrt(dx * dx + dz * dz);
-                // Distant labels are drawn clamped like the beam: at the
-                // real position they would be cut by the projection's far
-                // plane and never show.
-                double drawDist = realDist;
-                if (realDist > clampDist && realDist > 1.0e-3) {
-                    double factor = clampDist / realDist;
-                    dx *= factor;
-                    dz *= factor;
-                    drawDist = clampDist;
-                }
-
-                // JourneyMap-like: the name only shows when aiming near the
-                // waypoint (angle between the look vector and the label).
-                double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (len < 1.0e-3) {
-                    continue;
-                }
-
-                double aimCos = (look.x() * dx + look.y() * dy + look.z() * dz) / len;
-                if (aimCos < LABEL_VIEW_MIN_COS) {
-                    continue;
-                }
-
-                drawLabel(pose, event.getCamera(), buffers, mc.font, wp, dx, dy, dz, drawDist, realDist);
+        boolean showNames = WaypointClientConfig.SHOW_WAYPOINT_NAMES.get();
+        Vector3f look = event.getCamera().getLookVector();
+        for (Waypoint wp : shown) {
+            double dx = wp.x() + 0.5 - cam.x;
+            double dy = wp.y() + LABEL_HEIGHT_BLOCKS - cam.y;
+            double dz = wp.z() + 0.5 - cam.z;
+            double realDist = Math.sqrt(dx * dx + dz * dz);
+            // Distant icons/labels are drawn clamped like the beam: at the
+            // real position they would be cut by the projection's far
+            // plane and never show.
+            double drawDist = realDist;
+            if (realDist > clampDist && realDist > 1.0e-3) {
+                double factor = clampDist / realDist;
+                dx *= factor;
+                dz *= factor;
+                drawDist = clampDist;
             }
+
+            drawIcon(pose, event.getCamera(), buffers, wp, dx, dy, dz, drawDist, realDist);
+            if (!showNames) {
+                continue;
+            }
+
+            // JourneyMap-like: the name only shows when aiming near the
+            // waypoint (angle between the look vector and the label).
+            double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (len < 1.0e-3) {
+                continue;
+            }
+
+            double aimCos = (look.x() * dx + look.y() * dy + look.z() * dz) / len;
+            if (aimCos < LABEL_VIEW_MIN_COS) {
+                continue;
+            }
+
+            drawLabel(pose, event.getCamera(), buffers, mc.font, wp, dx, dy, dz, drawDist, realDist);
         }
         buffers.endBatch();
     }
@@ -196,7 +210,46 @@ public final class WaypointBeaconRenderer {
     }
 
     /**
-     * Floating label (name + distance), centered above the point
+     * Waypoint icon ({@link WaypointIcons} sprite tinted with the
+     * waypoint's color) drawn as a camera-facing billboard at the same
+     * anchor as the label. Unlike the label it is ALWAYS shown while the
+     * waypoint is within the beacon distance bounds (no aiming cone), and
+     * through blocks (see-through text render type: no depth test). Same
+     * constant-apparent-size math as the label so both scale together.
+     */
+    private static void drawIcon(
+            PoseStack pose,
+            Camera camera,
+            MultiBufferSource buffers,
+            Waypoint wp,
+            double dx,
+            double dy,
+            double dz,
+            double drawDist,
+            double realDist) {
+        pose.pushPose();
+        pose.translate(dx, dy, dz);
+        pose.mulPose(camera.rotation());
+        float boost = Math.clamp((float) realDist / LABEL_BOOST_START_BLOCKS, 1.0f, LABEL_BOOST_MAX);
+        float scale = 0.025f * (float) Math.max(1.0, drawDist / 12.0) * boost;
+        pose.scale(scale, -scale, scale);
+        Matrix4f mat = pose.last().pose();
+        int rgb = wp.colorRgb();
+        int r = (rgb >> 16) & 0xFF;
+        int g = (rgb >> 8) & 0xFF;
+        int b = rgb & 0xFF;
+        float h = ICON_HALF_EXTENT;
+
+        VertexConsumer buf = buffers.getBuffer(RenderType.textSeeThrough(WaypointIcons.textureFor(wp)));
+        buf.addVertex(mat, -h, h, 0).setColor(r, g, b, 255).setUv(0f, 1f).setLight(LightTexture.FULL_BRIGHT);
+        buf.addVertex(mat, h, h, 0).setColor(r, g, b, 255).setUv(1f, 1f).setLight(LightTexture.FULL_BRIGHT);
+        buf.addVertex(mat, h, -h, 0).setColor(r, g, b, 255).setUv(1f, 0f).setLight(LightTexture.FULL_BRIGHT);
+        buf.addVertex(mat, -h, -h, 0).setColor(r, g, b, 255).setUv(0f, 0f).setLight(LightTexture.FULL_BRIGHT);
+        pose.popPose();
+    }
+
+    /**
+     * Floating label (name + distance), centered above the waypoint icon
      * (JourneyMap-like), at the camera-relative offset computed by the
      * caller (clamped for distant waypoints). Full-intensity SEE_THROUGH:
      * the label stays readable in any circumstance, even with a block in
@@ -226,7 +279,7 @@ public final class WaypointBeaconRenderer {
         Matrix4f mat = pose.last().pose();
         float width = font.width(text);
         float x0 = -width / 2.0f;
-        float y0 = -4;
+        float y0 = LABEL_BASELINE;
 
         // Background quad emitted manually BEFORE the text, in its own
         // render type. drawInBatch's built-in background is a white-glyph

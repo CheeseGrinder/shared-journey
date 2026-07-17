@@ -91,6 +91,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     private static final int PAN_STEP_BLOCKS = 16;
     /** Toolbar button step: 20 px buttons + 2 px gap. */
     private static final int TOOLBAR_STEP = 22;
+    /** Emerald tint of the waypoint-diamond icon on the "Waypoints" action button. */
+    private static final int WAYPOINT_BUTTON_TINT = 0x00E676;
     /** Buttons stacked by the left toolbar (locate, follow, zoom ×2, waypoints, settings). */
     private static final int LEFT_TOOLBAR_ROWS = 6;
     /** Y of the addon zone (API TOP_LEFT buttons + bridged overlay widgets). */
@@ -302,8 +304,15 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 .bounds(6, y + 66, 20, 20)
                 .tooltip(Tooltip.create(Component.translatable(Lang.ACTION_ZOOM_OUT)))
                 .build());
-        addIcon(6, y + 88, Items.NAME_TAG, Lang.ACTION_WAYPOINTS, b -> Minecraft.getInstance()
-                .setScreen(new WaypointListScreen(this)));
+        IconButton waypointsButton = new IconButton(
+                6,
+                y + 88,
+                20,
+                WaypointIcons.DIAMOND,
+                WAYPOINT_BUTTON_TINT,
+                Component.translatable(Lang.ACTION_WAYPOINTS),
+                b -> Minecraft.getInstance().setScreen(new WaypointListScreen(this)));
+        addRenderableWidget(waypointsButton);
         addIcon(6, y + 110, Items.COMPARATOR, Lang.ACTION_SETTINGS, b -> Minecraft.getInstance()
                 .setScreen(new MapSettingsScreen(this)));
     }
