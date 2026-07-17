@@ -12,6 +12,7 @@ import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
+import fr.cheesegrinder.sharedjourney.client.service.DisplayNames;
 import fr.cheesegrinder.sharedjourney.client.service.MapMarkerStore;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
@@ -22,12 +23,14 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -41,7 +44,6 @@ import com.mojang.math.Axis;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -58,6 +60,23 @@ public final class MinimapRenderer {
     private static final float ZOOM_MIN = 0.25f;
     private static final float ZOOM_MAX = 4.0f;
     private static final int CIRCLE_SEGMENTS = 64;
+
+    /**
+     * Unit circle vertices for the round shapes (disc, rings, corner
+     * mask), precomputed once: the shapes are re-emitted every frame and
+     * recomputing 65+ cos/sin pairs per ring per frame added up.
+     */
+    private static final float[] CIRCLE_COS = new float[CIRCLE_SEGMENTS + 1];
+
+    private static final float[] CIRCLE_SIN = new float[CIRCLE_SEGMENTS + 1];
+
+    static {
+        for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
+            double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
+            CIRCLE_COS[i] = (float) Math.cos(a);
+            CIRCLE_SIN[i] = (float) Math.sin(a);
+        }
+    }
     /** Width (px) of the alpha ramp antialiasing the circle edges. */
     private static final float FEATHER = 0.75f;
     /** Dark gray (Discord-style) visible under chunks not yet received. */
@@ -263,8 +282,30 @@ public final class MinimapRenderer {
             gg.fill(x, y, x + size, y + size, BACKGROUND);
         }
 
-        double px = player.getX();
-        double pz = player.getZ();
+        // INTERPOLATED position (like world rendering), not getX(): the
+        // tick position only changes 20x/s, which made the pixel-snapped
+        // map advance in visible 20 Hz jolts while walking.
+        Vec3 lerpedPos = player.getPosition(deltaTracker.getGameTimeDeltaPartialTick(true));
+        double px = lerpedPos.x;
+        double pz = lerpedPos.z;
+        // Anchor snapped to whole PHYSICAL pixels at the current zoom: a
+        // fractional anchor rasterized every world-anchored icon (mob
+        // heads, trains, waypoint diamonds) at a different subpixel
+        // offset each frame — static markers visibly trembled while
+        // walking. One shared snapped anchor keeps tiles and overlays
+        // aligned. Physical pixels, not GUI pixels: a GUI pixel is 2-4
+        // physical ones, and GUI-pixel steps read as position jumps at
+        // low zoom. ONLY while one block spans at least one physical
+        // pixel: below that (strong dezoom) a one-pixel step covers
+        // several blocks and reads as a jump — there the anchor glides
+        // subpixel like before, the ±half-pixel tremble the snap
+        // prevents being imperceptible at those scales.
+        float zoomNow = currentZoom();
+        double snapScale = zoomNow * mc.getWindow().getGuiScale();
+        if (snapScale >= 1.0) {
+            px = Math.round(px * snapScale) / snapScale;
+            pz = Math.round(pz * snapScale) / snapScale;
+        }
         int band = layer == MapLayer.CAVE ? currentCaveBand() : 0;
         var dim = player.level().dimension();
 
@@ -414,6 +455,9 @@ public final class MinimapRenderer {
         double cosT = Math.cos(theta);
         double sinT = Math.sin(theta);
         float maxR = half;
+        // Icon positions snap to the same physical-pixel grid as the
+        // anchor (whole GUI pixels would make them lag the terrain).
+        double guiScale = mc.getWindow().getGuiScale();
 
         // Declarative API markers (api.client.MapMarkerApi), below the
         // waypoints and player markers, with the same border pinning when
@@ -438,29 +482,40 @@ public final class MinimapRenderer {
                 continue;
             }
 
-            MapMarkerRenderer.draw(gg, marker, cx + (float) sx, cy + (float) sy, 0.9f);
+            // Physical-pixel position: arbitrary fractional offsets
+            // resample the sprite differently every frame (tremble).
+            float mx = (float) (cx + Math.round(sx * guiScale) / guiScale);
+            float my = (float) (cy + Math.round(sy * guiScale) / guiScale);
+            MapMarkerRenderer.draw(gg, marker, mx, my, 0.9f);
         }
 
-        for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
-            if (!MapClientConfig.SHOW_WAYPOINTS.get() || !WaypointStore.isShown(wp)) {
-                continue;
-            }
-
-            double ox = (wp.x() + 0.5 - px) * zoom;
-            double oz = (wp.z() + 0.5 - pz) * zoom;
-            double sx = ox * cosT - oz * sinT;
-            double sy = ox * sinT + oz * cosT;
-            if (circle) {
-                double r = Math.sqrt(sx * sx + sy * sy);
-                if (r > maxR) {
-                    sx = sx / r * maxR;
-                    sy = sy / r * maxR;
+        // Config value hoisted out of the loop: each .get() walks the
+        // NeoForge config backing per call.
+        if (MapClientConfig.SHOW_WAYPOINTS.get()) {
+            for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
+                if (!WaypointStore.isShown(wp)) {
+                    continue;
                 }
-            } else {
-                sx = Math.clamp(sx, -maxR, maxR);
-                sy = Math.clamp(sy, -maxR, maxR);
+
+                double ox = (wp.x() + 0.5 - px) * zoom;
+                double oz = (wp.z() + 0.5 - pz) * zoom;
+                double sx = ox * cosT - oz * sinT;
+                double sy = ox * sinT + oz * cosT;
+                if (circle) {
+                    double r = Math.sqrt(sx * sx + sy * sy);
+                    if (r > maxR) {
+                        sx = sx / r * maxR;
+                        sy = sy / r * maxR;
+                    }
+                } else {
+                    sx = Math.clamp(sx, -maxR, maxR);
+                    sy = Math.clamp(sy, -maxR, maxR);
+                }
+                // Physical-pixel position, same rationale as the markers.
+                float wx = (float) (cx + Math.round(sx * guiScale) / guiScale);
+                float wy = (float) (cy + Math.round(sy * guiScale) / guiScale);
+                WaypointIcons.draw(gg, wp, wx, wy, 0.75f);
             }
-            WaypointIcons.draw(gg, wp, cx + (float) sx, cy + (float) sy, 0.75f);
         }
 
         // ---- Other players' heads (server positions, no distance limit),
@@ -509,21 +564,18 @@ public final class MinimapRenderer {
 
         // Labels (reduced scale) on translucent black pills: time +
         // period above the map, biome and coordinates below (or stacked
-        // above if the map is bottom-anchored).
+        // above if the map is bottom-anchored). The three strings are
+        // cached (per minute / biome / block position): rebuilding and
+        // re-translating them every frame allocated for nothing.
         drawSmallCentered(gg, mc, timeText(mc.level), cx, y - 9, 0xFFFFFF);
         String biome = mc.level == null
                 ? ""
                 : mc.level
                         .getBiome(player.blockPosition())
                         .unwrapKey()
-                        .map(k -> Component.translatable("biome."
-                                        + k.location().getNamespace() + "."
-                                        + k.location().getPath())
-                                .getString())
+                        .map(k -> DisplayNames.biome(k.location()))
                         .orElse("");
-        String coords = player.blockPosition().getX() + ", "
-                + player.blockPosition().getY() + ", "
-                + player.blockPosition().getZ();
+        String coords = coordsText(player.blockPosition());
         if (topAnchored) {
             drawSmallCentered(gg, mc, biome, cx, y + size + 4, 0xFFFFFF);
             if (MinimapClientConfig.SHOW_COORDS.get()) {
@@ -625,6 +677,47 @@ public final class MinimapRenderer {
         gg.pose().popPose();
     }
 
+    /** Arc resolution of each rounded pill end. */
+    private static final int PILL_ARC_SEGMENTS = 16;
+
+    /** Points of the closed pill outline (two arcs + repeated first point). */
+    private static final int PILL_POINTS = 2 * (PILL_ARC_SEGMENTS + 1) + 1;
+
+    /**
+     * Unit outline of a stadium, precomputed once (same rationale as the
+     * circle tables): right half-circle then left half-circle, first
+     * point repeated to close. Each point scales by the radius around
+     * its end center — xR for the first arc, xL for the second (see
+     * {@link #pillPointX}).
+     */
+    private static final float[] PILL_UNIT_X = new float[PILL_POINTS];
+
+    private static final float[] PILL_UNIT_Y = new float[PILL_POINTS];
+
+    static {
+        for (int i = 0; i <= PILL_ARC_SEGMENTS; i++) {
+            double right = -Math.PI / 2 + Math.PI * i / PILL_ARC_SEGMENTS;
+            PILL_UNIT_X[i] = (float) Math.cos(right);
+            PILL_UNIT_Y[i] = (float) Math.sin(right);
+            double left = Math.PI / 2 + Math.PI * i / PILL_ARC_SEGMENTS;
+            PILL_UNIT_X[PILL_ARC_SEGMENTS + 1 + i] = (float) Math.cos(left);
+            PILL_UNIT_Y[PILL_ARC_SEGMENTS + 1 + i] = (float) Math.sin(left);
+        }
+        PILL_UNIT_X[PILL_POINTS - 1] = PILL_UNIT_X[0];
+        PILL_UNIT_Y[PILL_POINTS - 1] = PILL_UNIT_Y[0];
+    }
+
+    /** X of outline point i at the given radius (right arc anchors on xR). */
+    private static float pillPointX(int i, float xL, float xR, float r) {
+        float anchor = i <= PILL_ARC_SEGMENTS || i == PILL_POINTS - 1 ? xR : xL;
+        return anchor + PILL_UNIT_X[i] * r;
+    }
+
+    /** Y of outline point i at the given radius. */
+    private static float pillPointY(int i, float cy, float r) {
+        return cy + PILL_UNIT_Y[i] * r;
+    }
+
     /**
      * Stadium ("pill") between the two end centers (xL, cy) and
      * (xR, cy) with the given end radius: solid convex fan up to
@@ -636,23 +729,25 @@ public final class MinimapRenderer {
         Matrix4f mat = gg.pose().last().pose();
         prepareShapeState();
         float solid = Math.max(0f, r - FEATHER / 2f);
-        List<float[]> inner = pillOutline(xL, xR, cy, solid);
-        List<float[]> outer = pillOutline(xL, xR, cy, r + FEATHER / 2f);
+        float outer = r + FEATHER / 2f;
 
         BufferBuilder fan =
                 Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
         fan.addVertex(mat, (xL + xR) / 2f, cy, 0).setColor(argb);
-        for (float[] p : inner) {
-            fan.addVertex(mat, p[0], p[1], 0).setColor(argb);
+        for (int i = 0; i < PILL_POINTS; i++) {
+            fan.addVertex(mat, pillPointX(i, xL, xR, solid), pillPointY(i, cy, solid), 0)
+                    .setColor(argb);
         }
         BufferUploader.drawWithShader(fan.buildOrThrow());
 
         int transparent = argb & 0x00FFFFFF;
         BufferBuilder rim =
                 Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-        for (int i = 0; i < inner.size(); i++) {
-            rim.addVertex(mat, outer.get(i)[0], outer.get(i)[1], 0).setColor(transparent);
-            rim.addVertex(mat, inner.get(i)[0], inner.get(i)[1], 0).setColor(argb);
+        for (int i = 0; i < PILL_POINTS; i++) {
+            rim.addVertex(mat, pillPointX(i, xL, xR, outer), pillPointY(i, cy, outer), 0)
+                    .setColor(transparent);
+            rim.addVertex(mat, pillPointX(i, xL, xR, solid), pillPointY(i, cy, solid), 0)
+                    .setColor(argb);
         }
         BufferUploader.drawWithShader(rim.buildOrThrow());
         endShapeState();
@@ -685,23 +780,21 @@ public final class MinimapRenderer {
         RenderSystem.enableCull();
     }
 
-    /** Closed stadium outline: right arc, left arc, first point repeated. */
-    private static List<float[]> pillOutline(float xL, float xR, float cy, float r) {
-        int arcSegments = 16;
-        List<float[]> out = new ArrayList<>();
-        for (int i = 0; i <= arcSegments; i++) {
-            double a = -Math.PI / 2 + Math.PI * i / arcSegments;
-            out.add(new float[] {xR + (float) (Math.cos(a) * r), cy + (float) (Math.sin(a) * r)});
-        }
-        for (int i = 0; i <= arcSegments; i++) {
-            double a = Math.PI / 2 + Math.PI * i / arcSegments;
-            out.add(new float[] {xL + (float) (Math.cos(a) * r), cy + (float) (Math.sin(a) * r)});
-        }
-        out.add(out.get(0).clone());
-        return out;
-    }
+    /** Displayed minute the cached time label was built for (h * 60 + m). */
+    private static int timeCachedStamp = -1;
 
-    /** Formatted world time (no seconds) + period (day, sunset, night, sunrise). */
+    private static String timeCachedText = "";
+
+    /** Block position the cached coordinates label was built for. */
+    private static long coordsCachedPos = Long.MIN_VALUE;
+
+    private static String coordsCachedText = "";
+
+    /**
+     * Formatted world time (no seconds) + period (day, sunset, night,
+     * sunrise). Rebuilt only when the displayed minute changes (~every
+     * 17 ticks); the period boundaries all fall on minute boundaries.
+     */
     private static String timeText(Level level) {
         if (level == null) {
             return "";
@@ -710,8 +803,23 @@ public final class MinimapRenderer {
         long t = Math.floorMod(level.getDayTime(), 24000L);
         int hours = (int) ((t / 1000 + 6) % 24);
         int minutes = (int) (t % 1000 * 60 / 1000);
-        return String.format("%02d:%02d ", hours, minutes)
-                + Component.translatable(periodKey(t)).getString();
+        int stamp = hours * 60 + minutes;
+        if (stamp != timeCachedStamp) {
+            timeCachedStamp = stamp;
+            timeCachedText = String.format("%02d:%02d ", hours, minutes)
+                    + Component.translatable(periodKey(t)).getString();
+        }
+        return timeCachedText;
+    }
+
+    /** "x, y, z" label, rebuilt only when the player changes block. */
+    private static String coordsText(BlockPos pos) {
+        long packed = pos.asLong();
+        if (packed != coordsCachedPos) {
+            coordsCachedPos = packed;
+            coordsCachedText = pos.getX() + ", " + pos.getY() + ", " + pos.getZ();
+        }
+        return coordsCachedText;
     }
 
     private static String periodKey(long dayTime) {
@@ -797,8 +905,7 @@ public final class MinimapRenderer {
                 Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
         buf.addVertex(mat, cx, cy, 0).setColor(argb);
         for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
-            double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
-            buf.addVertex(mat, cx + (float) (Math.cos(a) * solid), cy + (float) (Math.sin(a) * solid), 0)
+            buf.addVertex(mat, cx + CIRCLE_COS[i] * solid, cy + CIRCLE_SIN[i] * solid, 0)
                     .setColor(argb);
         }
         BufferUploader.drawWithShader(buf.buildOrThrow());
@@ -839,8 +946,7 @@ public final class MinimapRenderer {
         BufferBuilder buf =
                 Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
         for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
-            double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
-            float c = (float) Math.cos(a), s = (float) Math.sin(a);
+            float c = CIRCLE_COS[i], s = CIRCLE_SIN[i];
             buf.addVertex(mat, cx + c * r1, cy + s * r1, 0).setColor(argb1);
             buf.addVertex(mat, cx + c * r0, cy + s * r0, 0).setColor(argb0);
         }
@@ -863,8 +969,7 @@ public final class MinimapRenderer {
                 Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION);
         float z = 100f; // in front of the content (z = 0)
         for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
-            double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
-            float c = (float) Math.cos(a), s = (float) Math.sin(a);
+            float c = CIRCLE_COS[i], s = CIRCLE_SIN[i];
             // Point on the bounding square's edge, in the same direction.
             float scale = halfExt / Math.max(Math.abs(c), Math.abs(s));
             buf.addVertex(mat, cx + c * scale, cy + s * scale, z);

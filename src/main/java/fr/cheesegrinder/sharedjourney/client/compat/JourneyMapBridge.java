@@ -383,28 +383,51 @@ public final class JourneyMapBridge {
         dispatchToRegistry(registryClassName, fieldName, event, modId -> true);
     }
 
+    /**
+     * Resolved dispatch channel for one registry event field: the event
+     * implementation instance and its getListeners() accessor. Resolved
+     * once per (registry, field) pair — dispatch runs every frame, and
+     * repeating the Class.forName/getField/getMethod lookups there
+     * dominated the bridge's render cost. A null channel marks a failed
+     * resolution (registry class absent): cached too, so the lookup is
+     * never retried frame after frame.
+     */
+    private record DispatchChannel(Object eventImpl, Method getListeners) {}
+
+    private static final Map<String, DispatchChannel> DISPATCH_CHANNELS = new ConcurrentHashMap<>();
+
+    /** getListeners() entries are records of one class: their accessors, cached. */
+    private record ListenerAccessors(Method modId, Method listener) {}
+
+    private static final Map<Class<?>, ListenerAccessors> LISTENER_ACCESSORS = new ConcurrentHashMap<>();
+
+    /** Sentinel for registries that failed to resolve (map values can't be null). */
+    private static final DispatchChannel UNRESOLVED = new DispatchChannel(null, null);
+
     /** Variant filtered by subscriber modId (config overlay toggles). */
     static void dispatchToRegistry(
             String registryClassName, String fieldName, Object event, Predicate<String> modIdFilter) {
         try {
-            Class<?> registryClass = tryLoad(registryClassName);
-            if (registryClass == null) {
+            DispatchChannel channel = DISPATCH_CHANNELS.computeIfAbsent(
+                    registryClassName + '#' + fieldName, k -> resolveChannel(registryClassName, fieldName));
+            if (channel == UNRESOLVED) {
                 return;
             }
 
-            Object eventImpl = registryClass.getField(fieldName).get(null);
-            Object listeners = eventImpl.getClass().getMethod("getListeners").invoke(eventImpl);
+            Object listeners = channel.getListeners().invoke(channel.eventImpl());
             if (!(listeners instanceof List<?> list)) {
                 return;
             }
 
             for (Object entry : list) {
-                Object listenerModId = entry.getClass().getMethod("modId").invoke(entry);
+                ListenerAccessors accessors =
+                        LISTENER_ACCESSORS.computeIfAbsent(entry.getClass(), JourneyMapBridge::resolveAccessors);
+                Object listenerModId = accessors.modId().invoke(entry);
                 if (!modIdFilter.test(String.valueOf(listenerModId))) {
                     continue;
                 }
 
-                Object consumer = entry.getClass().getMethod("listener").invoke(entry);
+                Object consumer = accessors.listener().invoke(entry);
                 if (consumer instanceof Consumer<?> c) {
                     @SuppressWarnings("unchecked")
                     Consumer<Object> typed = (Consumer<Object>) c;
@@ -413,6 +436,30 @@ public final class JourneyMapBridge {
             }
         } catch (Throwable t) {
             LOGGER.warn("[Bridge JM] Unable to publish {}.{}: {}", registryClassName, fieldName, t.toString());
+        }
+    }
+
+    private static DispatchChannel resolveChannel(String registryClassName, String fieldName) {
+        try {
+            Class<?> registryClass = tryLoad(registryClassName);
+            if (registryClass == null) {
+                return UNRESOLVED;
+            }
+
+            Object eventImpl = registryClass.getField(fieldName).get(null);
+            Method getListeners = eventImpl.getClass().getMethod("getListeners");
+            return new DispatchChannel(eventImpl, getListeners);
+        } catch (Throwable t) {
+            LOGGER.warn("[Bridge JM] Unable to resolve {}.{}: {}", registryClassName, fieldName, t.toString());
+            return UNRESOLVED;
+        }
+    }
+
+    private static ListenerAccessors resolveAccessors(Class<?> entryClass) {
+        try {
+            return new ListenerAccessors(entryClass.getMethod("modId"), entryClass.getMethod("listener"));
+        } catch (NoSuchMethodException e) {
+            throw new IllegalStateException(e);
         }
     }
 

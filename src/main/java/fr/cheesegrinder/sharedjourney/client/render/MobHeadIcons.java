@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeSet;
 
 /**
@@ -114,8 +115,13 @@ public final class MobHeadIcons {
 
     /** Per-type geometry; shared by every texture variant of the type. */
     private static final Map<EntityType<?>, Geometry> GEOMETRY = new HashMap<>();
-    /** Atlas slot per (type, texture); a null value = FAILED (dot). */
-    private static final Map<IconKey, MobIconAtlas.Slot> ICONS = new HashMap<>();
+    /**
+     * Atlas slot per (type, texture); an empty value = FAILED (dot).
+     * Optional values instead of nulls: draw() runs per radar entity per
+     * frame, and distinguishing "failed" from "not tried yet" with nulls
+     * required a second containsKey lookup on every call.
+     */
+    private static final Map<IconKey, Optional<MobIconAtlas.Slot>> ICONS = new HashMap<>();
 
     private static MobIconCreator creator;
     private static long lastCreationNanos;
@@ -151,8 +157,8 @@ public final class MobHeadIcons {
         }
 
         IconKey key = new IconKey(e.getType(), texture);
-        MobIconAtlas.Slot slot = ICONS.get(key);
-        if (slot == null && !ICONS.containsKey(key)) {
+        Optional<MobIconAtlas.Slot> slot = ICONS.get(key);
+        if (slot == null) {
             long now = System.nanoTime();
             if (now - lastCreationNanos < MIN_CREATION_INTERVAL_NANOS) {
                 // Budget spent: dot this frame, icon on a later one.
@@ -164,14 +170,14 @@ public final class MobHeadIcons {
                 GEOMETRY.put(e.getType(), geometry);
             }
 
-            slot = createIcon(gg, e, texture, geometry);
+            slot = Optional.ofNullable(createIcon(gg, e, texture, geometry));
             ICONS.put(key, slot);
         }
-        if (slot == null) {
+        if (slot.isEmpty()) {
             return false;
         }
 
-        drawIcon(gg, slot, x, y, size);
+        drawIcon(gg, slot.get(), x, y, size);
         return true;
     }
 

@@ -5,6 +5,7 @@ import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 
+import net.minecraft.Util;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -12,6 +13,7 @@ import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BeaconRenderer;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
@@ -20,13 +22,16 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * In-world waypoint beacons: VANILLA beacon beam (animated texture, opaque
@@ -239,13 +244,62 @@ public final class WaypointBeaconRenderer {
         int g = (rgb >> 8) & 0xFF;
         int b = rgb & 0xFF;
         float h = ICON_HALF_EXTENT;
+        // Half-texel UV inset: the sprite is sampled LINEAR here, and at
+        // the exact 0/1 borders the default REPEAT wrap would blend the
+        // opposite edge's texels in.
+        float uv0 = 0.5f / WaypointIcons.SIZE;
+        float uv1 = 1f - uv0;
 
-        VertexConsumer buf = buffers.getBuffer(RenderType.textSeeThrough(WaypointIcons.textureFor(wp)));
-        buf.addVertex(mat, -h, h, 0).setColor(r, g, b, 255).setUv(0f, 1f).setLight(LightTexture.FULL_BRIGHT);
-        buf.addVertex(mat, h, h, 0).setColor(r, g, b, 255).setUv(1f, 1f).setLight(LightTexture.FULL_BRIGHT);
-        buf.addVertex(mat, h, -h, 0).setColor(r, g, b, 255).setUv(1f, 0f).setLight(LightTexture.FULL_BRIGHT);
-        buf.addVertex(mat, -h, -h, 0).setColor(r, g, b, 255).setUv(0f, 0f).setLight(LightTexture.FULL_BRIGHT);
+        VertexConsumer buf = buffers.getBuffer(SmoothIconRenderType.of(WaypointIcons.textureFor(wp)));
+        buf.addVertex(mat, -h, h, 0).setColor(r, g, b, 255).setUv(uv0, uv1).setLight(LightTexture.FULL_BRIGHT);
+        buf.addVertex(mat, h, h, 0).setColor(r, g, b, 255).setUv(uv1, uv1).setLight(LightTexture.FULL_BRIGHT);
+        buf.addVertex(mat, h, -h, 0).setColor(r, g, b, 255).setUv(uv1, uv0).setLight(LightTexture.FULL_BRIGHT);
+        buf.addVertex(mat, -h, -h, 0).setColor(r, g, b, 255).setUv(uv0, uv0).setLight(LightTexture.FULL_BRIGHT);
         pose.popPose();
+    }
+
+    /**
+     * Clone of {@link RenderType#textSeeThrough} sampling its texture
+     * with LINEAR filtering (blur = true, only difference). The 16 px
+     * sprite is drawn at ~20-30 screen px in-world: NEAREST sampling at
+     * that non-integer ratio duplicated some texel columns and not
+     * others, reading as a crushed, uneven icon. World-only — the GUI
+     * surfaces (minimap, fullscreen map, lists) keep their crisp NEAREST
+     * rendering through the regular blit path.
+     */
+    private static final class SmoothIconRenderType extends RenderType {
+
+        private static final Function<ResourceLocation, RenderType> TYPES = Util.memoize(texture -> create(
+                "sharedjourney_waypoint_icon",
+                DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP,
+                VertexFormat.Mode.QUADS,
+                1536,
+                false,
+                true,
+                CompositeState.builder()
+                        .setShaderState(RENDERTYPE_TEXT_SEE_THROUGH_SHADER)
+                        .setTextureState(new TextureStateShard(texture, true, false))
+                        .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                        .setLightmapState(LIGHTMAP)
+                        .setDepthTestState(NO_DEPTH_TEST)
+                        .setWriteMaskState(COLOR_WRITE)
+                        .createCompositeState(false)));
+
+        private SmoothIconRenderType(
+                String name,
+                VertexFormat format,
+                VertexFormat.Mode mode,
+                int bufferSize,
+                boolean affectsCrumbling,
+                boolean sortOnUpload,
+                Runnable setup,
+                Runnable clear) {
+            super(name, format, mode, bufferSize, affectsCrumbling, sortOnUpload, setup, clear);
+        }
+
+        static RenderType of(ResourceLocation texture) {
+            return TYPES.apply(texture);
+        }
     }
 
     /**

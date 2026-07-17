@@ -90,6 +90,16 @@ final class MobIconCreator {
     private int atlasFramebuffer;
 
     /**
+     * Caller's scissor box, captured when its scissor test is on:
+     * {@link #clearCell} repoints the GL scissor box at the atlas cell,
+     * and re-enabling the test on restore without putting the box back
+     * clipped the rest of the frame's minimap draws (radar icons, bridged
+     * rail overlays) into a stray 32x32 window corner — a one-frame
+     * overlay flicker on every non-fresh-page icon creation.
+     */
+    private final int[] scissorBoxBackup = new int[4];
+
+    /**
      * Renders the icon described by {@code geometry} (whose model must
      * already be in its neutral pose) into a fresh atlas cell. Returns
      * null when anything fails; GL state is restored either way.
@@ -97,6 +107,10 @@ final class MobIconCreator {
     MobIconAtlas.Slot create(GuiGraphics gg, Entity entity, ResourceLocation texture, MobHeadIcons.Geometry geometry) {
         Minecraft mc = Minecraft.getInstance();
         boolean scissorWasOn = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+        if (scissorWasOn) {
+            GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX, scissorBoxBackup);
+        }
+
         Matrix4f projectionBackup = RenderSystem.getProjectionMatrix();
         VertexSorting sortingBackup = RenderSystem.getVertexSorting();
 
@@ -284,6 +298,9 @@ final class MobIconCreator {
         GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
         mc.getMainRenderTarget().bindWrite(true);
         if (scissorWasOn) {
+            // Box BEFORE test: clearCell left the box on the atlas cell.
+            GlStateManager._scissorBox(
+                    scissorBoxBackup[0], scissorBoxBackup[1], scissorBoxBackup[2], scissorBoxBackup[3]);
             GlStateManager._enableScissorTest();
         }
 

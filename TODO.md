@@ -27,19 +27,58 @@ quantifié 4 blocs) ; son render type `TRAIN_MAP` est `NO_TRANSPARENCY` + shader
 techniquement : miroir filtré des sections 128×128 + swap du champ `maps` pendant
 `renderAndPick` (icônes/pick intacts), hauteurs de surface via le sidecar INFO._
 
-- [ ] **P4 · ★★☆☆☆ — Optimisation** : allocations par frame, réflexion dans les chemins
-  chauds des bridges, caches.
-- [ ] **P5 · ★★☆☆☆ — Rendu via shader** : étudier l'approche JourneyMap (draw avec ses
-  propres shaders) pour des formes plus propres (anti-aliasing).
+- [ ] **P5 · ★★☆☆☆ — Shaders** : deux volets à scoper (proposition utilisateur du
+  2026-07-17) : (1) **rendu** — approche JourneyMap (draw avec ses propres shaders) pour
+  des formes plus propres (anti-aliasing) ; inclut le bug connu du **flickering de
+  l'overlay des rails Create aux 3 plus hauts niveaux de zoom de la minimap** (alternance
+  noir/rose : bordure sombre vs cœur du rail, vraisemblablement l'échantillonnage du
+  buffer de rails sous magnification — à diagnostiquer dans ce volet plutôt qu'en fix
+  isolé, décision utilisateur) ; (2) **génération** — à clarifier au scoping (la
+  génération des tuiles est côté serveur, sans contexte GPU sur un serveur dédié :
+  vérifier ce qui est réellement shaderisable et où).
 ## Ordre recommandé
 
-1. **Marqueur du joueur** dès que l'asset est fourni.
-2. **Optimisation** (P4), puis shaders (P5).
+1. **Shaders** (P5) : recherche → proposition → validation avant toute implémentation.
+2. **Marqueur du joueur** dès que l'asset est fourni.
 
 ## Fait (résumé — détails dans l'historique git)
 
 ### Chantiers récents (2026-07)
 
+- **Fluidité/netteté minimap + icônes waypoint in-world (2026-07-17, validé en jeu)** :
+  suites de la validation P4. (1) **Mouvement minimap** : ancre sur la position
+  INTERPOLÉE (`getPosition(partialTick)` — la position de tick à 20 Hz donnait des
+  à-coups) + snap au pixel PHYSIQUE (pas GUI) de l'ancre et des icônes
+  (waypoints/marqueurs), CONDITIONNEL : seulement quand `zoom × guiScale ≥ 1` — en
+  dézoom fort un pas d'un pixel couvre plusieurs blocs et devient un saut, on laisse
+  alors glisser en sous-pixel (le tremblement est imperceptible à cette échelle).
+  L'équilibre tremblement/fluidité est le résultat de 3 itérations validées par A/B
+  utilisateur. (2) **Icônes waypoint in-world** : render type dédié
+  (`SmoothIconRenderType`, clone de textSeeThrough avec blur=true) — l'échantillonnage
+  nearest du sprite 16px à ~20-30px écran donnait un rendu « écrasé » ; UV insetées d'un
+  demi-texel (bleed du wrap REPEAT en linéaire) ; taille de base conservée (un essai
+  ×1.4 a été reverté : trop gros/blurry, décision utilisateur).
+- **Passe d'optimisation P4 (2026-07-17, VALIDÉE en jeu)** : que du mécanique, zéro
+  changement visuel/réseau/disque. (1) **Réflexion des bridges** :
+  `JourneyMapBridge.dispatchToRegistry` résout et cache par (registre, champ) la classe,
+  l'instance d'event et les accesseurs des listeners (avant : Class.forName + 2×getMethod
+  par listener PAR FRAME) ; `JourneyMapFullscreenBridge` réutilise le proxy IFullscreen
+  (slot unique par vue — une seule surface rend à la fois) et une vue minimap mutable
+  unique (avant : Screen anonyme + record + proxy alloués par frame) ;
+  `CreateTrainMapBridge` passe les appels chauds (renderAndPick, toggle hover/render,
+  getPixel par cellule de corridor, getPosition par wagon, champs de sync) en
+  MethodHandles typés `invokeExact` (zéro boxing), et la config overlay de Create est
+  relue au plus 1×/s (invalidée au clic du toggle). (2) **Allocations par frame** :
+  `WaypointStore.forDimension` sert un index immuable par dimension invalidé à la
+  mutation (toutes les écritures passent par 3 helpers) — appelé 2-4×/frame ; formes
+  rondes de la minimap sur table trigo statique + pills émises sans listes
+  intermédiaires ; strings HUD cachées (`DisplayNames` : biome/bloc localisés invalidés
+  au changement de langue ; heure par minute affichée ; coords par BlockPos) ; requêtes
+  région du plein écran sans `List.of` par région (helper `requestIfStale`) ; layout de
+  la légende construit 1× par ouverture ; `SHOW_WAYPOINTS`/`SHOW_WAYPOINT_NAMES` hissés
+  hors des boucles ; flèche joueur en un seul draw (3 triangles, 1 buffer) ; lookup
+  unique dans `MobHeadIcons` (valeurs `Optional`). _Non touché (déjà sain) :
+  MobHeadIcons v3 (un quad/frame), ClientMapCache, serveur (pas de chemin par frame)._
 - **Icône in-world des waypoints (2026-07-17)** : billboard face caméra à l'ancre du label
   (`WaypointBeaconRenderer.drawIcon`), sprite `WaypointIcons` (losange/mort/bannière —
   déjà des PNG teintés à la volée, donc personnalisation resource pack acquise ; l'étape
@@ -246,6 +285,17 @@ techniquement : miroir filtré des sections 128×128 + swap du champ `maps` pend
   indirection `Hooks` câblée par `SharedJourneyClient`, même patron que `Payloads.Hooks`).
 
 ### Bugs marquants
+
+- **Flicker des overlays minimap à la création d'icône de mob (2026-07-17)** : bug
+  préexistant de la v3 des têtes de mobs (pas lié à la passe d'optim P4).
+  `MobIconCreator.clearCell` repointait la scissor box GL sur la cellule d'atlas (32×32,
+  coin bas-gauche fenêtre) ; `restoreState` ré-activait le scissor test SANS restaurer la
+  box → tout le reste de la frame dessiné dans le scissor de la minimap (suite du radar,
+  rails/overlays bridgés, overlays API) était clippé hors champ pendant UNE frame — la
+  flèche/waypoints/labels (après `disableScissor`) restaient visibles, d'où le symptôme
+  « les overlays clignotent ». Déclencheur : création d'une icône sur une page d'atlas non
+  neuve (nouveau type/variante de mob entrant au radar), d'où l'irrégularité. Corrigé :
+  box capturée (`glGetIntegerv(GL_SCISSOR_BOX)`) et restaurée AVANT de ré-activer le test.
 
 - **Quarantaine — deux fuites de confort (2026-07-16)** : (1) un joueur caché qui repassait
   visible laissait ses chunks en attente jusqu'à la deadline — désormais

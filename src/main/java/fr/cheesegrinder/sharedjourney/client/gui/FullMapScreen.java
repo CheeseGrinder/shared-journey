@@ -23,6 +23,7 @@ import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
 import fr.cheesegrinder.sharedjourney.client.render.MobHeadIcons;
 import fr.cheesegrinder.sharedjourney.client.render.WaypointIcons;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
+import fr.cheesegrinder.sharedjourney.client.service.DisplayNames;
 import fr.cheesegrinder.sharedjourney.client.service.MapMarkerStore;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.network.PlayerVisibilityPayloads;
@@ -195,6 +196,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
     @Override
     protected void init() {
+        // Keybinds or language may have changed since the last open.
+        legendRows = null;
         bandSlider = addRenderableWidget(new BandSlider(width / 2 - 75, height - 40, 150, 20));
         closeContextMenu(); // resize: drop the transient menu
         buildTopToolbar();
@@ -1185,7 +1188,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         String biome = mc.level
                 .getBiome(pos)
                 .unwrapKey()
-                .map(k -> biomeName(k.location().toString()))
+                .map(k -> DisplayNames.biome(k.location()))
                 .orElse("?");
         String text = mc.player.getGameProfile().getName()
                 + " ■ x: " + pos.getX() + ", z: " + pos.getZ() + ", y: " + pos.getY()
@@ -1222,22 +1225,14 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         StringBuilder sb = new StringBuilder();
         if (!info.blockId().isEmpty()) {
-            var block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(info.blockId()));
-            sb.append(block.getName().getString()).append(" ■ ");
+            sb.append(DisplayNames.block(info.blockId())).append(" ■ ");
         }
         sb.append("x: ").append(wx).append(", z: ").append(wz).append(", y: ").append(info.y());
         if (!info.biomeId().isEmpty()) {
-            sb.append(" ■ ").append(biomeName(info.biomeId()));
+            sb.append(" ■ ").append(DisplayNames.biome(info.biomeId()));
         }
         sb.append(extra);
         drawInfoBar(gg, sb.toString(), height - 24);
-    }
-
-    /** Localized biome name from its "namespace:path" identifier. */
-    private String biomeName(String biomeId) {
-        var loc = ResourceLocation.parse(biomeId);
-        return Component.translatable("biome." + loc.getNamespace() + "." + loc.getPath())
-                .getString();
     }
 
     /**
@@ -1273,13 +1268,22 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         gg.drawString(font, text, x, y, 0xE0E0E0);
     }
 
+    /** A legend line: keycap chip text + localized description. */
+    private record LegendRow(String chip, String label) {}
+
     /**
-     * Controls legend (Show Keys), bottom right: one keycap-styled chip
-     * per shortcut with its description, drawn at full font size (the old
-     * version scaled the font down to 0.75, which blurred the text).
+     * Legend rows, built once per screen open (init() drops them): the
+     * translations, key bindings and text widths cannot change while the
+     * map is open, and rebuilding them every rendered frame allocated a
+     * dozen resolved components each time.
      */
-    private void renderLegend(GuiGraphics gg) {
-        record LegendRow(String chip, String label) {}
+    private List<LegendRow> legendRows;
+
+    private int legendChipW;
+
+    private int legendLabelW;
+
+    private void buildLegendRows() {
         var mc = Minecraft.getInstance();
         List<LegendRow> rows = new ArrayList<>();
         for (KeyMapping key : List.of(
@@ -1309,13 +1313,29 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             chipW = Math.max(chipW, font.width(row.chip()));
             labelW = Math.max(labelW, font.width(row.label()));
         }
-        chipW += 8;
 
+        legendRows = rows;
+        legendChipW = chipW + 8;
+        legendLabelW = labelW;
+    }
+
+    /**
+     * Controls legend (Show Keys), bottom right: one keycap-styled chip
+     * per shortcut with its description, drawn at full font size (the old
+     * version scaled the font down to 0.75, which blurred the text).
+     */
+    private void renderLegend(GuiGraphics gg) {
+        if (legendRows == null) {
+            buildLegendRows();
+        }
+
+        List<LegendRow> rows = legendRows;
+        int chipW = legendChipW;
         String title = translate(Lang.LEGEND_TITLE);
         int rowH = 15;
         int chipH = 12;
         int pad = 6;
-        int boxW = Math.max(chipW + 6 + labelW, font.width(title)) + pad * 2;
+        int boxW = Math.max(chipW + 6 + legendLabelW, font.width(title)) + pad * 2;
         int boxH = pad + 12 + rows.size() * rowH + pad;
         int x0 = width - boxW - 6;
         // Larger bottom margin: stay clear of the chat area.
@@ -1366,6 +1386,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         List<RegionKey> missing = new ArrayList<>();
         List<Long> knownVersions = new ArrayList<>();
+        long now = System.currentTimeMillis();
 
         var pose = gg.pose();
         pose.pushPose();
@@ -1394,16 +1415,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 }
                 // Request if missing or potentially stale (throttled); the
                 // hover sidecar (INFO) rides along with the displayed layer.
-                long now = System.currentTimeMillis();
-                RegionKey infoKey = new RegionKey(dim, MapLayer.INFO, 0, rx, rz);
-                for (RegionKey wanted : List.of(key, infoKey)) {
-                    Long last = ClientMapCache.LAST_REQUESTED.get(wanted);
-                    if ((last == null || now - last > REQUEST_COOLDOWN_MS) && missing.size() < 64) {
-                        missing.add(wanted);
-                        knownVersions.add(ClientMapCache.versionOf(wanted));
-                        ClientMapCache.LAST_REQUESTED.put(wanted, now);
-                    }
-                }
+                requestIfStale(key, now, missing, knownVersions);
+                requestIfStale(new RegionKey(dim, MapLayer.INFO, 0, rx, rz), now, missing, knownVersions);
             }
         }
 
@@ -1466,21 +1479,26 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             MapMarkerRenderer.draw(gg, marker, (float) msx, (float) msy, 1.2f);
         }
 
-        // Waypoints on top, in screen coordinates (constant size regardless of zoom)
-        for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
-            if (!MapClientConfig.SHOW_WAYPOINTS.get() || !WaypointStore.isShown(wp)) {
-                continue;
-            }
+        // Waypoints on top, in screen coordinates (constant size
+        // regardless of zoom). Config values hoisted out of the loop:
+        // each .get() walks the NeoForge config backing per call.
+        if (MapClientConfig.SHOW_WAYPOINTS.get()) {
+            boolean showNames = zoom >= 0.5f && WaypointClientConfig.SHOW_WAYPOINT_NAMES.get();
+            for (Waypoint wp : WaypointStore.forDimension(dim.location())) {
+                if (!WaypointStore.isShown(wp)) {
+                    continue;
+                }
 
-            int sx = (int) Math.round(screenX(wp.x() + 0.5));
-            int sy = (int) Math.round(screenY(wp.z() + 0.5));
-            if (sx < -8 || sx > width + 8 || sy < -8 || sy > height + 8) {
-                continue;
-            }
+                int sx = (int) Math.round(screenX(wp.x() + 0.5));
+                int sy = (int) Math.round(screenY(wp.z() + 0.5));
+                if (sx < -8 || sx > width + 8 || sy < -8 || sy > height + 8) {
+                    continue;
+                }
 
-            WaypointIcons.draw(gg, wp, sx, sy, 1.0f);
-            if (zoom >= 0.5f && WaypointClientConfig.SHOW_WAYPOINT_NAMES.get()) {
-                gg.drawCenteredString(font, wp.name(), sx, sy - WaypointIcons.SIZE / 2 - 10, 0xFFFFFF);
+                WaypointIcons.draw(gg, wp, sx, sy, 1.0f);
+                if (showNames) {
+                    gg.drawCenteredString(font, wp.name(), sx, sy - WaypointIcons.SIZE / 2 - 10, 0xFFFFFF);
+                }
             }
         }
 
@@ -1544,6 +1562,25 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         if (!missing.isEmpty()) {
             PacketDistributor.sendToServer(new RegionSyncPayloads.RegionRequestPayload(missing, knownVersions));
         }
+    }
+
+    /**
+     * Queues one region for the batched request if it is not throttled
+     * and the batch has room (64 keys max per frame).
+     */
+    private void requestIfStale(RegionKey wanted, long now, List<RegionKey> missing, List<Long> knownVersions) {
+        if (missing.size() >= 64) {
+            return;
+        }
+
+        Long last = ClientMapCache.LAST_REQUESTED.get(wanted);
+        if (last != null && now - last <= REQUEST_COOLDOWN_MS) {
+            return;
+        }
+
+        missing.add(wanted);
+        knownVersions.add(ClientMapCache.versionOf(wanted));
+        ClientMapCache.LAST_REQUESTED.put(wanted, now);
     }
 
     /**

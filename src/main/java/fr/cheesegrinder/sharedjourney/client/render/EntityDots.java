@@ -107,25 +107,28 @@ public final class EntityDots {
         // so the direction reads at a glance. Vertices in screen clockwise
         // order (tip, bottom-left, bottom-right): same winding as vanilla
         // GUI quads, otherwise back-face culling would eliminate the arrow.
-        triangle(gg, 0xFF2653C1, 0f, -7f, -5.5f, 6f, 5.5f, 6f);
-        triangle(gg, 0xFFFFFFFF, 0f, -4.5f, -3.6f, 4.6f, 3.6f, 4.6f);
-        triangle(gg, 0xFF2653C1, 0f, 1.5f, -2.8f, 6f, 2.8f, 6f);
-        gg.pose().popPose();
-        RenderSystem.enableCull();
-        RenderSystem.enableDepthTest();
-    }
-
-    /** Solid triangle in immediate mode, within the current pose. */
-    private static void triangle(GuiGraphics gg, int argb, float x1, float y1, float x2, float y2, float x3, float y3) {
+        // One buffer and one draw for the three triangles (vertex order
+        // preserves the paint order): this runs every frame on the HUD.
         Matrix4f mat = gg.pose().last().pose();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferBuilder buf =
                 Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+        triangle(buf, mat, 0xFF2653C1, 0f, -7f, -5.5f, 6f, 5.5f, 6f);
+        triangle(buf, mat, 0xFFFFFFFF, 0f, -4.5f, -3.6f, 4.6f, 3.6f, 4.6f);
+        triangle(buf, mat, 0xFF2653C1, 0f, 1.5f, -2.8f, 6f, 2.8f, 6f);
+        BufferUploader.drawWithShader(buf.buildOrThrow());
+        gg.pose().popPose();
+        RenderSystem.enableCull();
+        RenderSystem.enableDepthTest();
+    }
+
+    /** Appends a solid triangle to the shared arrow buffer. */
+    private static void triangle(
+            BufferBuilder buf, Matrix4f mat, int argb, float x1, float y1, float x2, float y2, float x3, float y3) {
         buf.addVertex(mat, x1, y1, 0).setColor(argb);
         buf.addVertex(mat, x2, y2, 0).setColor(argb);
         buf.addVertex(mat, x3, y3, 0).setColor(argb);
-        BufferUploader.drawWithShader(buf.buildOrThrow());
     }
 }

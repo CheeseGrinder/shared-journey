@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,6 +49,14 @@ public final class WaypointStore {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static final Map<UUID, Waypoint> WAYPOINTS = new ConcurrentHashMap<>();
+    /**
+     * Immutable per-dimension index of WAYPOINTS, rebuilt lazily by
+     * {@link #forDimension} and dropped by the mutation helpers below.
+     * forDimension is called several times per FRAME (minimap, fullscreen
+     * map, in-world beacons): filtering the whole map on each call
+     * allocated a fresh list per caller per frame.
+     */
+    private static volatile Map<ResourceLocation, List<Waypoint>> byDimension;
     /** Groups explicitly hidden in the management screen. */
     private static final Set<String> HIDDEN_GROUPS = ConcurrentHashMap.newKeySet();
     /**
@@ -83,7 +92,7 @@ public final class WaypointStore {
 
     public static void closeSession() {
         save();
-        WAYPOINTS.clear();
+        clearWaypoints();
         HIDDEN_GROUPS.clear();
         HIDDEN_IDS.clear();
         KNOWN_GROUPS.clear();
@@ -98,9 +107,49 @@ public final class WaypointStore {
 
     /** Waypoints of a dimension (every type is bound to its dimension). */
     public static List<Waypoint> forDimension(ResourceLocation dim) {
-        return WAYPOINTS.values().stream()
-                .filter(w -> w.dimension().equals(dim))
-                .toList();
+        Map<ResourceLocation, List<Waypoint>> index = byDimension;
+        if (index == null) {
+            index = buildDimensionIndex();
+            byDimension = index;
+        }
+
+        return index.getOrDefault(dim, List.of());
+    }
+
+    private static Map<ResourceLocation, List<Waypoint>> buildDimensionIndex() {
+        Map<ResourceLocation, List<Waypoint>> index = new HashMap<>();
+        for (Waypoint wp : WAYPOINTS.values()) {
+            index.computeIfAbsent(wp.dimension(), d -> new ArrayList<>()).add(wp);
+        }
+
+        for (Map.Entry<ResourceLocation, List<Waypoint>> entry : index.entrySet()) {
+            entry.setValue(List.copyOf(entry.getValue()));
+        }
+        return Map.copyOf(index);
+    }
+
+    // ------------------------------------------------------------------ mutation helpers
+
+    // Every write to WAYPOINTS goes through these three helpers so the
+    // per-dimension index above can never go stale.
+
+    private static void putWaypoint(UUID id, Waypoint wp) {
+        WAYPOINTS.put(id, wp);
+        byDimension = null;
+    }
+
+    private static Waypoint removeWaypoint(UUID id) {
+        Waypoint removed = WAYPOINTS.remove(id);
+        if (removed != null) {
+            byDimension = null;
+        }
+
+        return removed;
+    }
+
+    private static void clearWaypoints() {
+        WAYPOINTS.clear();
+        byDimension = null;
     }
 
     public static Waypoint get(UUID id) {
@@ -260,7 +309,7 @@ public final class WaypointStore {
             return false;
         }
 
-        WAYPOINTS.put(wp.id(), wp);
+        putWaypoint(wp.id(), wp);
         save();
         return true;
     }
@@ -285,7 +334,7 @@ public final class WaypointStore {
             return;
         }
 
-        WAYPOINTS.put(wp.id(), wp);
+        putWaypoint(wp.id(), wp);
         NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
         save();
     }
@@ -300,7 +349,7 @@ public final class WaypointStore {
      */
     private static void updateBanner(Waypoint wp) {
         setHiddenId(wp.id(), !wp.visible());
-        WAYPOINTS.put(wp.id(), wp);
+        putWaypoint(wp.id(), wp);
         NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
         save();
     }
@@ -331,7 +380,7 @@ public final class WaypointStore {
             // (otherwise it comes back as a duplicate DIMENSION waypoint on
             // the next login).
             if (old != null) {
-                WAYPOINTS.remove(wp.id());
+                removeWaypoint(wp.id());
                 save();
                 if (isServerManaged(old)) {
                     sendPlayerRemove(wp.id());
@@ -359,7 +408,7 @@ public final class WaypointStore {
                     Waypoint.GROUP_DEFAULT,
                     wp.visible(),
                     wp.type());
-            WAYPOINTS.put(local.id(), local);
+            putWaypoint(local.id(), local);
             NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(local));
             save();
             if (isServerManaged(local)) {
@@ -377,7 +426,7 @@ public final class WaypointStore {
                 || old.colorRgb() != wp.colorRgb();
         Waypoint normalized = normalizedPublic(
                 wp.id(), wp.name(), wp.dimension(), wp.x(), wp.y(), wp.z(), wp.colorRgb(), wp.visible());
-        WAYPOINTS.put(normalized.id(), normalized);
+        putWaypoint(normalized.id(), normalized);
         setHiddenId(normalized.id(), !normalized.visible());
         NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(normalized));
         save();
@@ -401,7 +450,7 @@ public final class WaypointStore {
             // Demoted to TEMP: drop the player's server copy, keep local.
             sendPlayerRemove(wp.id());
             HIDDEN_IDS.remove(wp.id());
-            WAYPOINTS.put(wp.id(), wp);
+            putWaypoint(wp.id(), wp);
             NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
             save();
             return;
@@ -420,7 +469,7 @@ public final class WaypointStore {
                 || !old.group().equals(wp.group());
         Waypoint normalized = normalizedPlayerManaged(
                 wp.id(), wp.name(), wp.dimension(), wp.x(), wp.y(), wp.z(), wp.colorRgb(), wp.group(), wp.visible());
-        WAYPOINTS.put(normalized.id(), normalized);
+        putWaypoint(normalized.id(), normalized);
         setHiddenId(normalized.id(), !normalized.visible());
         NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(normalized));
         save();
@@ -430,7 +479,7 @@ public final class WaypointStore {
     }
 
     public static void remove(UUID id) {
-        Waypoint wp = WAYPOINTS.remove(id);
+        Waypoint wp = removeWaypoint(id);
         if (wp == null) {
             return;
         }
@@ -454,7 +503,7 @@ public final class WaypointStore {
     public static void acceptPublicUpsert(WaypointPayloads.PublicWaypointPayload p) {
         Waypoint wp = normalizedPublic(
                 p.id(), p.name(), p.dimension(), p.x(), p.y(), p.z(), p.colorRgb(), !HIDDEN_IDS.contains(p.id()));
-        WAYPOINTS.put(wp.id(), wp);
+        putWaypoint(wp.id(), wp);
         // Updated (not the cancellable Added) even for new entries: the
         // server is authoritative, listeners cannot veto the sync.
         NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
@@ -462,7 +511,7 @@ public final class WaypointStore {
 
     /** Server broadcast: removal of a public waypoint. */
     public static void acceptPublicRemove(UUID id) {
-        Waypoint wp = WAYPOINTS.remove(id);
+        Waypoint wp = removeWaypoint(id);
         HIDDEN_IDS.remove(id);
         if (wp != null) {
             NeoForge.EVENT_BUS.post(new WaypointEvent.Removed(wp));
@@ -516,7 +565,7 @@ public final class WaypointStore {
                 p.colorRgb(),
                 p.group(),
                 !HIDDEN_IDS.contains(p.id()));
-        WAYPOINTS.put(wp.id(), wp);
+        putWaypoint(wp.id(), wp);
         // Updated (not the cancellable Added) even for new entries: the
         // server is authoritative, listeners cannot veto the sync.
         NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
@@ -524,7 +573,7 @@ public final class WaypointStore {
 
     /** Server echo: removal of one of THIS player's own waypoints. */
     public static void acceptPlayerRemove(UUID id) {
-        Waypoint wp = WAYPOINTS.remove(id);
+        Waypoint wp = removeWaypoint(id);
         HIDDEN_IDS.remove(id);
         if (wp != null) {
             NeoForge.EVENT_BUS.post(new WaypointEvent.Removed(wp));
@@ -556,13 +605,13 @@ public final class WaypointStore {
     public static void acceptBannerUpsert(WaypointPayloads.BannerWaypointPayload p) {
         Waypoint wp = normalizedBanner(
                 p.id(), p.name(), p.dimension(), p.x(), p.y(), p.z(), p.colorRgb(), !HIDDEN_IDS.contains(p.id()));
-        WAYPOINTS.put(wp.id(), wp);
+        putWaypoint(wp.id(), wp);
         NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
     }
 
     /** Server broadcast: removal of a banner waypoint (the banner was broken). */
     public static void acceptBannerRemove(UUID id) {
-        Waypoint wp = WAYPOINTS.remove(id);
+        Waypoint wp = removeWaypoint(id);
         HIDDEN_IDS.remove(id);
         if (wp != null) {
             NeoForge.EVENT_BUS.post(new WaypointEvent.Removed(wp));
@@ -628,7 +677,7 @@ public final class WaypointStore {
     // ------------------------------------------------------------------ IO
 
     private static void load() {
-        WAYPOINTS.clear();
+        clearWaypoints();
         HIDDEN_GROUPS.clear();
         HIDDEN_IDS.clear();
         KNOWN_GROUPS.clear();
@@ -698,7 +747,7 @@ public final class WaypointStore {
                         o.has("group") ? o.get("group").getAsString() : Waypoint.GROUP_DEFAULT,
                         !o.has("visible") || o.get("visible").getAsBoolean(),
                         readType(o));
-                WAYPOINTS.put(wp.id(), wp);
+                putWaypoint(wp.id(), wp);
             }
 
             // Migration (pre group-management files): groups created as

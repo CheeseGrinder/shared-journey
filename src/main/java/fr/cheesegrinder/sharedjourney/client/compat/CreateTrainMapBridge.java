@@ -24,6 +24,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -84,20 +87,26 @@ public final class CreateTrainMapBridge {
     private static Method requestData;
     private static Method stopRequesting;
     private static Method handleToggleWidgetClick;
-    private static Method renderAndPick;
-    private static Method renderToggleWidget;
-    private static Method isToggleWidgetHovered;
     private static Method drawHoveringText;
     private static Method allConfigsClient;
     private static Field showTrainMapOverlayField;
     private static Method configBoolGet;
-    private static Field syncCurrentDataField;
-    private static Field entryDimensionsField;
-    private static Field entryPositionsField;
-    private static Method entryGetPosition;
-    private static Object rendererInstance;
-    private static Method rendererGetPixel;
     private static boolean requesting;
+
+    // Per-frame reflective calls (render, hover pick, rail pixel reads):
+    // typed MethodHandles invoked via invokeExact — a Method.invoke here
+    // boxes every int/boolean/double argument on each of the hundreds of
+    // calls a frame can make (pickTrain per carriage, getPixel per
+    // corridor cell). Cold paths (tick pump, clicks, tooltips) keep
+    // plain reflection above.
+    private static MethodHandle renderAndPick;
+    private static MethodHandle renderToggleWidget;
+    private static MethodHandle isToggleWidgetHovered;
+    private static MethodHandle syncCurrentData;
+    private static MethodHandle entryDimensions;
+    private static MethodHandle entryPositions;
+    private static MethodHandle entryGetPosition;
+    private static MethodHandle rendererGetPixel;
 
     /** Corridor (blocks) around the route in which rail pixels are recolored. */
     private static final int PATH_CORRIDOR_RADIUS = 1;
@@ -158,7 +167,7 @@ public final class CreateTrainMapBridge {
      * This follows Create's own rasterization exactly (offsets, rail
      * width). Route cells with no drawn rail yet fall back to themselves.
      */
-    private static void recomputePaintedCells() throws ReflectiveOperationException {
+    private static void recomputePaintedCells() throws Throwable {
         Set<Long> seen = new HashSet<>();
         List<long[]> painted = new ArrayList<>();
         for (int i = 0; i < pathCellXs.length; i++) {
@@ -167,7 +176,7 @@ public final class CreateTrainMapBridge {
                 for (int dz = -PATH_CORRIDOR_RADIUS; dz <= PATH_CORRIDOR_RADIUS; dz++) {
                     int cx = pathCellXs[i] + dx;
                     int cz = pathCellZs[i] + dz;
-                    int pixel = (int) rendererGetPixel.invoke(rendererInstance, cx, cz);
+                    int pixel = (int) rendererGetPixel.invokeExact(cx, cz);
                     if (!isRailCorePixel(pixel)) {
                         continue;
                     }
@@ -306,7 +315,7 @@ public final class CreateTrainMapBridge {
                         Mth.floor(-screenH / 2f / scale + centerZ),
                         Mth.floor(screenW / scale),
                         Mth.floor(screenH / scale));
-                tooltip = (List<?>) renderAndPick.invoke(null, gg, pickX, pickZ, false, bounds);
+                tooltip = (List<?>) renderAndPick.invokeExact(gg, pickX, pickZ, false, bounds);
 
                 // Hovered or followed train: its remaining navigation
                 // route, drawn in the same world-coordinate pose (the
@@ -329,10 +338,10 @@ public final class CreateTrainMapBridge {
                 return;
             }
 
-            renderToggleWidget.invoke(null, gg, TOGGLE_WIDGET_X, TOGGLE_WIDGET_Y);
+            renderToggleWidget.invokeExact(gg, TOGGLE_WIDGET_X, TOGGLE_WIDGET_Y);
             Font font = Minecraft.getInstance().font;
-            boolean toggleHovered = Boolean.TRUE.equals(
-                    isToggleWidgetHovered.invoke(null, mouseX, mouseY, TOGGLE_WIDGET_X, TOGGLE_WIDGET_Y));
+            boolean toggleHovered =
+                    (boolean) isToggleWidgetHovered.invokeExact(mouseX, mouseY, TOGGLE_WIDGET_X, TOGGLE_WIDGET_Y);
             if (toggleHovered) {
                 List<Component> lines = List.of(Component.translatable("create.train_map.toggle"));
                 drawHoveringText.invoke(
@@ -367,19 +376,19 @@ public final class CreateTrainMapBridge {
 
         try {
             Minecraft mc = Minecraft.getInstance();
-            Map<?, ?> data = (Map<?, ?>) syncCurrentDataField.get(null);
+            Map<?, ?> data = (Map<?, ?>) syncCurrentData.invokeExact();
             Object entry = data.get(trainId);
             if (mc.level == null || entry == null) {
                 return null;
             }
 
             Object currentDim = mc.level.dimension();
-            List<?> dims = (List<?>) entryDimensionsField.get(entry);
-            Object[] positions = (Object[]) entryPositionsField.get(entry);
+            List<?> dims = (List<?>) entryDimensions.invokeExact(entry);
+            Object[] positions = (Object[]) entryPositions.invokeExact(entry);
             int carriages = positions == null ? 0 : Math.min(dims.size(), positions.length / 6);
             for (int i = 0; i < carriages; i++) {
                 if (currentDim.equals(dims.get(i))) {
-                    return (Vec3) entryGetPosition.invoke(entry, i, true, 1.0);
+                    return (Vec3) entryGetPosition.invokeExact(entry, i, true, 1.0);
                 }
             }
             return null;
@@ -393,25 +402,25 @@ public final class CreateTrainMapBridge {
      * Train whose carriage sits within the pick radius of the hovered
      * block, from the map sync data ({@code TrainMapSyncClient}), or null.
      */
-    private static UUID pickTrain(int pickX, int pickZ) throws ReflectiveOperationException {
+    private static UUID pickTrain(int pickX, int pickZ) throws Throwable {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) {
             return null;
         }
 
         Object currentDim = mc.level.dimension();
-        Map<?, ?> data = (Map<?, ?>) syncCurrentDataField.get(null);
+        Map<?, ?> data = (Map<?, ?>) syncCurrentData.invokeExact();
         for (Map.Entry<?, ?> e : data.entrySet()) {
             Object entry = e.getValue();
-            List<?> dims = (List<?>) entryDimensionsField.get(entry);
-            Object[] positions = (Object[]) entryPositionsField.get(entry);
+            List<?> dims = (List<?>) entryDimensions.invokeExact(entry);
+            Object[] positions = (Object[]) entryPositions.invokeExact(entry);
             int carriages = positions == null ? 0 : Math.min(dims.size(), positions.length / 6);
             for (int i = 0; i < carriages; i++) {
                 if (!currentDim.equals(dims.get(i))) {
                     continue;
                 }
 
-                Vec3 pos = (Vec3) entryGetPosition.invoke(entry, i, true, 1.0);
+                Vec3 pos = (Vec3) entryGetPosition.invokeExact(entry, i, true, 1.0);
                 if (Math.max(Math.abs(pickX - pos.x), Math.abs(pickZ - pos.z)) <= TRAIN_PICK_RADIUS_BLOCKS) {
                     return (UUID) e.getKey();
                 }
@@ -437,7 +446,7 @@ public final class CreateTrainMapBridge {
      * pixels of Create's map buffer along the route (see
      * recomputePaintedCells) — the rail itself appears recolored.
      */
-    private static void drawPath(GuiGraphics gg) throws ReflectiveOperationException {
+    private static void drawPath(GuiGraphics gg) throws Throwable {
         if (System.currentTimeMillis() - paintedComputedAt > PATH_PAINT_REFRESH_MS) {
             recomputePaintedCells();
         }
@@ -465,8 +474,14 @@ public final class CreateTrainMapBridge {
         }
 
         try {
-            return Boolean.TRUE.equals(
+            boolean consumed = Boolean.TRUE.equals(
                     handleToggleWidgetClick.invoke(null, mouseX, mouseY, TOGGLE_WIDGET_X, TOGGLE_WIDGET_Y));
+            if (consumed) {
+                // The click may have flipped Create's overlay config:
+                // re-read it on the next frame instead of the next second.
+                overlayCheckedAt = 0;
+            }
+            return consumed;
         } catch (Throwable t) {
             warnAndDisable(t);
             return false;
@@ -481,11 +496,30 @@ public final class CreateTrainMapBridge {
         return JourneyMapBridge.bridgeActive() && resolve() && MapClientConfig.SHOW_TRAIN_OVERLAY.get();
     }
 
-    /** Create's own "show train map overlay" client config value. */
+    /** Refresh period of the cached Create overlay config value (ms). */
+    private static final long OVERLAY_CONFIG_REFRESH_MS = 1000;
+
+    private static boolean overlayEnabledCached;
+
+    private static long overlayCheckedAt;
+
+    /**
+     * Create's own "show train map overlay" client config value. Read
+     * through three reflective hops, so the value is cached and re-read
+     * at most once per second (or on the next frame after a click on the
+     * toggle widget — see handleToggleClick).
+     */
     private static boolean overlayEnabled() {
+        long now = System.currentTimeMillis();
+        if (now - overlayCheckedAt < OVERLAY_CONFIG_REFRESH_MS) {
+            return overlayEnabledCached;
+        }
+
         try {
             Object cclient = allConfigsClient.invoke(null);
-            return Boolean.TRUE.equals(configBoolGet.invoke(showTrainMapOverlayField.get(cclient)));
+            overlayEnabledCached = Boolean.TRUE.equals(configBoolGet.invoke(showTrainMapOverlayField.get(cclient)));
+            overlayCheckedAt = now;
+            return overlayEnabledCached;
         } catch (Throwable t) {
             warnAndDisable(t);
             return false;
@@ -513,11 +547,6 @@ public final class CreateTrainMapBridge {
             stopRequesting = sync.getMethod("stopRequesting");
             handleToggleWidgetClick =
                     manager.getMethod("handleToggleWidgetClick", int.class, int.class, int.class, int.class);
-            renderAndPick = manager.getMethod(
-                    "renderAndPick", GuiGraphics.class, int.class, int.class, boolean.class, Rect2i.class);
-            renderToggleWidget = manager.getMethod("renderToggleWidget", GuiGraphics.class, int.class, int.class);
-            isToggleWidgetHovered =
-                    manager.getMethod("isToggleWidgetHovered", int.class, int.class, int.class, int.class);
             drawHoveringText = guiUtils.getMethod(
                     "drawHoveringText",
                     GuiGraphics.class,
@@ -532,13 +561,33 @@ public final class CreateTrainMapBridge {
             showTrainMapOverlayField = allConfigsClient.getReturnType().getField("showTrainMapOverlay");
             configBoolGet = showTrainMapOverlayField.getType().getMethod("get");
             Class<?> entry = Class.forName("com.simibubi.create.compat.trainmap.TrainMapSync$TrainMapSyncEntry");
-            syncCurrentDataField = sync.getField("currentData");
-            entryDimensionsField = entry.getField("dimensions");
-            entryPositionsField = entry.getField("positions");
-            entryGetPosition = entry.getMethod("getPosition", int.class, boolean.class, double.class);
             Class<?> renderer = Class.forName("com.simibubi.create.compat.trainmap.TrainMapRenderer");
-            rendererInstance = renderer.getField("INSTANCE").get(null);
-            rendererGetPixel = renderer.getMethod("getPixel", int.class, int.class);
+            Object rendererInstance = renderer.getField("INSTANCE").get(null);
+
+            // Hot-path handles, adapted (asType) to the exact call-site
+            // signatures below so invokeExact never boxes an argument.
+            MethodHandles.Lookup lookup = MethodHandles.publicLookup();
+            renderAndPick = lookup.unreflect(manager.getMethod(
+                            "renderAndPick", GuiGraphics.class, int.class, int.class, boolean.class, Rect2i.class))
+                    .asType(MethodType.methodType(
+                            List.class, GuiGraphics.class, int.class, int.class, boolean.class, Rect2i.class));
+            renderToggleWidget = lookup.unreflect(
+                            manager.getMethod("renderToggleWidget", GuiGraphics.class, int.class, int.class))
+                    .asType(MethodType.methodType(void.class, GuiGraphics.class, int.class, int.class));
+            isToggleWidgetHovered = lookup.unreflect(
+                            manager.getMethod("isToggleWidgetHovered", int.class, int.class, int.class, int.class))
+                    .asType(MethodType.methodType(boolean.class, int.class, int.class, int.class, int.class));
+            syncCurrentData =
+                    lookup.unreflectGetter(sync.getField("currentData")).asType(MethodType.methodType(Map.class));
+            entryDimensions = lookup.unreflectGetter(entry.getField("dimensions"))
+                    .asType(MethodType.methodType(List.class, Object.class));
+            entryPositions = lookup.unreflectGetter(entry.getField("positions"))
+                    .asType(MethodType.methodType(Object[].class, Object.class));
+            entryGetPosition = lookup.unreflect(entry.getMethod("getPosition", int.class, boolean.class, double.class))
+                    .asType(MethodType.methodType(Vec3.class, Object.class, int.class, boolean.class, double.class));
+            rendererGetPixel = lookup.unreflect(renderer.getMethod("getPixel", int.class, int.class))
+                    .bindTo(rendererInstance)
+                    .asType(MethodType.methodType(int.class, int.class, int.class));
             available = true;
             LOGGER.info("[Bridge JM] Create train map detected: sync and rendering wired to the SharedJourney map.");
         } catch (ClassNotFoundException e) {

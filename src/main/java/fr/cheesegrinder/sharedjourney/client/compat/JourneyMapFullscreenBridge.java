@@ -247,10 +247,7 @@ public final class JourneyMapFullscreenBridge {
         Minecraft mc = Minecraft.getInstance();
         int sw = mc.getWindow().getGuiScaledWidth();
         int sh = mc.getWindow().getGuiScaledHeight();
-        Screen dummy = new Screen(Component.empty()) {};
-        dummy.width = sw;
-        dummy.height = sh;
-        BridgedMapView view = new MinimapView(dummy, sw, sh, px, pz, zoom, layer);
+        MINIMAP_VIEW.update(sw, sh, px, pz, zoom, layer);
         var pose = gg.pose();
         pose.pushPose();
         if (rotationDeg != 0f) {
@@ -259,23 +256,77 @@ public final class JourneyMapFullscreenBridge {
             pose.translate(-cx, -cy, 0);
         }
         pose.translate(cx - sw / 2f, cy - sh / 2f, 0);
-        fireRender(view, gg, 0, 0, 0f);
+        fireRender(MINIMAP_VIEW, gg, 0, 0, 0f);
         // Create's train map, rendered directly (see overlayFilter): no
         // toggle widget nor tooltips on the minimap.
         CreateTrainMapBridge.renderMap(gg, sw, sh, px, pz, zoom, 0, 0, false, null);
         pose.popPose();
     }
 
-    /** Minimap view: center = player, dimensions = screen (translated pose). */
-    private record MinimapView(
-            Screen screen,
-            int viewWidth,
-            int viewHeight,
-            double centerX,
-            double centerZ,
-            float zoomScale,
-            MapLayer currentLayer)
-            implements BridgedMapView {
+    /** Single minimap view instance, refreshed per frame (see MinimapView). */
+    private static final MinimapView MINIMAP_VIEW = new MinimapView();
+
+    /**
+     * Minimap view: center = player, dimensions = screen (translated
+     * pose). One mutable instance is reused across frames — the view, its
+     * dummy screen and the IFullscreen proxy wrapping it (see proxyFor)
+     * used to be reallocated every frame of the HUD render loop.
+     */
+    private static final class MinimapView implements BridgedMapView {
+
+        private final Screen dummyScreen = new Screen(Component.empty()) {};
+        private int viewWidth;
+        private int viewHeight;
+        private double centerX;
+        private double centerZ;
+        private float zoomScale;
+        private MapLayer currentLayer;
+
+        void update(int width, int height, double px, double pz, float zoom, MapLayer layer) {
+            dummyScreen.width = width;
+            dummyScreen.height = height;
+            viewWidth = width;
+            viewHeight = height;
+            centerX = px;
+            centerZ = pz;
+            zoomScale = zoom;
+            currentLayer = layer;
+        }
+
+        @Override
+        public Screen screen() {
+            return dummyScreen;
+        }
+
+        @Override
+        public int viewWidth() {
+            return viewWidth;
+        }
+
+        @Override
+        public int viewHeight() {
+            return viewHeight;
+        }
+
+        @Override
+        public double centerX() {
+            return centerX;
+        }
+
+        @Override
+        public double centerZ() {
+            return centerZ;
+        }
+
+        @Override
+        public float zoomScale() {
+            return zoomScale;
+        }
+
+        @Override
+        public MapLayer currentLayer() {
+            return currentLayer;
+        }
 
         @Override
         public boolean isMinimap() {
@@ -297,9 +348,27 @@ public final class JourneyMapFullscreenBridge {
 
     // ------------------------------------------------------------------ IFullscreen proxy
 
+    /** Last proxied view and its proxy: reused while the same view renders. */
+    private static BridgedMapView cachedProxyView;
+
+    private static Object cachedProxy;
+
+    /**
+     * IFullscreen proxy for a view. Cached by view identity: only one map
+     * surface renders at a time (the minimap hides behind any screen), so
+     * a single slot serves both the reusable minimap view and the current
+     * fullscreen screen for their whole display lifetime.
+     */
     private static Object proxyFor(BridgedMapView map) {
-        return Proxy.newProxyInstance(
+        if (map == cachedProxyView) {
+            return cachedProxy;
+        }
+
+        Object proxy = Proxy.newProxyInstance(
                 fullscreenInterface.getClassLoader(), new Class<?>[] {fullscreenInterface}, new Handler(map));
+        cachedProxyView = map;
+        cachedProxy = proxy;
+        return proxy;
     }
 
     /**
