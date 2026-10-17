@@ -129,7 +129,8 @@ public final class SyncService {
                         new ArrayList<>(LayersServerConfig.CAVE_BANDS.get()),
                         SyncServerConfig.RADAR_MAX_RADIUS.get(),
                         WaypointServerConfig.DEATH_WAYPOINTS_ENABLED.get(),
-                        WaypointServerConfig.WAYPOINT_STORAGE.get() == WaypointServerConfig.Storage.SERVER));
+                        WaypointServerConfig.WAYPOINT_STORAGE.get() == WaypointServerConfig.Storage.SERVER,
+                        WaypointServerConfig.CONVERTED_WAYPOINTS_ENABLED.get()));
     }
 
     public static void broadcastLayerSettings(MinecraftServer server) {

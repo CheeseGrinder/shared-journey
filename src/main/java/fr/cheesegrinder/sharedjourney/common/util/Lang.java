@@ -120,6 +120,7 @@ public final class Lang {
     public static final String SETTINGS_SERVER_BED = key("settings.server.bed_waypoints");
     public static final String SETTINGS_SERVER_PORTAL = key("settings.server.portal_waypoints");
     public static final String SETTINGS_SERVER_ANCHOR = key("settings.server.anchor_waypoints");
+    public static final String SETTINGS_SERVER_CONVERTED = key("settings.server.converted_waypoints");
     public static final String SETTINGS_SERVER_PRIVACY = key("settings.server.privacy");
     public static final String SETTINGS_SERVER_POLICY = key("settings.server.hidden_policy");
     public static final String SETTINGS_SERVER_QUAR_RADIUS = key("settings.server.quarantine_radius");
@@ -161,6 +162,8 @@ public final class Lang {
     public static final String CONTEXT_SHOW_ALL = key("context.show_all");
     public static final String CONTEXT_HIDE_ALL = key("context.hide_all");
     public static final String CONTEXT_MANAGE_WAYPOINTS = key("context.manage_waypoints");
+    public static final String CONTEXT_CONVERT_SHOW = key("context.convert_show");
+    public static final String CONTEXT_CONVERT_HIDE = key("context.convert_hide");
     public static final String CONTEXT_CHAT = key("context.chat");
 
     // ------------------------------------------------------------------ fullscreen map: misc
@@ -212,6 +215,16 @@ public final class Lang {
     /** Display-only type label for banner waypoints (internally routed as PUBLIC). */
     public static final String WAYPOINT_TYPE_BANNER = key("waypoint.type.banner");
 
+    /** Edit-form toggle of the Overworld / Nether link ("Converted: %s"). */
+    public static final String WAYPOINT_CONVERTED = key("waypoint.converted");
+
+    public static final String WAYPOINT_CONVERTED_TOOLTIP = key("waypoint.converted.tooltip");
+    public static final String WAYPOINT_CONVERTED_ON = key("waypoint.converted.on");
+    public static final String WAYPOINT_CONVERTED_OFF = key("waypoint.converted.off");
+
+    /** Name of a converted counterpart ("%s (converted)"). */
+    public static final String WAYPOINT_CONVERTED_NAME = key("waypoint.converted.name");
+
     /** Label of one waypoint type ("sharedjourney.waypoint.type.public"...). */
     public static String waypointType(Waypoint.Type type) {
         return key("waypoint.type." + type.name().toLowerCase(Locale.ROOT));
@@ -234,6 +247,9 @@ public final class Lang {
     public static final String WAYPOINTS_TELEPORT = key("waypoints.teleport");
     public static final String WAYPOINTS_VIEW = key("waypoints.view");
     public static final String WAYPOINTS_VIEW_TOOLTIP = key("waypoints.view.tooltip");
+    public static final String WAYPOINTS_CONVERT_SHOW = key("waypoints.convert_show");
+    public static final String WAYPOINTS_CONVERT_HIDE = key("waypoints.convert_hide");
+    public static final String WAYPOINTS_CONVERTED_INFO = key("waypoints.converted_info");
     public static final String WAYPOINTS_ON = key("waypoints.on");
     public static final String WAYPOINTS_OFF = key("waypoints.off");
 

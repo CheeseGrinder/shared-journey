@@ -67,6 +67,12 @@ public final class ClientMapCache {
      */
     public static volatile boolean serverManagesWaypoints = true;
     /**
+     * Server switch of the converted (Overworld / Nether) waypoints: off
+     * hides every converted counterpart and blocks new links, existing
+     * links stay dormant. Defaults to true like the other server toggles.
+     */
+    public static volatile boolean convertedWaypointsEnabled = true;
+    /**
      * Last server config snapshot received for the ops tab of the settings
      * screen (null until the server answers an OpsConfigRequestPayload —
      * i.e. for every non-op player).

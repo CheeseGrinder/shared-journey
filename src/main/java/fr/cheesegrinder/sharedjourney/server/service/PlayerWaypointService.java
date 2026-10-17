@@ -1,7 +1,9 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
+import fr.cheesegrinder.sharedjourney.common.config.WaypointServerConfig;
 import fr.cheesegrinder.sharedjourney.common.network.WaypointPayloads;
+import fr.cheesegrinder.sharedjourney.common.waypoint.DimensionConversion;
 
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -95,6 +97,13 @@ public final class PlayerWaypointService {
             return;
         }
 
+        WaypointPayloads.PlayerWaypointPayload existing = waypoints.get(sanitized.id());
+        boolean converted = DimensionConversion.resolveLink(
+                WaypointServerConfig.CONVERTED_WAYPOINTS_ENABLED.get(),
+                sanitized.converted(),
+                existing != null && existing.converted(),
+                sanitized.dimension());
+        sanitized = withConverted(sanitized, converted);
         waypoints.put(sanitized.id(), sanitized);
         save(sp.getUUID(), waypoints.values());
         PacketDistributor.sendToPlayer(sp, sanitized);
@@ -142,7 +151,13 @@ public final class PlayerWaypointService {
         }
 
         return new WaypointPayloads.PlayerWaypointPayload(
-                p.id(), name, p.dimension(), p.x(), p.y(), p.z(), 0xFFFFFF & p.colorRgb(), group);
+                p.id(), name, p.dimension(), p.x(), p.y(), p.z(), 0xFFFFFF & p.colorRgb(), group, p.converted());
+    }
+
+    private static WaypointPayloads.PlayerWaypointPayload withConverted(
+            WaypointPayloads.PlayerWaypointPayload p, boolean converted) {
+        return new WaypointPayloads.PlayerWaypointPayload(
+                p.id(), p.name(), p.dimension(), p.x(), p.y(), p.z(), p.colorRgb(), p.group(), converted);
     }
 
     // ------------------------------------------------------------------ IO
@@ -184,7 +199,8 @@ public final class PlayerWaypointService {
                         o.get("y").getAsInt(),
                         o.get("z").getAsInt(),
                         o.get("color").getAsInt(),
-                        o.has("group") ? o.get("group").getAsString() : Waypoint.GROUP_DEFAULT));
+                        o.has("group") ? o.get("group").getAsString() : Waypoint.GROUP_DEFAULT,
+                        o.has("converted") && o.get("converted").getAsBoolean()));
             }
         } catch (Exception e) {
             LOGGER.error("Failed to read waypoints of player {}", playerId, e);
@@ -208,6 +224,9 @@ public final class PlayerWaypointService {
             o.addProperty("z", wp.z());
             o.addProperty("color", wp.colorRgb());
             o.addProperty("group", wp.group());
+            if (wp.converted()) {
+                o.addProperty("converted", true);
+            }
             arr.add(o);
         }
 

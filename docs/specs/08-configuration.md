@@ -58,6 +58,7 @@ settings edited through the in-game screen apply live and are saved on close.
 | `bedWaypointsEnabled` | true | Automatic bed waypoint, private per player ([06 AUTO](06-waypoints.md)). Off: hidden from clients, entries kept on disk |
 | `portalWaypointsEnabled` | true | Automatic nether portal waypoints, shared with everyone, recorded at both ends when a portal is used. Off: hidden, entries kept |
 | `anchorWaypointsEnabled` | true | Automatic respawn anchor waypoint, private per player. Off: hidden, entries kept |
+| `convertedWaypointsEnabled` | true | Lets players link an Overworld / Nether waypoint so a read-only counterpart with converted coordinates (x8 / ÷8) is shown in the other dimension ([14](14-converted-waypoints.md)); announced to clients, editable in the ops tab. Off: no counterpart shown, no new link possible, existing links kept dormant on disk |
 | `waypointStorage` | `SERVER` | `SERVER`: user DIMENSION waypoints persisted per player on the server; `CLIENT`: local file. TEMP always local, PUBLIC always server |
 
 ### `[privacy]`

@@ -44,7 +44,8 @@ public final class RegionSyncPayloads {
             List<Integer> caveBands,
             int radarMaxRadius,
             boolean deathWaypointsEnabled,
-            boolean serverManagesWaypoints)
+            boolean serverManagesWaypoints,
+            boolean convertedWaypointsEnabled)
             implements CustomPacketPayload {
         public static final Type<LayerSettingsPayload> TYPE = new Type<>(Payloads.id("layer_settings"));
 
@@ -61,6 +62,7 @@ public final class RegionSyncPayloads {
                     buf.writeVarInt(p.radarMaxRadius);
                     buf.writeBoolean(p.deathWaypointsEnabled);
                     buf.writeBoolean(p.serverManagesWaypoints);
+                    buf.writeBoolean(p.convertedWaypointsEnabled);
                 },
                 buf -> {
                     int n = buf.readVarInt();
@@ -85,8 +87,14 @@ public final class RegionSyncPayloads {
 
                     int radarMaxRadius = buf.readVarInt();
                     boolean deathWaypointsEnabled = buf.readBoolean();
+                    boolean serverManagesWaypoints = buf.readBoolean();
                     return new LayerSettingsPayload(
-                            map, bands, radarMaxRadius, deathWaypointsEnabled, buf.readBoolean());
+                            map,
+                            bands,
+                            radarMaxRadius,
+                            deathWaypointsEnabled,
+                            serverManagesWaypoints,
+                            buf.readBoolean());
                 });
 
         @Override

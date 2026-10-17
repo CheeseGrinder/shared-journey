@@ -545,6 +545,11 @@ public class MapSettingsScreen extends Screen {
                 Lang.configTooltip("anchorWaypointsEnabled"),
                 () -> ops.anchorWaypoints,
                 v -> ops.anchorWaypoints = v));
+        rows.add(toggle(
+                Component.translatable(Lang.SETTINGS_SERVER_CONVERTED),
+                Lang.configTooltip("convertedWaypointsEnabled"),
+                () -> ops.convertedWaypoints,
+                v -> ops.convertedWaypoints = v));
 
         rows.add(header(Component.translatable(Lang.SETTINGS_SERVER_PRIVACY)));
         rows.add(cycle(
@@ -680,6 +685,7 @@ public class MapSettingsScreen extends Screen {
         boolean bedWaypoints;
         boolean portalWaypoints;
         boolean anchorWaypoints;
+        boolean convertedWaypoints;
         PrivacyServerConfig.HiddenAreaPolicy policy;
 
         static OpsState from(OpsConfigPayloads.OpsConfigPayload p) {
@@ -726,6 +732,7 @@ public class MapSettingsScreen extends Screen {
             s.bedWaypoints = p.bedWaypointsEnabled();
             s.portalWaypoints = p.portalWaypointsEnabled();
             s.anchorWaypoints = p.anchorWaypointsEnabled();
+            s.convertedWaypoints = p.convertedWaypointsEnabled();
             s.policy = parsePolicy(p.hiddenAreaPolicy());
             s.quarantineRadius = p.quarantineRadiusChunks();
             s.quarantineDrain = p.quarantineDrainMinutes();
@@ -773,6 +780,7 @@ public class MapSettingsScreen extends Screen {
                     bedWaypoints,
                     portalWaypoints,
                     anchorWaypoints,
+                    convertedWaypoints,
                     policy.name(),
                     quarantineRadius,
                     quarantineDrain);

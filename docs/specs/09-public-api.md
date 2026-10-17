@@ -23,9 +23,9 @@ All calls operate on the client's `WaypointStore`.
 
 | Method | Contract |
 |--------|----------|
-| `all()`, `forDimension(dim)`, `get(id)` | Read (copies / immutable lists); `get` returns null if unknown |
-| `add(wp)` | Routes like the UI (PUBLIC → server). Returns false if a listener cancelled `WaypointEvent.Added` (local path only) |
-| `update(wp)`, `remove(id)` | By id |
+| `all()`, `forDimension(dim)`, `get(id)` | Read (copies / immutable lists); `get` returns null if unknown. `forDimension` also returns the read-only converted counterparts of linked waypoints of the paired Overworld / Nether dimension (`Waypoint.isConvertedView()`, same id as the source); `all()` and `get` only know stored waypoints ([14 CONV-14](14-converted-waypoints.md)) |
+| `add(wp)` | Routes like the UI (PUBLIC → server). Returns false if a listener cancelled `WaypointEvent.Added` (local path only), or if `wp` is a converted counterpart |
+| `update(wp)`, `remove(id)` | By id. `update` ignores a converted counterpart; `remove` of its id removes the source. The link itself is `Waypoint.conversion()` (`LINKED` / `NONE`, set with `withConversion`); the store drops it on a waypoint that cannot be linked and keeps the stored one while the server switch is off |
 | `isShown(wp)` | Own flag AND group flag |
 | `groups()` | Sorted, `default` first |
 | `createGroup(name)` | false on blank or taken |

@@ -86,7 +86,7 @@ sequenceDiagram
 
 | Payload | Dir | Purpose |
 |---------|-----|---------|
-| `LayerSettingsPayload` | S2C | Active layers per dimension (custom included), cave bands, `radarMaxRadius`, `deathWaypointsEnabled`, `serverManagesWaypoints`. Sent at login, dimension change, config reload, `/sj admin layer`, ops apply. |
+| `LayerSettingsPayload` | S2C | Active layers per dimension (custom included), cave bands, `radarMaxRadius`, `deathWaypointsEnabled`, `serverManagesWaypoints`, `convertedWaypointsEnabled`. Sent at login, dimension change, config reload, `/sj admin layer`, ops apply. |
 | `MapVisibilityPayload(hidden)` | C2S | Hide-from-map preference. Sent on login, on every client config reload, and immediately when toggled. |
 | `HiddenPlayersPayload(uuids)` | S2C | The hidden set; broadcast on change and sent at join. |
 | `PlayerPositionsPayload` | S2C | `(uuid, dimension, x, z)` of every **non-hidden** player, broadcast every 20 ticks. |
@@ -96,7 +96,7 @@ sequenceDiagram
 | `TrainPathRequestPayload(trainId)` / `TrainPathPayload(trainId, xs[], zs[])` | C2S / S2C | Create bridge ([10](10-compat-bridges.md)). |
 | `OverlaySettingsPayload(forcedChunks, slimeChunks)` | S2C | Chunk overlays the server allows ([13](13-chunk-overlays.md)). Sent at login and on config reload. |
 | `OverlayRegionRequestPayload(kind, dimension, rxs[], rzs[])` / `OverlayRegionDataPayload(kind, dimension, [(rx, rz, bitmap)])` | C2S / S2C | Per-region chunk bitmaps of the force-loaded and slime chunk overlays ([13](13-chunk-overlays.md)); forced-chunk changes are pushed with the same data payload. |
-| `PublicWaypoint[Remove]Payload`, `PlayerWaypoint[Remove]Payload` | C2S + S2C | Waypoints ([06](06-waypoints.md)). |
+| `PublicWaypoint[Remove]Payload`, `PlayerWaypoint[Remove]Payload` | C2S + S2C | Waypoints ([06](06-waypoints.md)). The two upserts end with a `converted` boolean, the Overworld / Nether link flag ([14](14-converted-waypoints.md)). |
 | `BannerWaypoint[Remove]Payload` | S2C | Banner waypoints. |
 | `AutoWaypointPayload(id, kind, dimension, x, y, z)` / `AutoWaypointRemovePayload(id)` | S2C | Automatic bed / portal / respawn anchor waypoints; shared kinds are broadcast, private ones sent to their owner only ([06 §3.4](06-waypoints.md)). |
 | `OpsConfigRequestPayload` / `OpsConfigPayload` | C2S / both | In-game server config ([05](05-regen-commands-admin.md)). |

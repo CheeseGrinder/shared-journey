@@ -705,7 +705,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             // block) and death waypoints are a factual record (where you
             // died): double-click does not open the edit form, same
             // restriction as the manager screen.
-            boolean editable = !nearest.isWorldDerived() && !Waypoint.GROUP_DEATHS.equals(nearest.group());
+            // A converted counterpart is a read-only projection of a waypoint
+            // of the other dimension: edit it from there.
+            boolean editable = !nearest.isWorldDerived()
+                    && !nearest.isConvertedView()
+                    && !Waypoint.GROUP_DEATHS.equals(nearest.group());
             if (doubleClick && editable && nearest.id().equals(lastClickWaypoint)) {
                 lastClickAt = 0;
                 lastClickWaypoint = null;
@@ -768,6 +772,12 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             items.add(ContextMenu.Item.action(Component.translatable(Lang.CONTEXT_TELEPORT), () -> teleportTo(wx, wz)));
         }
 
+        // Right click on a waypoint: Overworld / Nether link toggle.
+        ContextMenu.Item convertItem = conversionMenuItem(nearestWaypoint(mouseX, mouseY));
+        if (convertItem != null) {
+            items.add(convertItem);
+        }
+
         items.add(ContextMenu.Item.submenu(
                 Component.translatable(Lang.CONTEXT_WAYPOINTS),
                 List.of(
@@ -800,6 +810,28 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         Component title = Component.literal(wx + ", " + wz);
         contextMenu = new ContextMenu(font, title, items, mouseX, mouseY, width, height, this::closeContextMenu);
+    }
+
+    /**
+     * "Show / Hide converted waypoint" row for the waypoint under the
+     * cursor, null when there is none or it cannot be linked. On a
+     * converted counterpart the row unlinks its source (the counterpart
+     * is read-only, the link belongs to the waypoint of the other dimension).
+     */
+    private static ContextMenu.Item conversionMenuItem(Waypoint nearest) {
+        if (nearest == null || !WaypointStore.isConversionEnabled()) {
+            return null;
+        }
+
+        Waypoint source = WaypointStore.get(nearest.id());
+        if (source == null || !WaypointStore.canLinkConversion(source)) {
+            return null;
+        }
+
+        boolean linked = source.hasConvertedLink();
+        String key = linked ? Lang.CONTEXT_CONVERT_HIDE : Lang.CONTEXT_CONVERT_SHOW;
+        return ContextMenu.Item.action(
+                Component.translatable(key), () -> WaypointStore.setConversionLink(source.id(), !linked));
     }
 
     /** API context-menu entry -> internal menu row (one submenu level). */

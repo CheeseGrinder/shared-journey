@@ -6,6 +6,7 @@ import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
 import fr.cheesegrinder.sharedjourney.common.network.WaypointPayloads;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
 import fr.cheesegrinder.sharedjourney.common.waypoint.AutoWaypointKind;
+import fr.cheesegrinder.sharedjourney.common.waypoint.DimensionConversion;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -108,7 +109,13 @@ public final class WaypointStore {
         return new ArrayList<>(WAYPOINTS.values());
     }
 
-    /** Waypoints of a dimension (every type is bound to its dimension). */
+    /**
+     * Waypoints of a dimension (every type is bound to its dimension),
+     * plus the read-only converted counterparts ({@link
+     * Waypoint#isConvertedView()}) of the linked waypoints of the paired
+     * dimension while the server allows the feature. {@link #all} never
+     * lists those counterparts: they are derived views, not stored.
+     */
     public static List<Waypoint> forDimension(ResourceLocation dim) {
         Map<ResourceLocation, List<Waypoint>> index = byDimension;
         if (index == null) {
@@ -121,14 +128,123 @@ public final class WaypointStore {
 
     private static Map<ResourceLocation, List<Waypoint>> buildDimensionIndex() {
         Map<ResourceLocation, List<Waypoint>> index = new HashMap<>();
+        boolean convert = isConversionEnabled();
         for (Waypoint wp : WAYPOINTS.values()) {
             index.computeIfAbsent(wp.dimension(), d -> new ArrayList<>()).add(wp);
+            if (convert && wp.hasConvertedLink() && canLinkConversion(wp)) {
+                Waypoint view = convertedView(wp);
+                if (view != null) {
+                    index.computeIfAbsent(view.dimension(), d -> new ArrayList<>())
+                            .add(view);
+                }
+            }
         }
 
         for (Map.Entry<ResourceLocation, List<Waypoint>> entry : index.entrySet()) {
             entry.setValue(List.copyOf(entry.getValue()));
         }
         return Map.copyOf(index);
+    }
+
+    // ------------------------------------------------------------------ converted waypoints
+
+    /** Does the server currently allow converted (Overworld / Nether) waypoints? */
+    public static boolean isConversionEnabled() {
+        return ClientMapCache.convertedWaypointsEnabled;
+    }
+
+    /** The server switch changed: the derived views must be rebuilt. */
+    public static void invalidateConvertedViews() {
+        byDimension = null;
+    }
+
+    /**
+     * Can the player link this waypoint to its counterpart in the paired
+     * dimension? Hand-made (user / public) DIMENSION and PUBLIC waypoints
+     * of the Overworld or the Nether only: TEMP ones vanish on arrival,
+     * banner and automatic ones are world-derived (the server owns them),
+     * bridged ones belong to their mod, and other dimensions have no
+     * counterpart. Ignores the server switch (see {@link #isConversionEnabled}).
+     */
+    public static boolean canLinkConversion(Waypoint wp) {
+        if (wp.isConvertedView() || wp.isWorldDerived() || wp.type() == Waypoint.Type.TEMP) {
+            return false;
+        }
+
+        boolean ownKind = Waypoint.SOURCE_USER.equals(wp.source()) || Waypoint.SOURCE_PUBLIC.equals(wp.source());
+        return ownKind && DimensionConversion.isPaired(wp.dimension());
+    }
+
+    /**
+     * Links (or unlinks) the waypoint with this id to its converted
+     * counterpart. Linking is refused while the server switch is off, or
+     * when the waypoint cannot be linked ({@link #canLinkConversion}); unlinking
+     * is always allowed. Goes through {@link #update}, so the flag reaches
+     * the server for PUBLIC and server-managed waypoints.
+     */
+    public static boolean setConversionLink(UUID id, boolean linked) {
+        Waypoint wp = WAYPOINTS.get(id);
+        if (wp == null) {
+            return false;
+        }
+
+        if (linked && (!isConversionEnabled() || !canLinkConversion(wp))) {
+            return false;
+        }
+
+        update(wp.withConversion(linked ? Waypoint.Conversion.LINKED : Waypoint.Conversion.NONE));
+        return true;
+    }
+
+    /**
+     * Derived counterpart of a linked waypoint in the paired dimension:
+     * same id, group, colour, source, type and visibility as the source,
+     * converted position ({@link DimensionConversion}) and a "(converted)"
+     * name. Null when the dimension has no counterpart.
+     */
+    private static Waypoint convertedView(Waypoint source) {
+        ResourceLocation from = source.dimension();
+        ResourceLocation target = DimensionConversion.counterpart(from);
+        if (target == null) {
+            return null;
+        }
+
+        String name = Component.translatable(Lang.WAYPOINT_CONVERTED_NAME, source.name())
+                .getString();
+        return new Waypoint(
+                source.id(),
+                name,
+                target,
+                DimensionConversion.convertHorizontal(from, source.x()),
+                DimensionConversion.convertHeight(from, source.y()),
+                DimensionConversion.convertHorizontal(from, source.z()),
+                source.colorRgb(),
+                source.source(),
+                source.group(),
+                source.visible(),
+                source.type(),
+                Waypoint.Conversion.VIEW);
+    }
+
+    /**
+     * Brings the link flag of an incoming waypoint to what is allowed: a
+     * derived view never comes in as-is; a waypoint that cannot be linked
+     * (TEMP, world-derived, bridged, unpaired dimension) loses the flag; and
+     * while the server switch is off nothing can be linked or unlinked, so
+     * the flag of the stored copy (the dormant link) is kept.
+     */
+    private static Waypoint normalizedConversion(Waypoint old, Waypoint wp) {
+        Waypoint.Conversion target = wp.hasConvertedLink() ? Waypoint.Conversion.LINKED : Waypoint.Conversion.NONE;
+        if (!canLinkConversion(wp)) {
+            target = Waypoint.Conversion.NONE;
+        } else if (!isConversionEnabled()) {
+            target = old != null && old.hasConvertedLink() ? Waypoint.Conversion.LINKED : Waypoint.Conversion.NONE;
+        }
+
+        if (target == wp.conversion()) {
+            return wp;
+        }
+        return wp.withConversion(target);
     }
 
     // ------------------------------------------------------------------ mutation helpers
@@ -293,7 +409,13 @@ public final class WaypointStore {
      * point of view and must never be pushed to a SharedJourney server
      * channel, whatever their type happens to be.
      */
-    public static boolean add(Waypoint wp) {
+    public static boolean add(Waypoint added) {
+        // A converted view is a read-only projection, never stored.
+        if (added.isConvertedView()) {
+            return false;
+        }
+
+        Waypoint wp = normalizedConversion(WAYPOINTS.get(added.id()), added);
         if (isUserPublic(wp)) {
             sendPublicUpsert(wp);
             return true;
@@ -315,8 +437,15 @@ public final class WaypointStore {
         return true;
     }
 
-    public static void update(Waypoint wp) {
-        Waypoint old = WAYPOINTS.get(wp.id());
+    public static void update(Waypoint updated) {
+        // A converted view is a read-only projection: its coordinates are
+        // those of the OTHER dimension, writing it back would corrupt the source.
+        if (updated.isConvertedView()) {
+            return;
+        }
+
+        Waypoint old = WAYPOINTS.get(updated.id());
+        Waypoint wp = normalizedConversion(old, updated);
         boolean wasPublic = old != null && isUserPublic(old);
         if (wasPublic || isUserPublic(wp)) {
             updatePublic(old, wp, wasPublic);
@@ -409,7 +538,8 @@ public final class WaypointStore {
                     Waypoint.SOURCE_USER,
                     Waypoint.GROUP_DEFAULT,
                     wp.visible(),
-                    wp.type());
+                    wp.type(),
+                    wp.conversion());
             putWaypoint(local.id(), local);
             NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(local));
             save();
@@ -425,9 +555,18 @@ public final class WaypointStore {
                 || old.x() != wp.x()
                 || old.y() != wp.y()
                 || old.z() != wp.z()
-                || old.colorRgb() != wp.colorRgb();
+                || old.colorRgb() != wp.colorRgb()
+                || old.conversion() != wp.conversion();
         Waypoint normalized = normalizedPublic(
-                wp.id(), wp.name(), wp.dimension(), wp.x(), wp.y(), wp.z(), wp.colorRgb(), wp.visible());
+                wp.id(),
+                wp.name(),
+                wp.dimension(),
+                wp.x(),
+                wp.y(),
+                wp.z(),
+                wp.colorRgb(),
+                wp.visible(),
+                wp.conversion());
         putWaypoint(normalized.id(), normalized);
         setHiddenId(normalized.id(), !normalized.visible());
         NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(normalized));
@@ -468,9 +607,19 @@ public final class WaypointStore {
                 || old.y() != wp.y()
                 || old.z() != wp.z()
                 || old.colorRgb() != wp.colorRgb()
-                || !old.group().equals(wp.group());
+                || !old.group().equals(wp.group())
+                || old.conversion() != wp.conversion();
         Waypoint normalized = normalizedPlayerManaged(
-                wp.id(), wp.name(), wp.dimension(), wp.x(), wp.y(), wp.z(), wp.colorRgb(), wp.group(), wp.visible());
+                wp.id(),
+                wp.name(),
+                wp.dimension(),
+                wp.x(),
+                wp.y(),
+                wp.z(),
+                wp.colorRgb(),
+                wp.group(),
+                wp.visible(),
+                wp.conversion());
         putWaypoint(normalized.id(), normalized);
         setHiddenId(normalized.id(), !normalized.visible());
         NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(normalized));
@@ -504,7 +653,15 @@ public final class WaypointStore {
     /** Server broadcast: upsert of a public waypoint (login or edit). */
     public static void acceptPublicUpsert(WaypointPayloads.PublicWaypointPayload p) {
         Waypoint wp = normalizedPublic(
-                p.id(), p.name(), p.dimension(), p.x(), p.y(), p.z(), p.colorRgb(), !HIDDEN_IDS.contains(p.id()));
+                p.id(),
+                p.name(),
+                p.dimension(),
+                p.x(),
+                p.y(),
+                p.z(),
+                p.colorRgb(),
+                !HIDDEN_IDS.contains(p.id()),
+                conversionOf(p.converted()));
         putWaypoint(wp.id(), wp);
         // Updated (not the cancellable Added) even for new entries: the
         // server is authoritative, listeners cannot veto the sync.
@@ -521,7 +678,15 @@ public final class WaypointStore {
     }
 
     private static Waypoint normalizedPublic(
-            UUID id, String name, ResourceLocation dim, int x, int y, int z, int color, boolean visible) {
+            UUID id,
+            String name,
+            ResourceLocation dim,
+            int x,
+            int y,
+            int z,
+            int color,
+            boolean visible,
+            Waypoint.Conversion conversion) {
         return new Waypoint(
                 id,
                 name,
@@ -533,7 +698,13 @@ public final class WaypointStore {
                 Waypoint.SOURCE_PUBLIC,
                 Waypoint.GROUP_PUBLIC,
                 visible,
-                Waypoint.Type.PUBLIC);
+                Waypoint.Type.PUBLIC,
+                conversion);
+    }
+
+    /** Wire flag to model state: only source waypoints travel, so LINKED or NONE. */
+    private static Waypoint.Conversion conversionOf(boolean converted) {
+        return converted ? Waypoint.Conversion.LINKED : Waypoint.Conversion.NONE;
     }
 
     private static void setHiddenId(UUID id, boolean hidden) {
@@ -546,7 +717,7 @@ public final class WaypointStore {
 
     private static void sendPublicUpsert(Waypoint wp) {
         PacketDistributor.sendToServer(new WaypointPayloads.PublicWaypointPayload(
-                wp.id(), wp.name(), wp.dimension(), wp.x(), wp.y(), wp.z(), wp.colorRgb()));
+                wp.id(), wp.name(), wp.dimension(), wp.x(), wp.y(), wp.z(), wp.colorRgb(), wp.hasConvertedLink()));
     }
 
     private static void sendPublicRemove(UUID id) {
@@ -566,7 +737,8 @@ public final class WaypointStore {
                 p.z(),
                 p.colorRgb(),
                 p.group(),
-                !HIDDEN_IDS.contains(p.id()));
+                !HIDDEN_IDS.contains(p.id()),
+                conversionOf(p.converted()));
         putWaypoint(wp.id(), wp);
         // Updated (not the cancellable Added) even for new entries: the
         // server is authoritative, listeners cannot veto the sync.
@@ -583,14 +755,42 @@ public final class WaypointStore {
     }
 
     private static Waypoint normalizedPlayerManaged(
-            UUID id, String name, ResourceLocation dim, int x, int y, int z, int color, String group, boolean visible) {
+            UUID id,
+            String name,
+            ResourceLocation dim,
+            int x,
+            int y,
+            int z,
+            int color,
+            String group,
+            boolean visible,
+            Waypoint.Conversion conversion) {
         return new Waypoint(
-                id, name, dim, x, y, z, color, Waypoint.SOURCE_USER, group, visible, Waypoint.Type.DIMENSION);
+                id,
+                name,
+                dim,
+                x,
+                y,
+                z,
+                color,
+                Waypoint.SOURCE_USER,
+                group,
+                visible,
+                Waypoint.Type.DIMENSION,
+                conversion);
     }
 
     private static void sendPlayerUpsert(Waypoint wp) {
         PacketDistributor.sendToServer(new WaypointPayloads.PlayerWaypointPayload(
-                wp.id(), wp.name(), wp.dimension(), wp.x(), wp.y(), wp.z(), wp.colorRgb(), wp.group()));
+                wp.id(),
+                wp.name(),
+                wp.dimension(),
+                wp.x(),
+                wp.y(),
+                wp.z(),
+                wp.colorRgb(),
+                wp.group(),
+                wp.hasConvertedLink()));
     }
 
     private static void sendPlayerRemove(UUID id) {
@@ -680,10 +880,15 @@ public final class WaypointStore {
                 kind.shared() ? Waypoint.Type.PUBLIC : Waypoint.Type.DIMENSION);
     }
 
-    /** Forces the visibility of every waypoint of a dimension (+ globals). */
+    /**
+     * Forces the visibility of every waypoint shown in a dimension. A
+     * converted counterpart shares its source's visibility flag, so it
+     * is applied to the source (which lives in the paired dimension).
+     */
     public static void setAllVisible(ResourceLocation dim, boolean visible) {
-        for (Waypoint wp : forDimension(dim)) {
-            if (wp.visible() != visible) {
+        for (Waypoint shown : forDimension(dim)) {
+            Waypoint wp = shown.isConvertedView() ? WAYPOINTS.get(shown.id()) : shown;
+            if (wp != null && wp.visible() != visible) {
                 update(wp.withVisible(visible));
             }
         }
@@ -792,7 +997,8 @@ public final class WaypointStore {
                         o.has("source") ? o.get("source").getAsString() : Waypoint.SOURCE_USER,
                         o.has("group") ? o.get("group").getAsString() : Waypoint.GROUP_DEFAULT,
                         !o.has("visible") || o.get("visible").getAsBoolean(),
-                        readType(o));
+                        readType(o),
+                        conversionOf(o.has("converted") && o.get("converted").getAsBoolean()));
                 putWaypoint(wp.id(), wp);
             }
 
@@ -856,6 +1062,9 @@ public final class WaypointStore {
             o.addProperty("group", wp.group());
             o.addProperty("visible", wp.visible());
             o.addProperty("type", wp.type().name());
+            if (wp.hasConvertedLink()) {
+                o.addProperty("converted", true);
+            }
             arr.add(o);
         }
 

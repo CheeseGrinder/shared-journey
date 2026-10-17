@@ -28,6 +28,10 @@ public final class ClientNetHandler {
         ClientMapCache.radarMaxRadius = payload.radarMaxRadius();
         ClientMapCache.deathWaypointsEnabled = payload.deathWaypointsEnabled();
         ClientMapCache.serverManagesWaypoints = payload.serverManagesWaypoints();
+        if (ClientMapCache.convertedWaypointsEnabled != payload.convertedWaypointsEnabled()) {
+            ClientMapCache.convertedWaypointsEnabled = payload.convertedWaypointsEnabled();
+            WaypointStore.invalidateConvertedViews();
+        }
     }
 
     public static void handleRegionData(RegionSyncPayloads.RegionDataPayload payload) {

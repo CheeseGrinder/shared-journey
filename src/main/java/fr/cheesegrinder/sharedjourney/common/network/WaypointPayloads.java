@@ -33,10 +33,12 @@ public final class WaypointPayloads {
      * edits one (C2S), the server persists it in the world folder and
      * broadcasts it back (S2C) to every player — including at login (full
      * send). Visibility is deliberately absent: showing or hiding a public
-     * waypoint is a per-client choice, never shared.
+     * waypoint is a per-client choice, never shared. {@code converted} is
+     * the shared Overworld / Nether link flag (see {@code Waypoint.Conversion}):
+     * it is shared like the position.
      */
     public record PublicWaypointPayload(
-            UUID id, String name, ResourceLocation dimension, int x, int y, int z, int colorRgb)
+            UUID id, String name, ResourceLocation dimension, int x, int y, int z, int colorRgb, boolean converted)
             implements CustomPacketPayload {
         public static final Type<PublicWaypointPayload> TYPE = new Type<>(Payloads.id("public_waypoint"));
 
@@ -49,6 +51,7 @@ public final class WaypointPayloads {
                     buf.writeVarInt(p.y);
                     buf.writeVarInt(p.z);
                     buf.writeInt(p.colorRgb);
+                    buf.writeBoolean(p.converted);
                 },
                 buf -> new PublicWaypointPayload(
                         buf.readUUID(),
@@ -57,7 +60,8 @@ public final class WaypointPayloads {
                         buf.readVarInt(),
                         buf.readVarInt(),
                         buf.readVarInt(),
-                        buf.readInt()));
+                        buf.readInt(),
+                        buf.readBoolean()));
 
         @Override
         public @NotNull Type<? extends CustomPacketPayload> type() {
@@ -89,9 +93,19 @@ public final class WaypointPayloads {
      * {@link PublicWaypointPayload}. Covers DIMENSION waypoints only:
      * TEMP ones always stay client-local. Visibility is deliberately
      * absent, same rationale as public waypoints: a per-client choice.
+     * {@code converted} is the Overworld / Nether link flag (see
+     * {@code Waypoint.Conversion}), stored with the waypoint.
      */
     public record PlayerWaypointPayload(
-            UUID id, String name, ResourceLocation dimension, int x, int y, int z, int colorRgb, String group)
+            UUID id,
+            String name,
+            ResourceLocation dimension,
+            int x,
+            int y,
+            int z,
+            int colorRgb,
+            String group,
+            boolean converted)
             implements CustomPacketPayload {
         public static final Type<PlayerWaypointPayload> TYPE = new Type<>(Payloads.id("player_waypoint"));
 
@@ -105,6 +119,7 @@ public final class WaypointPayloads {
                     buf.writeVarInt(p.z);
                     buf.writeInt(p.colorRgb);
                     buf.writeUtf(p.group, 32);
+                    buf.writeBoolean(p.converted);
                 },
                 buf -> new PlayerWaypointPayload(
                         buf.readUUID(),
@@ -114,7 +129,8 @@ public final class WaypointPayloads {
                         buf.readVarInt(),
                         buf.readVarInt(),
                         buf.readInt(),
-                        buf.readUtf(32)));
+                        buf.readUtf(32),
+                        buf.readBoolean()));
 
         @Override
         public @NotNull Type<? extends CustomPacketPayload> type() {

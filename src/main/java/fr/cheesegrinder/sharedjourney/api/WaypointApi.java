@@ -59,7 +59,14 @@ public final class WaypointApi {
         return Hooks.all.get();
     }
 
-    /** Waypoints of a dimension (every type is bound to its own dimension). */
+    /**
+     * Waypoints of a dimension (every type is bound to its own dimension),
+     * plus the read-only converted counterparts of the linked waypoints of
+     * the paired Overworld / Nether dimension ({@link Waypoint#isConvertedView()}:
+     * same id as their source, converted position). {@link #all} never lists
+     * those counterparts, and {@link #add} / {@link #update} ignore them;
+     * {@link #remove} by id acts on the source waypoint.
+     */
     public static List<Waypoint> forDimension(ResourceLocation dimension) {
         return Hooks.forDimension.apply(dimension);
     }

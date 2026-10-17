@@ -52,6 +52,9 @@ public final class WaypointIcons {
     /** Icon of the automatic respawn anchor waypoints ({@link AutoWaypointKind#ANCHOR}). */
     public static final ResourceLocation ANCHOR = texture("anchor");
 
+    /** Icon of the converted counterparts ({@link Waypoint#isConvertedView()}): a hollow diamond. */
+    public static final ResourceLocation CONVERTED = texture("converted");
+
     private WaypointIcons() {}
 
     private static ResourceLocation texture(String name) {
@@ -60,10 +63,13 @@ public final class WaypointIcons {
     }
 
     /**
-     * Sprite for a waypoint: banner source, automatic kind (bed, portal,
-     * anchor), death group, or the default diamond.
+     * Sprite for a waypoint: converted counterpart, banner source, automatic
+     * kind (bed, portal, anchor), death group, or the default diamond.
      */
     public static ResourceLocation textureFor(Waypoint wp) {
+        if (wp.isConvertedView()) {
+            return CONVERTED;
+        }
         if (Waypoint.SOURCE_BANNER.equals(wp.source())) {
             return BANNER;
         }

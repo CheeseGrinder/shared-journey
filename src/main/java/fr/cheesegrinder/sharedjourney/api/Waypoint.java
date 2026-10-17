@@ -23,7 +23,8 @@ public record Waypoint(
         String source,
         String group,
         boolean visible,
-        Type type) {
+        Type type,
+        Conversion conversion) {
 
     /** Source of hand-created waypoints — the only ones persisted locally. */
     public static final String SOURCE_USER = "user";
@@ -73,6 +74,45 @@ public record Waypoint(
         if (group == null || group.isBlank()) {
             group = GROUP_DEFAULT;
         }
+
+        if (conversion == null) {
+            conversion = Conversion.NONE;
+        }
+    }
+
+    /** Waypoint without conversion state ({@link Conversion#NONE}). */
+    public Waypoint(
+            UUID id,
+            String name,
+            ResourceLocation dimension,
+            int x,
+            int y,
+            int z,
+            int colorRgb,
+            String source,
+            String group,
+            boolean visible,
+            Type type) {
+        this(id, name, dimension, x, y, z, colorRgb, source, group, visible, type, Conversion.NONE);
+    }
+
+    /**
+     * Overworld / Nether conversion state. A hand-made DIMENSION or PUBLIC
+     * waypoint of the Overworld or the Nether can be {@link #LINKED} by a
+     * player so that its counterpart, with converted coordinates, is also
+     * shown in the paired dimension. The counterpart is never stored: it is
+     * a {@link #VIEW} derived on the fly from the linked waypoint (same id,
+     * converted position, name suffixed with "(converted)"), served by the
+     * per-dimension queries ({@code WaypointApi.forDimension}) only. A VIEW is
+     * read-only and is ignored by {@code add} / {@code update}.
+     */
+    public enum Conversion {
+        /** Ordinary waypoint, not shown in the paired dimension. */
+        NONE,
+        /** Source waypoint whose converted counterpart is shown in the paired dimension. */
+        LINKED,
+        /** Derived counterpart of a LINKED waypoint, as seen in the paired dimension. */
+        VIEW
     }
 
     /**
@@ -111,27 +151,41 @@ public record Waypoint(
     }
 
     public Waypoint withName(String newName) {
-        return new Waypoint(id, newName, dimension, x, y, z, colorRgb, source, group, visible, type);
+        return new Waypoint(id, newName, dimension, x, y, z, colorRgb, source, group, visible, type, conversion);
     }
 
     public Waypoint withColor(int rgb) {
-        return new Waypoint(id, name, dimension, x, y, z, rgb & 0xFFFFFF, source, group, visible, type);
+        return new Waypoint(id, name, dimension, x, y, z, rgb & 0xFFFFFF, source, group, visible, type, conversion);
     }
 
     public Waypoint withGroup(String newGroup) {
-        return new Waypoint(id, name, dimension, x, y, z, colorRgb, source, newGroup, visible, type);
+        return new Waypoint(id, name, dimension, x, y, z, colorRgb, source, newGroup, visible, type, conversion);
     }
 
     public Waypoint withVisible(boolean v) {
-        return new Waypoint(id, name, dimension, x, y, z, colorRgb, source, group, v, type);
+        return new Waypoint(id, name, dimension, x, y, z, colorRgb, source, group, v, type, conversion);
     }
 
     public Waypoint withType(Type newType) {
-        return new Waypoint(id, name, dimension, x, y, z, colorRgb, source, group, visible, newType);
+        return new Waypoint(id, name, dimension, x, y, z, colorRgb, source, group, visible, newType, conversion);
+    }
+
+    public Waypoint withConversion(Conversion newConversion) {
+        return new Waypoint(id, name, dimension, x, y, z, colorRgb, source, group, visible, type, newConversion);
     }
 
     public BlockPos pos() {
         return new BlockPos(x, y, z);
+    }
+
+    /** Is this a derived counterpart of a linked waypoint (read-only, never stored)? */
+    public boolean isConvertedView() {
+        return conversion == Conversion.VIEW;
+    }
+
+    /** Is this a source waypoint linked to be shown in the paired dimension? */
+    public boolean hasConvertedLink() {
+        return conversion == Conversion.LINKED;
     }
 
     /**

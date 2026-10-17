@@ -26,6 +26,7 @@ the discrepancy is listed in [11-limitations-and-open-issues.md](11-limitations-
 | 11 | [Limitations and open issues](11-limitations-and-open-issues.md) | Accepted limits, suspected defects, doc/code gaps |
 | 12 | [Radar rules](12-radar-rules.md) | JSON radar categories: matchers, effects, merging, defaults |
 | 13 | [Chunk overlays](13-chunk-overlays.md) | Force-loaded and slime chunks: server-computed bitmaps, sync, privacy, toggles |
+| 14 | [Converted waypoints](14-converted-waypoints.md) | Overworld / Nether counterpart of a linked waypoint: derived view, conversion rules, sync, server switch |
 
 ## Conventions
 
@@ -51,6 +52,7 @@ the discrepancy is listed in [11-limitations-and-open-issues.md](11-limitations-
 | Server render engine, sync, privacy | Implemented, validated in game |
 | Waypoints (private/public/temp/banner/death) | Implemented |
 | Automatic waypoints: bed, nether portal, respawn anchor ([06 §3.4](06-waypoints.md)) | Implemented, not yet checked in game |
+| Converted waypoints, Overworld / Nether ([14](14-converted-waypoints.md)) | Implemented, not yet checked in game |
 | Fullscreen map, minimap, radar | Implemented |
 | Level of detail when zoomed out ([07 §3.5](07-client-ui.md)) | Implemented, not yet checked in game |
 | Radar rules in JSON ([12](12-radar-rules.md)) | Implemented, not yet checked in game |

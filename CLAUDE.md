@@ -38,7 +38,7 @@ Packages under `fr.cheesegrinder.sharedjourney`, organized by part then by role:
 | `common.config`  | `CommonConfig`, `ServerConfig` (facade) + per-section `LayersServerConfig`, `EngineServerConfig`, `SyncServerConfig`, `WaypointServerConfig`, `OverlaysServerConfig` |
 | `common.network` | `Payloads` (network packets + `Hooks` indirection), per-group payload classes incl. `ChunkOverlayPayloads` (force-loaded / slime chunk bitmaps)                  |
 | `common.overlay` | `ChunkOverlayKind` (force-loaded / slime chunk overlays, region bitmap helpers)                                                                                  |
-| `common.waypoint` | `AutoWaypointKind` (bed / portal / anchor: id, reserved group, colour, shared-or-private scope) |
+| `common.waypoint` | `AutoWaypointKind` (bed / portal / anchor: id, reserved group, colour, shared-or-private scope), `DimensionConversion` (Overworld / Nether pairing and x8 / ÷8 coordinate conversion behind the converted waypoints, `Waypoint.Conversion` LINKED / VIEW; the counterpart is derived in `WaypointStore.forDimension`, never stored) |
 | `common.region`  | `RegionKey`, `RegionIndex`, `RegionStorage` (disk layout + legacy migration), `HoverRegionData` (hover sidecar format)                                           |
 | `common.util`    | `UndergroundCheck` (shared client/server "is underground" rule), `Lang` (i18n key constants)                                                                     |
 | `server.command` | `MapCommands` (`/sj`, `/sharedjourney`)                                                                                                                          |

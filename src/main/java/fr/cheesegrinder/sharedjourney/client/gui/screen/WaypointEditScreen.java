@@ -4,6 +4,7 @@ import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.client.gui.util.UiColors;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
+import fr.cheesegrinder.sharedjourney.common.waypoint.DimensionConversion;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -38,6 +39,8 @@ public class WaypointEditScreen extends Screen {
 
     private static final int FORM_WIDTH = 240;
     private static final int ROW_STEP = 32;
+    /** Height of the optional Overworld / Nether link row. */
+    private static final int CONVERSION_ROW = 26;
 
     // Group autocompletion dropdown.
     private static final int MAX_GROUP_SUGGESTIONS = 5;
@@ -59,6 +62,8 @@ public class WaypointEditScreen extends Screen {
     private Waypoint.Type type;
     /** Selected group (cycles over the existing assignable groups). */
     private String group;
+    /** Overworld / Nether link: also show a converted copy in the paired dimension. */
+    private boolean convertedLink;
 
     // Picker state. HSB is kept authoritative while dragging the picker
     // (recomputing it from RGB would reset the hue on black/gray colors).
@@ -87,6 +92,10 @@ public class WaypointEditScreen extends Screen {
 
     /** Panel top, recomputed in init() (kept for render()). */
     private int panelTop;
+    /** Link toggle row shown (feature enabled and waypoint linkable), recomputed in init(). */
+    private boolean conversionRow;
+
+    private Button convertButton;
 
     public WaypointEditScreen(Screen parent, Waypoint waypoint) {
         this(parent, waypoint, false);
@@ -123,13 +132,16 @@ public class WaypointEditScreen extends Screen {
         this.visible = waypoint.visible();
         this.type = waypoint.type();
         this.group = waypoint.group();
+        this.convertedLink = waypoint.hasConvertedLink();
         updateHsbFromColor();
     }
 
     @Override
     protected void init() {
         int left = width / 2 - FORM_WIDTH / 2;
-        panelTop = Math.max(24, height / 2 - 162);
+        conversionRow = showsConversionToggle();
+        convertButton = null;
+        panelTop = Math.max(24, height / 2 - 162 - (conversionRow ? CONVERSION_ROW / 2 : 0));
         int y = panelTop + 14;
 
         // Row 1: name.
@@ -191,11 +203,26 @@ public class WaypointEditScreen extends Screen {
                     type = nextType(type);
                     b.setMessage(typeLabel());
                     refreshGroupField();
+                    refreshConvertButton();
                 })
                 .bounds(left + 122, y, 118, 20)
                 .tooltip(Tooltip.create(Component.translatable(Lang.WAYPOINT_TYPE_TOOLTIP)))
                 .build());
         y += 26;
+
+        // Row 8 (optional): Overworld / Nether link. A TEMP waypoint vanishes
+        // on arrival and cannot be linked.
+        if (conversionRow) {
+            convertButton = addRenderableWidget(Button.builder(convertedLabel(), b -> {
+                        convertedLink = !convertedLink;
+                        refreshConvertButton();
+                    })
+                    .bounds(left, y, FORM_WIDTH, 20)
+                    .tooltip(Tooltip.create(Component.translatable(Lang.WAYPOINT_CONVERTED_TOOLTIP)))
+                    .build());
+            refreshConvertButton();
+            y += CONVERSION_ROW;
+        }
 
         // Bottom row: Done / (Delete) / Cancel.
         if (creating) {
@@ -390,6 +417,32 @@ public class WaypointEditScreen extends Screen {
         return Component.translatable(Lang.WAYPOINT_TYPE, Component.translatable(Lang.waypointType(type)));
     }
 
+    /**
+     * Is the link toggle offered? Only while the server allows converted
+     * waypoints and for a hand-made waypoint of the Overworld or the Nether.
+     */
+    private boolean showsConversionToggle() {
+        boolean ownKind =
+                Waypoint.SOURCE_USER.equals(original.source()) || Waypoint.SOURCE_PUBLIC.equals(original.source());
+        return WaypointStore.isConversionEnabled() && ownKind && DimensionConversion.isPaired(original.dimension());
+    }
+
+    private Component convertedLabel() {
+        String state =
+                convertedLink && type != Waypoint.Type.TEMP ? Lang.WAYPOINT_CONVERTED_ON : Lang.WAYPOINT_CONVERTED_OFF;
+        return Component.translatable(Lang.WAYPOINT_CONVERTED, Component.translatable(state));
+    }
+
+    /** Label and availability follow the link state and the current type. */
+    private void refreshConvertButton() {
+        if (convertButton == null) {
+            return;
+        }
+
+        convertButton.setMessage(convertedLabel());
+        convertButton.active = type != Waypoint.Type.TEMP;
+    }
+
     private static Waypoint.Type nextType(Waypoint.Type type) {
         Waypoint.Type[] values = Waypoint.Type.values();
         return values[(type.ordinal() + 1) % values.length];
@@ -412,7 +465,8 @@ public class WaypointEditScreen extends Screen {
                 original.source(),
                 resolveGroup(),
                 visible,
-                type);
+                type,
+                resolveConversion());
         if (creating) {
             WaypointStore.add(edited);
         } else {
@@ -420,6 +474,20 @@ public class WaypointEditScreen extends Screen {
         }
 
         close();
+    }
+
+    /**
+     * Link state to persist: the toggle when it is offered (a TEMP waypoint
+     * cannot be linked), otherwise the original state untouched, so a link
+     * that is dormant while the server switch is off survives an edit.
+     */
+    private Waypoint.Conversion resolveConversion() {
+        if (!conversionRow) {
+            return original.conversion();
+        }
+
+        boolean linked = convertedLink && type != Waypoint.Type.TEMP;
+        return linked ? Waypoint.Conversion.LINKED : Waypoint.Conversion.NONE;
     }
 
     private static int parsedInt(EditBox box, int fallback) {
@@ -441,7 +509,8 @@ public class WaypointEditScreen extends Screen {
     public void renderBackground(@NotNull GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         super.renderBackground(gg, mouseX, mouseY, partialTick);
         int left = width / 2 - FORM_WIDTH / 2;
-        int bottom = panelTop + 14 + 3 * ROW_STEP + 22 + 26 + PICKER_ROW + 26 + 30;
+        int bottom =
+                panelTop + 14 + 3 * ROW_STEP + 22 + 26 + PICKER_ROW + 26 + 30 + (conversionRow ? CONVERSION_ROW : 0);
         gg.fill(left - 12, panelTop - 26, left + FORM_WIDTH + 12, bottom, UiColors.PANEL_BACKGROUND);
         gg.renderOutline(left - 12, panelTop - 26, FORM_WIDTH + 24, bottom - panelTop + 26, UiColors.PANEL_BORDER);
     }

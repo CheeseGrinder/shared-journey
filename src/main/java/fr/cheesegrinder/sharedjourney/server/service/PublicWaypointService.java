@@ -1,6 +1,8 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
+import fr.cheesegrinder.sharedjourney.common.config.WaypointServerConfig;
 import fr.cheesegrinder.sharedjourney.common.network.WaypointPayloads;
+import fr.cheesegrinder.sharedjourney.common.waypoint.DimensionConversion;
 
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -78,13 +80,27 @@ public final class PublicWaypointService {
             return;
         }
 
-        boolean isNew = !WAYPOINTS.containsKey(sanitized.id());
-        if (isNew && WAYPOINTS.size() >= MAX_WAYPOINTS) {
+        WaypointPayloads.PublicWaypointPayload existing = WAYPOINTS.get(sanitized.id());
+        if (existing == null && WAYPOINTS.size() >= MAX_WAYPOINTS) {
             LOGGER.warn(
                     "Public waypoint limit reached ({}), upsert from {} ignored", MAX_WAYPOINTS, playerName(player));
             return;
         }
 
+        boolean converted = DimensionConversion.resolveLink(
+                WaypointServerConfig.CONVERTED_WAYPOINTS_ENABLED.get(),
+                sanitized.converted(),
+                existing != null && existing.converted(),
+                sanitized.dimension());
+        sanitized = new WaypointPayloads.PublicWaypointPayload(
+                sanitized.id(),
+                sanitized.name(),
+                sanitized.dimension(),
+                sanitized.x(),
+                sanitized.y(),
+                sanitized.z(),
+                sanitized.colorRgb(),
+                converted);
         WAYPOINTS.put(sanitized.id(), sanitized);
         save();
         PacketDistributor.sendToAllPlayers(sanitized);
@@ -110,7 +126,7 @@ public final class PublicWaypointService {
             name = name.substring(0, MAX_NAME_LENGTH);
         }
         return new WaypointPayloads.PublicWaypointPayload(
-                p.id(), name, p.dimension(), p.x(), p.y(), p.z(), 0xFFFFFF & p.colorRgb());
+                p.id(), name, p.dimension(), p.x(), p.y(), p.z(), 0xFFFFFF & p.colorRgb(), p.converted());
     }
 
     private static String playerName(Player player) {
@@ -146,7 +162,8 @@ public final class PublicWaypointService {
                         o.get("x").getAsInt(),
                         o.get("y").getAsInt(),
                         o.get("z").getAsInt(),
-                        o.get("color").getAsInt());
+                        o.get("color").getAsInt(),
+                        o.has("converted") && o.get("converted").getAsBoolean());
                 WAYPOINTS.put(wp.id(), wp);
             }
         } catch (Exception e) {
@@ -169,6 +186,9 @@ public final class PublicWaypointService {
             o.addProperty("y", wp.y());
             o.addProperty("z", wp.z());
             o.addProperty("color", wp.colorRgb());
+            if (wp.converted()) {
+                o.addProperty("converted", true);
+            }
             arr.add(o);
         }
 

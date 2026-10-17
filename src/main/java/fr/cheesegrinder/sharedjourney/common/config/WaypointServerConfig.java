@@ -21,6 +21,12 @@ public final class WaypointServerConfig {
     /** Automatic respawn anchor waypoint (private, per player): set when a player sets their spawn in one. */
     public static ModConfigSpec.BooleanValue ANCHOR_WAYPOINTS_ENABLED;
 
+    /**
+     * Converted waypoints: lets players link a waypoint so its Overworld / Nether
+     * counterpart (coordinates multiplied or divided by 8) is also shown in the paired dimension.
+     */
+    public static ModConfigSpec.BooleanValue CONVERTED_WAYPOINTS_ENABLED;
+
     /** Where players' own (non-public) waypoints are stored. */
     public static ModConfigSpec.EnumValue<Storage> WAYPOINT_STORAGE;
 
@@ -58,6 +64,13 @@ public final class WaypointServerConfig {
                                 + " last set their spawn in. Disabling hides the existing ones without deleting"
                                 + " them.")
                 .define("anchorWaypointsEnabled", true);
+        CONVERTED_WAYPOINTS_ENABLED = b.comment(
+                        "Converted waypoints: a player can link one of their Overworld or Nether waypoints so"
+                                + " that a read-only counterpart with converted coordinates (x8 / divided by 8)"
+                                + " is also shown in the other dimension. Never created automatically."
+                                + " Disabling hides every converted counterpart and blocks new links; the existing"
+                                + " links are kept and come back when re-enabled.")
+                .define("convertedWaypointsEnabled", true);
         WAYPOINT_STORAGE = b.comment(
                         "Where players' own waypoints are stored: SERVER (persisted per-player, private) or"
                                 + " CLIENT (purely local, today's behavior). Temporary waypoints always stay"

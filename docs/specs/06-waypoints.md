@@ -13,6 +13,7 @@
 | `group` | Group name; blank/null is normalized to `default`. |
 | `visible` | Per-waypoint display flag. |
 | `type` | `DIMENSION`, `PUBLIC`, `TEMP`. |
+| `conversion` | `NONE`, `LINKED` (the player asked to also show a converted counterpart in the paired Overworld / Nether dimension) or `VIEW` (that derived counterpart, never stored). See [14](14-converted-waypoints.md). |
 
 Reserved groups: `default`, `deaths`, `public`, `banners`, `beds`, `portals`, `anchors`. A group is **editable** (can be
 renamed/deleted) iff it is not reserved and holds no non-`user` waypoint.
@@ -41,14 +42,14 @@ In-memory source of truth for everything the client knows, regardless of persist
 
 | ID | Requirement |
 |----|-------------|
-| WS-01 | Local file `<cache>/waypoints.json`: `{hiddenGroups, hiddenIds, groups, waypoints[]}`; a bare array is accepted as the legacy format. |
+| WS-01 | Local file `<cache>/waypoints.json`: `{hiddenGroups, hiddenIds, groups, waypoints[]}`; a bare array is accepted as the legacy format. An entry carries `"converted": true` when linked to the paired dimension ([14 CONV-09](14-converted-waypoints.md)). |
 | WS-02 | Only `source=user` waypoints that are **not** server-managed are written. Bridged, public, banner, automatic and server-managed ones are volatile (resynchronized each session). Loading skips any entry whose source is not `user`. |
 | WS-03 | Loading migrates: unknown/missing type → `DIMENSION` (the former `GLOBAL` type also becomes `DIMENSION`, never `PUBLIC`); groups that exist only through a waypoint are adopted as known groups. |
 | WS-04 | `add` routes: user PUBLIC → `PublicWaypointPayload` (the local copy appears with the server echo); server-managed user DIMENSION → `PlayerWaypointPayload`; otherwise post the cancellable `WaypointEvent.Added`, then store locally. Routes are gated on `source=user`: bridged, banner and automatic waypoints MUST NEVER be pushed to a Shared Journey channel. |
 | WS-05 | `update` handles type transitions: private → PUBLIC (publish, drop the private server copy if any, echo re-adds), PUBLIC → private (server copy removed, group reset to `default`, source `user`), DIMENSION ↔ TEMP (server copy added/removed). Shared fields go through the server; the `visible` flag stays local. |
 | WS-06 | Server echoes (`accept*Upsert`) post `WaypointEvent.Updated` (never the cancellable `Added`): the server is authoritative, listeners cannot veto a sync. |
 | WS-07 | `remove` posts `WaypointEvent.Removed` and sends the matching remove payload for PUBLIC and server-managed waypoints. |
-| WS-08 | `forDimension` serves an immutable per-dimension index rebuilt lazily and invalidated by every mutation (called several times per frame). |
+| WS-08 | `forDimension` serves an immutable per-dimension index rebuilt lazily and invalidated by every mutation (called several times per frame). It also holds the derived converted counterparts of linked waypoints ([14 CONV-02](14-converted-waypoints.md)); `all()` does not. |
 | WS-09 | `removeReachedTemp` runs every 20 ticks: a TEMP waypoint in the player's dimension within `waypoints.tempWaypointRadius` (3-D distance, default 8) is removed. |
 | WS-10 | Group management: `createGroup` (trimmed, non-empty, unique), `renameGroup` (re-routes each member through `update` so server-managed ones are pushed; moves hidden state), `deleteGroup` (deletes the group **and all its waypoints**). |
 | WS-11 | Session close saves the file, then clears waypoints, hidden sets and groups. |
@@ -59,17 +60,18 @@ In-memory source of truth for everything the client knows, regardless of persist
 
 | ID | Requirement |
 |----|-------------|
-| PUB-01 | File `waypoints_public.json` (array of `{id,name,dimension,x,y,z,color}`), loaded at start, saved after every change. |
+| PUB-01 | File `waypoints_public.json` (array of `{id,name,dimension,x,y,z,color[,converted]}`), loaded at start, saved after every change. |
 | PUB-02 | `handleUpsert`: name trimmed, empty → rejected, > 48 → truncated; colour masked to 24 bits; at most **1 024** waypoints (an upsert of a *new* one at the cap is ignored with a warning). Accepted upserts are persisted and broadcast to **all** players. |
 | PUB-03 | `handleRemove`: unknown id ignored; otherwise persisted and broadcast. |
 | PUB-04 | Full list is sent to each player at login (one upsert per waypoint). |
-| PUB-05 | **No ownership and no permission check**: any player may edit or delete any public waypoint. |
+| PUB-05 | **No ownership and no permission check**: any player may edit or delete any public waypoint (including its Overworld / Nether link, [14](14-converted-waypoints.md)). |
+| PUB-06 | The Overworld / Nether link flag (`converted`) is a shared field of the upsert; the server keeps the stored value while `convertedWaypointsEnabled` is off ([14 CONV-11](14-converted-waypoints.md)). Same rule for private waypoints (PRI-02). |
 
 ### 3.2 Private waypoints (`PlayerWaypointService`)
 
 | ID | Requirement |
 |----|-------------|
-| PRI-01 | One file per player: `waypoints/<uuid>.json` (array of `{id,name,dimension,x,y,z,color,group}`); no in-memory cache, read/written on each edit. |
+| PRI-01 | One file per player: `waypoints/<uuid>.json` (array of `{id,name,dimension,x,y,z,color,group[,converted]}`); no in-memory cache, read/written on each edit. |
 | PRI-02 | Upsert sanitization as for public, plus group: blank → `default`, trimmed, ≤ 32 chars. Cap **512** per player (new ones above the cap ignored). |
 | PRI-03 | The echo goes **only** to the originating player; nothing is ever broadcast. Full list sent at login. |
 
@@ -127,7 +129,7 @@ Rendered after translucent blocks when `waypoints.waypointBeacons` is on.
 |----|-------------|
 | BCN-01 | A waypoint is drawn iff shown (`isShown`), in the player's dimension, and its **horizontal** distance from the camera lies in `[beaconMinDistance, beaconMaxDistance]` (defaults 4 / 512; ranges 0–512 / 16–4096). |
 | BCN-02 | Beam: the vanilla beacon beam texture tinted with the waypoint colour; beyond 80 % of the render distance it is drawn clamped toward the camera (same direction) so far beams stay visible. |
-| BCN-03 | Icon: a camera-facing sprite (diamond; death, banner, bed, portal and anchor variants) tinted with the colour, anchored 1.2 blocks above the waypoint, always visible through blocks, apparent size constant with distance (clamped to the render distance); sampled with a dedicated render type and shader (sharp bilinear, half-texel UV inset) to avoid a crushed look. |
+| BCN-03 | Icon: a camera-facing sprite (diamond; death, banner, bed, portal, anchor and converted-counterpart variants) tinted with the colour, anchored 1.2 blocks above the waypoint, always visible through blocks, apparent size constant with distance (clamped to the render distance); sampled with a dedicated render type and shader (sharp bilinear, half-texel UV inset) to avoid a crushed look. |
 | BCN-04 | Label (name + distance) above the icon, shown only while the crosshair is within ~12° of the waypoint; boosted up to ×1.5 beyond 32 blocks. The beam, icon and label are drawn in two passes (beams, flush, then text) so the translucent beam never masks the text. |
 
 ## 6. Waypoint UI
@@ -138,7 +140,8 @@ Rendered after translucent blocks when `waypoints.waypointBeacons` is on.
   the group's visibility, live counters; buttons New / Rename / Delete / Done. Rename and
   Delete are enabled only for editable groups.
 - Right panel: waypoints of the selected group, with a final "+ New waypoint" row. Per row:
-  colour swatch, name and info, **visibility toggle**, **Edit** (hidden for banner, automatic and
+  colour swatch, name and info, **visibility toggle**, **Overworld / Nether link** (arrows button,
+  only for linkable waypoints while the server allows it, [14](14-converted-waypoints.md)), **Edit** (hidden for banner, automatic and
   death), **View on map** (enabled in the same dimension), **Teleport** (OP only),
   **Delete** `x` (hidden for banner and automatic).
 - Modals (`ModalScreen`): group name prompt, delete-group confirmation.
@@ -148,7 +151,8 @@ Rendered after translucent blocks when `waypoints.waypointBeacons` is on.
 Fields: name (≤ 48), X/Y/Z, group (free text with autocompletion over assignable groups —
 a new name creates the group on save; **locked to `public` while the type is PUBLIC**),
 colour (hex field, 10-colour palette, random, HSB picker), visibility, type (cycles
-DIMENSION → PUBLIC → TEMP). Enter saves.
+DIMENSION → PUBLIC → TEMP), and, for a linkable waypoint while the server allows it, a
+full-width "Converted: On/Off" row ([14 CONV-07](14-converted-waypoints.md)). Enter saves.
 
 | ID | Requirement |
 |----|-------------|
@@ -159,7 +163,8 @@ DIMENSION → PUBLIC → TEMP). Enter saves.
 ## 7. Events (client side, `NeoForge.EVENT_BUS`)
 
 `WaypointEvent.Added` (cancellable, local path only), `Updated`, `Removed`. Waypoints from
-the JourneyMap bridge also flow through them.
+the JourneyMap bridge also flow through them. The derived converted counterparts
+([14](14-converted-waypoints.md)) never do: only their source waypoint raises events.
 
 ## Acceptance checks
 
@@ -182,3 +187,5 @@ the JourneyMap bridge also flow through them.
    disappear within about 10 seconds once their chunk is loaded.
 10. Set `bedWaypointsEnabled=false` (ops tab): bed markers vanish from the clients; set it
     back to true: they return (nothing was deleted).
+11. Link a waypoint to its Overworld / Nether counterpart and verify the scenarios of
+    [14](14-converted-waypoints.md).

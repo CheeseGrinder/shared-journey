@@ -5,6 +5,7 @@ import fr.cheesegrinder.sharedjourney.client.gui.modal.ModalScreen;
 import fr.cheesegrinder.sharedjourney.client.render.WaypointIcons;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
+import fr.cheesegrinder.sharedjourney.common.waypoint.DimensionConversion;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -437,6 +438,8 @@ public class WaypointListScreen extends Screen {
             private final Waypoint waypoint;
             private final List<Button> buttons = new ArrayList<>();
             private final Button visibility;
+            /** Link toggle, null when the waypoint cannot be linked. */
+            private Button convert;
 
             WaypointRow(Waypoint waypoint) {
                 this.waypoint = waypoint;
@@ -452,6 +455,21 @@ public class WaypointListScreen extends Screen {
                         .tooltip(Tooltip.create(Component.translatable(Lang.WAYPOINTS_TOGGLE)))
                         .build();
                 buttons.add(visibility);
+                // Overworld / Nether link: only for waypoints that can be
+                // linked, while the server allows the feature.
+                if (WaypointStore.isConversionEnabled() && WaypointStore.canLinkConversion(waypoint)) {
+                    convert = Button.builder(convertLabel(), b -> {
+                                Waypoint current = WaypointStore.get(waypoint.id());
+                                if (current != null) {
+                                    WaypointStore.setConversionLink(current.id(), !current.hasConvertedLink());
+                                }
+                                refreshConvertButton();
+                            })
+                            .size(20, 20)
+                            .build();
+                    refreshConvertButton();
+                    buttons.add(convert);
+                }
                 // Banner and automatic (bed, portal, anchor) waypoints are
                 // read-only (position/name/color are derived from the
                 // physical block): no Edit, no Delete — removing them means
@@ -495,6 +513,23 @@ public class WaypointListScreen extends Screen {
                             .build();
                     buttons.add(delete);
                 }
+            }
+
+            private boolean isLinked() {
+                Waypoint current = WaypointStore.get(waypoint.id());
+                return current == null ? waypoint.hasConvertedLink() : current.hasConvertedLink();
+            }
+
+            /** Green arrows while the converted copy is shown, gray otherwise. */
+            private Component convertLabel() {
+                int color = isLinked() ? 0x60E060 : 0xA0A0A0;
+                return Component.literal("⇄").withStyle(s -> s.withColor(color));
+            }
+
+            private void refreshConvertButton() {
+                convert.setMessage(convertLabel());
+                String key = isLinked() ? Lang.WAYPOINTS_CONVERT_HIDE : Lang.WAYPOINTS_CONVERT_SHOW;
+                convert.setTooltip(Tooltip.create(Component.translatable(key)));
             }
 
             private Component visibilityLabel() {
@@ -556,6 +591,12 @@ public class WaypointListScreen extends Screen {
                 if (Waypoint.SOURCE_AUTO.equals(waypoint.source())) {
                     info.append("  · ")
                             .append(Component.translatable(Lang.WAYPOINT_TYPE_AUTO)
+                                    .getString());
+                }
+                ResourceLocation counterpart = DimensionConversion.counterpart(waypoint.dimension());
+                if (counterpart != null && WaypointStore.isConversionEnabled() && isLinked()) {
+                    info.append("  · ⇄ ")
+                            .append(Component.translatable(Lang.WAYPOINTS_CONVERTED_INFO, dimensionLabel(counterpart))
                                     .getString());
                 }
                 gg.drawString(font, info.toString(), left + 20, top + 11, 0x888888);

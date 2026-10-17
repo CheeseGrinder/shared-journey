@@ -86,6 +86,7 @@ public final class OpsConfigService {
                 WaypointServerConfig.BED_WAYPOINTS_ENABLED.get(),
                 WaypointServerConfig.PORTAL_WAYPOINTS_ENABLED.get(),
                 WaypointServerConfig.ANCHOR_WAYPOINTS_ENABLED.get(),
+                WaypointServerConfig.CONVERTED_WAYPOINTS_ENABLED.get(),
                 PrivacyServerConfig.HIDDEN_AREA_POLICY.get().name(),
                 PrivacyServerConfig.QUARANTINE_RADIUS_CHUNKS.get(),
                 PrivacyServerConfig.QUARANTINE_DRAIN_MINUTES.get());
@@ -121,6 +122,7 @@ public final class OpsConfigService {
         WaypointServerConfig.BED_WAYPOINTS_ENABLED.set(p.bedWaypointsEnabled());
         WaypointServerConfig.PORTAL_WAYPOINTS_ENABLED.set(p.portalWaypointsEnabled());
         WaypointServerConfig.ANCHOR_WAYPOINTS_ENABLED.set(p.anchorWaypointsEnabled());
+        WaypointServerConfig.CONVERTED_WAYPOINTS_ENABLED.set(p.convertedWaypointsEnabled());
 
         PrivacyServerConfig.HIDDEN_AREA_POLICY.set(parsePolicy(p.hiddenAreaPolicy()));
         PrivacyServerConfig.QUARANTINE_RADIUS_CHUNKS.set(Math.clamp(p.quarantineRadiusChunks(), 1, 32));
