@@ -71,9 +71,7 @@ final class MobIconCreator {
 
     /** Packed full-bright light, same as inventory entity rendering. */
     private static final int FULL_BRIGHT = 15728880;
-    /** Share of the cell filled by the framed cubes (outline margin). */
-    private static final float FIT = 0.72f;
-    /** Outline thickness in cell pixels (~0.6 screen px at icon size). */
+    /** Outline thickness in cell pixels (~0.5 screen px at icon size). */
     private static final int OUTLINE_PX = 1;
 
     /**
@@ -94,7 +92,7 @@ final class MobIconCreator {
      * {@link #clearCell} repoints the GL scissor box at the atlas cell,
      * and re-enabling the test on restore without putting the box back
      * clipped the rest of the frame's minimap draws (radar icons, bridged
-     * rail overlays) into a stray 32x32 window corner — a one-frame
+     * rail overlays) into a stray cell-sized window corner — a one-frame
      * overlay flicker on every non-fresh-page icon creation.
      */
     private final int[] scissorBoxBackup = new int[4];
@@ -185,17 +183,19 @@ final class MobIconCreator {
         // model +Y (down) staying down. Only Z flips: visible faces are
         // the ones wound counter-clockwise on screen, which needs a
         // NEGATIVE pose determinant — same as vanilla's
-        // renderEntityInInventory. Profile views rotate the model before
-        // everything else (the rotation is rightmost, so it applies
-        // first). Real depth testing sorts the head layers (hat...).
+        // renderEntityInInventory. The framing rotation (profile or tilted
+        // views) comes last, so it applies to the model first, in the same
+        // order as the bounds computation in MobHeadIcons. The scale is
+        // fixed in pixels per block (geometry.scale()), not fitted to the
+        // frame: mobs keep their relative sizes. Real depth testing sorts
+        // the head layers (hat...).
         PoseStack pose = new PoseStack();
         pose.translate(MobIconAtlas.CELL / 2f, MobIconAtlas.CELL / 2f, -FAR_PLANE / 2f);
-        float k = MobIconAtlas.CELL * FIT / geometry.span();
+        float k = geometry.scale();
         pose.scale(k, k, -k);
         pose.translate(-geometry.cx(), -geometry.cy(), -geometry.cz());
-        if (geometry.sideView()) {
-            pose.mulPose(Axis.YP.rotationDegrees(90f));
-        }
+        pose.mulPose(Axis.XP.rotationDegrees(geometry.rotX()));
+        pose.mulPose(Axis.YP.rotationDegrees(geometry.rotY()));
 
         VertexConsumer vc = bufferSource.getBuffer(RenderType.entityCutout(texture));
         if (geometry.parts().isEmpty()) {

@@ -35,6 +35,7 @@ import fr.cheesegrinder.sharedjourney.common.network.RegenPayloads;
 import fr.cheesegrinder.sharedjourney.common.network.RegionSyncPayloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
+import fr.cheesegrinder.sharedjourney.common.util.SurfaceHeight;
 
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -908,8 +909,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         LevelChunk chunk = mc.level.getChunkSource().getChunkNow(wx >> 4, wz >> 4);
         if (chunk != null) {
-            int top = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, wx & 15, wz & 15);
-            BlockPos pos = new BlockPos(wx, top, wz);
+            // Same ground rule as the server sidecar: hidden vegetation
+            // (short/tall grass...) is never reported as the surface block.
+            BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+            int top = SurfaceHeight.groundY(chunk, wx, wz, cursor);
+            BlockPos pos = cursor.immutable();
             String biomeId = mc.level
                     .getBiome(pos)
                     .unwrapKey()
@@ -1585,30 +1589,35 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         if (RadarClientConfig.RADAR_ENABLED.get() && ClientMapCache.radarMaxRadius > 0) {
             int radius = Math.min(RadarClientConfig.RADAR_RADIUS.get(), ClientMapCache.radarMaxRadius);
             AABB box = mc.player.getBoundingBox().inflate(radius, 32, radius);
-            for (Entity e : mc.level.getEntities(mc.player, box)) {
-                Integer color = EntityDots.colorFor(e);
-                if (color == null) {
-                    continue;
-                }
+            MobHeadIcons.beginBatch();
+            try {
+                for (Entity e : mc.level.getEntities(mc.player, box)) {
+                    Integer color = EntityDots.colorFor(e);
+                    if (color == null) {
+                        continue;
+                    }
 
-                double ex = e.getX() - mc.player.getX(), ez = e.getZ() - mc.player.getZ();
-                if (ex * ex + ez * ez > (double) radius * radius) {
-                    continue;
-                }
+                    double ex = e.getX() - mc.player.getX(), ez = e.getZ() - mc.player.getZ();
+                    if (ex * ex + ez * ez > (double) radius * radius) {
+                        continue;
+                    }
 
-                int sx = (int) Math.round(screenX(e.getX()));
-                int sy = (int) Math.round(screenY(e.getZ()));
-                if (sx < -4 || sx > width + 4 || sy < -4 || sy > height + 4) {
-                    continue;
-                }
+                    int sx = (int) Math.round(screenX(e.getX()));
+                    int sy = (int) Math.round(screenY(e.getZ()));
+                    if (sx < -4 || sx > width + 4 || sy < -4 || sy > height + 4) {
+                        continue;
+                    }
 
-                boolean head = false;
-                if (RadarClientConfig.RADAR_MOB_HEADS.get()) {
-                    head = MobHeadIcons.draw(gg, e, sx, sy, MobHeadIcons.ICON_SIZE);
+                    boolean head = false;
+                    if (RadarClientConfig.RADAR_MOB_HEADS.get()) {
+                        head = MobHeadIcons.draw(gg, e, sx, sy, MobHeadIcons.ICON_SIZE);
+                    }
+                    if (!head) {
+                        EntityDots.draw(gg, sx, sy, color);
+                    }
                 }
-                if (!head) {
-                    EntityDots.draw(gg, sx, sy, color);
-                }
+            } finally {
+                MobHeadIcons.endBatch(gg);
             }
         }
 

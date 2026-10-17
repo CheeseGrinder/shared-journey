@@ -408,34 +408,41 @@ public final class MinimapRenderer {
         if (RadarClientConfig.RADAR_ENABLED.get() && ClientMapCache.radarMaxRadius > 0) {
             int radius = Math.min(RadarClientConfig.RADAR_RADIUS.get(), ClientMapCache.radarMaxRadius);
             AABB box = player.getBoundingBox().inflate(radius, 32, radius);
-            for (Entity e : player.level().getEntities(player, box)) {
-                Integer color = EntityDots.colorFor(e);
-                if (color == null) {
-                    continue;
-                }
-
-                double ex = e.getX() - px, ez = e.getZ() - pz;
-                if (ex * ex + ez * ez > (double) radius * radius) {
-                    continue;
-                }
-
-                // Head icon at constant screen size, kept upright: the
-                // content pose is zoom-scaled (and rotated in rotate
-                // mode), so both are countered locally. Dot fallback.
-                boolean head = false;
-                if (RadarClientConfig.RADAR_MOB_HEADS.get()) {
-                    gg.pose().pushPose();
-                    gg.pose().translate((float) e.getX(), (float) e.getZ(), 0f);
-                    if (rotate) {
-                        gg.pose().mulPose(Axis.ZP.rotationDegrees(yaw + 180f));
+            // One batched draw for all head icons, flushed while the
+            // minimap's scissor and content pose are still in place.
+            MobHeadIcons.beginBatch();
+            try {
+                for (Entity e : player.level().getEntities(player, box)) {
+                    Integer color = EntityDots.colorFor(e);
+                    if (color == null) {
+                        continue;
                     }
-                    gg.pose().scale(1f / zoom, 1f / zoom, 1f);
-                    head = MobHeadIcons.draw(gg, e, 0f, 0f, MobHeadIcons.ICON_SIZE);
-                    gg.pose().popPose();
+
+                    double ex = e.getX() - px, ez = e.getZ() - pz;
+                    if (ex * ex + ez * ez > (double) radius * radius) {
+                        continue;
+                    }
+
+                    // Head icon at constant screen size, kept upright: the
+                    // content pose is zoom-scaled (and rotated in rotate
+                    // mode), so both are countered locally. Dot fallback.
+                    boolean head = false;
+                    if (RadarClientConfig.RADAR_MOB_HEADS.get()) {
+                        gg.pose().pushPose();
+                        gg.pose().translate((float) e.getX(), (float) e.getZ(), 0f);
+                        if (rotate) {
+                            gg.pose().mulPose(Axis.ZP.rotationDegrees(yaw + 180f));
+                        }
+                        gg.pose().scale(1f / zoom, 1f / zoom, 1f);
+                        head = MobHeadIcons.draw(gg, e, 0f, 0f, MobHeadIcons.ICON_SIZE);
+                        gg.pose().popPose();
+                    }
+                    if (!head) {
+                        EntityDots.draw(gg, (int) Math.floor(e.getX()), (int) Math.floor(e.getZ()), color);
+                    }
                 }
-                if (!head) {
-                    EntityDots.draw(gg, (int) Math.floor(e.getX()), (int) Math.floor(e.getZ()), color);
-                }
+            } finally {
+                MobHeadIcons.endBatch(gg);
             }
         }
 

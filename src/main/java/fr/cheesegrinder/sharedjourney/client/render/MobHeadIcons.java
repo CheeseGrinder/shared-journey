@@ -8,20 +8,13 @@ import net.minecraft.client.model.HeadedModel;
 import net.minecraft.client.model.HierarchicalModel;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelPart;
-import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.BufferUploader;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.Tesselator;
-import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.math.Axis;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -63,15 +56,22 @@ import java.util.TreeSet;
  *       every part name containing "head" (wither: "center_head") —
  *       and finally a reflective scan of ModelPart fields named "head"
  *       (llama-style models that extend EntityModel directly).</li>
- *   <li>The icon frames the union of the LARGE cubes in the FRONT
+ *   <li>The icon CENTERS on the union of the LARGE cubes in the FRONT
  *       third of the part: vanilla "head" parts often carry the neck in
- *       their own cubes (horse, camel...), so framing on the whole part
- *       showed neck; framing on the front-most big boxes isolates the
- *       face. Everything still renders; what the frame excludes lands
- *       outside the atlas cell and is simply not stored.</li>
+ *       their own cubes (horse, camel...), so centering on the whole part
+ *       showed neck; the front-most big boxes isolate the face.
+ *       Everything still renders; what falls outside the atlas cell is
+ *       simply not stored.</li>
+ *   <li>The SCALE is fixed in pixels per block ({@link #NATURAL_SCALE}),
+ *       so mobs keep their relative sizes (a bat head is smaller than a
+ *       ravager's). Only the extremes are bent: frames wider than
+ *       {@link #MAX_FILL} of the cell shrink to fit, frames narrower
+ *       than {@link #MIN_FILL} grow to stay legible.</li>
  *   <li>Mobs with no identifiable head, or a tiny one (parrot, fish),
  *       draw the whole model instead; shapes much deeper than wide
- *       (fish) are shown in profile rather than face-on.</li>
+ *       (fish) are shown in profile rather than face-on.
+ *       {@link MobIconTweaks} lists the models needing a tilt, a profile
+ *       view or a forced whole-model framing.</li>
  *   <li>The shared model is frozen in a neutral pose ({@code setupAnim}
  *       with all-zero parameters) before the capture — no bobbing.</li>
  * </ul>
@@ -87,11 +87,22 @@ import java.util.TreeSet;
  */
 public final class MobHeadIcons {
 
-    /** Icon square size, in screen pixels (radar call sites). */
-    public static final float ICON_SIZE = 10f;
+    /**
+     * Screen size (GUI units) of one WHOLE atlas cell at the radar call
+     * sites. At the natural scale an 8-unit head fills a quarter of the
+     * cell, so 32 shows a zombie-sized head about 8 units wide.
+     */
+    public static final float ICON_SIZE = 32f;
 
     /** Creation budget: at most one off-screen render per interval. */
     private static final long MIN_CREATION_INTERVAL_NANOS = 15_000_000L;
+
+    /** Natural icon scale: cell pixels per block (one block = half a cell). */
+    private static final float NATURAL_SCALE = MobIconAtlas.CELL / 2f;
+    /** Largest share of the cell a frame may span before shrinking to fit. */
+    private static final float MAX_FILL = 0.88f;
+    /** Smallest share of the cell a frame may span before growing (tiny mobs). */
+    private static final float MIN_FILL = 0.2f;
 
     /** Head span (block units) under which the whole model reads better. */
     private static final float TINY_HEAD = 0.26f;
@@ -105,11 +116,21 @@ public final class MobHeadIcons {
     /**
      * What to render and how to frame it for one entity type.
      * {@code parts} null = resolution failed (dot fallback); empty =
-     * draw the whole model. The model reference detects renderer swaps
+     * draw the whole model. {@code rotX}/{@code rotY} (degrees) turn the
+     * model before centering on ({@code cx}, {@code cy}, {@code cz}),
+     * which are expressed in the rotated space; {@code scale} is in cell
+     * pixels per block. The model reference detects renderer swaps
      * (resource reload) and triggers a full reset.
      */
     record Geometry(
-            EntityModel<?> model, List<ModelPart> parts, boolean sideView, float cx, float cy, float cz, float span) {}
+            EntityModel<?> model,
+            List<ModelPart> parts,
+            float rotX,
+            float rotY,
+            float cx,
+            float cy,
+            float cz,
+            float scale) {}
 
     private record IconKey(EntityType<?> type, ResourceLocation texture) {}
 
@@ -129,10 +150,27 @@ public final class MobHeadIcons {
     private MobHeadIcons() {}
 
     /**
+     * Opens a draw batch: until {@link #endBatch}, {@link #draw} only
+     * queues the icons (the pose current at each call is baked in) and a
+     * single flush draws them all. Callers wrap their entity loop with
+     * it, inside the scissor/pose the icons belong to.
+     */
+    public static void beginBatch() {
+        MobIconBatch.begin();
+    }
+
+    /** Draws the icons queued since {@link #beginBatch}. */
+    public static void endBatch(GuiGraphics gg) {
+        MobIconBatch.flush(gg);
+    }
+
+    /**
      * Draws the head icon of {@code e} centered on (x, y) in the current
-     * pose, {@code size} units square. Returns false when no icon can be
-     * rendered for this entity type (or none exists yet this frame): the
-     * caller draws its dot instead.
+     * pose, {@code size} units square for the whole atlas cell (see
+     * {@link #ICON_SIZE}). Queued when a batch is open, drawn right away
+     * otherwise. Returns false when no icon can be rendered for this
+     * entity type (or none exists yet this frame): the caller draws its
+     * dot instead.
      */
     public static boolean draw(GuiGraphics gg, Entity e, float x, float y, float size) {
         Minecraft mc = Minecraft.getInstance();
@@ -199,31 +237,21 @@ public final class MobHeadIcons {
         return creator.create(gg, e, texture, geometry);
     }
 
-    /** One textured quad sampling the icon's atlas cell. */
+    /**
+     * Queues the icon into the open batch, or draws it alone when none
+     * is open (an atlas page has no ResourceLocation for the batched GUI
+     * render types, hence the dedicated immediate path).
+     */
     private static void drawIcon(GuiGraphics gg, MobIconAtlas.Slot slot, float x, float y, float size) {
-        // Immediate draw (an atlas page has no ResourceLocation for the
-        // batched GUI render types): the pending batch keeps its order.
-        gg.flush();
-        RenderSystem.setShader(GameRenderer::getPositionTexShader);
-        RenderSystem.setShaderTexture(0, slot.textureId());
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
+        Matrix4f pose = gg.pose().last().pose();
+        if (MobIconBatch.isActive()) {
+            MobIconBatch.add(slot, pose, x, y, size);
+            return;
+        }
 
-        float half = size / 2f;
-        float u0 = slot.x() / (float) slot.pageSize();
-        float u1 = (slot.x() + MobIconAtlas.CELL) / (float) slot.pageSize();
-        // The icon's top is stored at the HIGH v of its cell (GL
-        // framebuffers are bottom-up), hence the flip.
-        float vTop = (slot.y() + MobIconAtlas.CELL) / (float) slot.pageSize();
-        float vBottom = slot.y() / (float) slot.pageSize();
-        Matrix4f mat = gg.pose().last().pose();
-        BufferBuilder buf = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        buf.addVertex(mat, x - half, y - half, 0f).setUv(u0, vTop);
-        buf.addVertex(mat, x - half, y + half, 0f).setUv(u0, vBottom);
-        buf.addVertex(mat, x + half, y + half, 0f).setUv(u1, vBottom);
-        buf.addVertex(mat, x + half, y - half, 0f).setUv(u1, vTop);
-        BufferUploader.drawWithShader(buf.buildOrThrow());
+        MobIconBatch.begin();
+        MobIconBatch.add(slot, pose, x, y, size);
+        MobIconBatch.flush(gg);
     }
 
     /** Drops every cached icon, geometry and atlas page. */
@@ -242,41 +270,93 @@ public final class MobHeadIcons {
     private static Geometry build(Entity e, EntityModel<?> model) {
         try {
             neutralPose(model, e);
-            List<ModelPart> headParts = resolveHeadParts(model);
-            if (headParts != null) {
-                float[] frame = frameBounds(collectCubes(headParts, false));
-                if (frame != null && spanOf(frame) >= TINY_HEAD) {
-                    return geometry(model, headParts, false, frame);
+            MobIconTweaks.Tweak tweak = MobIconTweaks.forModel(model);
+            if (!tweak.wholeModel()) {
+                Geometry head = headGeometry(model, tweak);
+                if (head != null) {
+                    return head;
                 }
             }
 
-            // No usable head: whole model, in profile when the shape is
-            // much deeper than wide (a face-on fish is a sliver).
-            List<ModelPart> all = wholeModelParts(model);
-            float[] overall = unionBounds(collectCubes(all, false));
-            boolean side = false;
-            if (overall != null) {
-                side = (overall[3] - overall[0]) < SIDE_VIEW_RATIO * (overall[5] - overall[2]);
-            }
-            float[] frame = frameBounds(collectCubes(all, side));
-            if (frame == null) {
-                // Unknown model layout: estimate from the collision box.
-                // Model space puts y = 0 at 1.5 blocks above the feet.
-                float w = e.getBbWidth() / 2f;
-                float h = e.getBbHeight();
-                frame = new float[] {-w, 1.5f - h, -w, w, 1.5f, w};
-            }
-            if (spanOf(frame) < 0.01f) {
-                return new Geometry(model, null, false, 0f, 0f, 0f, 0f);
-            }
-            return geometry(model, List.of(), side, frame);
+            return wholeModelGeometry(e, model, tweak);
         } catch (Exception ex) {
-            return new Geometry(model, null, false, 0f, 0f, 0f, 0f);
+            return failed(model);
         }
     }
 
-    private static Geometry geometry(EntityModel<?> model, List<ModelPart> parts, boolean side, float[] f) {
-        return new Geometry(model, parts, side, (f[0] + f[3]) / 2f, (f[1] + f[4]) / 2f, (f[2] + f[5]) / 2f, spanOf(f));
+    /** Geometry of the model's head, or null when none is usable. */
+    private static Geometry headGeometry(EntityModel<?> model, MobIconTweaks.Tweak tweak) {
+        List<ModelPart> headParts = resolveHeadParts(model);
+        if (headParts == null) {
+            return null;
+        }
+
+        float[] frame = frameBounds(collectCubes(headParts, tweak.rotX(), tweak.rotY()));
+        if (frame == null || spanOf(frame) < TINY_HEAD) {
+            return null;
+        }
+
+        return geometry(model, headParts, tweak.rotX(), tweak.rotY(), frame);
+    }
+
+    /**
+     * Geometry of the whole model: forced by the tweak or fallen back to
+     * when no usable head exists. In profile when the shape is much
+     * deeper than wide (a face-on fish is a sliver). Framed on the union
+     * of ALL cubes, so nothing of the body is left out.
+     */
+    private static Geometry wholeModelGeometry(Entity e, EntityModel<?> model, MobIconTweaks.Tweak tweak) {
+        List<ModelPart> all = wholeModelParts(model);
+        float rotY = tweak.rotY();
+        float[] overall = unionBounds(collectCubes(all, tweak.rotX(), rotY));
+        if (rotY == 0f && overall != null && isDeeperThanWide(overall)) {
+            rotY = 90f;
+        }
+
+        float[] frame = unionBounds(collectCubes(all, tweak.rotX(), rotY));
+        if (frame == null) {
+            // Unknown model layout: estimate from the collision box.
+            // Model space puts y = 0 at 1.5 blocks above the feet.
+            float w = e.getBbWidth() / 2f;
+            float h = e.getBbHeight();
+            frame = new float[] {-w, 1.5f - h, -w, w, 1.5f, w};
+        }
+
+        if (spanOf(frame) < 0.01f) {
+            return failed(model);
+        }
+
+        return geometry(model, List.of(), tweak.rotX(), rotY, frame);
+    }
+
+    private static boolean isDeeperThanWide(float[] bounds) {
+        return (bounds[3] - bounds[0]) < SIDE_VIEW_RATIO * (bounds[5] - bounds[2]);
+    }
+
+    private static Geometry failed(EntityModel<?> model) {
+        return new Geometry(model, null, 0f, 0f, 0f, 0f, 0f, 0f);
+    }
+
+    private static Geometry geometry(EntityModel<?> model, List<ModelPart> parts, float rotX, float rotY, float[] f) {
+        return new Geometry(
+                model,
+                parts,
+                rotX,
+                rotY,
+                (f[0] + f[3]) / 2f,
+                (f[1] + f[4]) / 2f,
+                (f[2] + f[5]) / 2f,
+                scaleFor(spanOf(f)));
+    }
+
+    /**
+     * Cell pixels per block for a frame of {@code span} blocks: the
+     * natural scale, bent only to keep the frame between {@link #MIN_FILL}
+     * and {@link #MAX_FILL} of the cell.
+     */
+    private static float scaleFor(float span) {
+        float scale = Math.min(NATURAL_SCALE, MobIconAtlas.CELL * MAX_FILL / span);
+        return Math.max(scale, MobIconAtlas.CELL * MIN_FILL / span);
     }
 
     private static float spanOf(float[] f) {
@@ -431,14 +511,14 @@ public final class MobHeadIcons {
     /**
      * All cube bounds of the given part trees, in block units, in the
      * same space the creator draws them (pivots and rotations applied;
-     * {@code side} pre-rotates 90° for profile views).
+     * {@code rotX}/{@code rotY} pre-rotate the model, Y first, exactly
+     * like {@link MobIconCreator}).
      */
-    private static List<float[]> collectCubes(List<ModelPart> parts, boolean side) {
+    private static List<float[]> collectCubes(List<ModelPart> parts, float rotX, float rotY) {
         List<float[]> out = new ArrayList<>();
         PoseStack ps = new PoseStack();
-        if (side) {
-            ps.mulPose(Axis.YP.rotationDegrees(90f));
-        }
+        ps.mulPose(Axis.XP.rotationDegrees(rotX));
+        ps.mulPose(Axis.YP.rotationDegrees(rotY));
         Vector3f v = new Vector3f();
         for (ModelPart part : parts) {
             part.visit(ps, (pose, path, index, cube) -> {

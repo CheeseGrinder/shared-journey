@@ -14,14 +14,18 @@ import java.util.List;
  * <p>Each page is a square RGBA8 texture split into {@link #CELL}-pixel
  * cells, filled left-to-right then top-to-bottom. A new page is created
  * when the current one is full. Pages are sampled with bilinear
- * filtering and no mipmaps; every icon keeps a transparent border inside
- * its cell (enforced by the creator's framing margin), so full-cell UVs
- * never bleed into a neighbor.
+ * filtering and no mipmaps. Every icon keeps a transparent border inside
+ * its cell (enforced by the creator's framing margin) and is sampled
+ * {@link #INSET} pixels inside the cell edge, so bilinear taps never
+ * reach a neighbor cell.
  */
 final class MobIconAtlas {
 
     /** Cell size in pixels — the stored resolution of one icon. */
-    static final int CELL = 32;
+    static final int CELL = 64;
+
+    /** Border (pixels) skipped on every side of a cell when sampling it. */
+    static final int INSET = 1;
 
     /** Preferred page size (clamped by GL_MAX_TEXTURE_SIZE). */
     private static final int PREFERRED_PAGE_SIZE = 1024;
