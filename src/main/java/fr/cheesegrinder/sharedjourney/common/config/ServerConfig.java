@@ -21,6 +21,7 @@ public final class ServerConfig {
     static {
         ModConfigSpec.Builder b = new ModConfigSpec.Builder();
         LayersServerConfig.define(b);
+        CavesServerConfig.define(b);
         EngineServerConfig.define(b);
         SyncServerConfig.define(b);
         WaypointServerConfig.define(b);

@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
+import fr.cheesegrinder.sharedjourney.common.config.CavesServerConfig;
 import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
 import fr.cheesegrinder.sharedjourney.common.util.UndergroundCheck;
 
@@ -12,16 +13,14 @@ import net.minecraft.world.level.ChunkPos;
 /**
  * Cave anti-exploit: CAVE bands are only painted where a player actually
  * went underground. Periodically scans player positions and unlocks the
- * matching band around them (MapManager.unlockCave). Without a player
- * passing through, a band stays empty (gray background client-side), even
- * after a /sj admin regen full.
+ * matching band around them, within {@code caves.revealRadiusChunks}
+ * (MapManager.unlockCave). Without a player passing through, a band stays
+ * empty (gray background client-side), even after a /sj admin regen full.
  */
 public final class CaveTracker {
 
     /** One scan per second is enough: you cannot cross a chunk faster in a cave. */
     private static final int SCAN_INTERVAL_TICKS = 20;
-    /** Radius (in chunks) unlocked around an underground player. */
-    private static final int UNLOCK_RADIUS_CHUNKS = 2;
 
     private CaveTracker() {}
 
@@ -61,11 +60,28 @@ public final class CaveTracker {
             return;
         }
 
+        // Radius in chunks unlocked around an underground player
+        // (caves.revealRadiusChunks).
+        int radius = CavesServerConfig.REVEAL_RADIUS_CHUNKS.get();
         ChunkPos center = player.chunkPosition();
-        for (int dx = -UNLOCK_RADIUS_CHUNKS; dx <= UNLOCK_RADIUS_CHUNKS; dx++) {
-            for (int dz = -UNLOCK_RADIUS_CHUNKS; dz <= UNLOCK_RADIUS_CHUNKS; dz++) {
-                mgr.unlockCave(level, band, center.x + dx, center.z + dz);
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                unlockIfLoaded(mgr, level, band, center.x + dx, center.z + dz);
             }
         }
+    }
+
+    /**
+     * Only loaded chunks are unlocked: the render queue drops a chunk that
+     * is not loaded, which would leave its unlock pending forever. With a
+     * radius beyond the server's view distance the farther chunks are
+     * simply retried on the next scan, once they are loaded.
+     */
+    private static void unlockIfLoaded(MapManager mgr, ServerLevel level, int band, int cx, int cz) {
+        if (level.getChunkSource().getChunkNow(cx, cz) == null) {
+            return;
+        }
+
+        mgr.unlockCave(level, band, cx, cz);
     }
 }

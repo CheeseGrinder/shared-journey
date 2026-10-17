@@ -412,6 +412,14 @@ public class MapSettingsScreen extends Screen {
                 ops.bandMax,
                 MapSettingsScreen::bandLabel,
                 v -> ops.bandMax = v));
+        rows.add(intSlider(
+                Component.translatable(Lang.SETTINGS_SERVER_REVEAL_RADIUS),
+                Lang.configTooltip("revealRadiusChunks"),
+                1,
+                16,
+                ops.revealRadius,
+                v -> Component.translatable(Lang.UNIT_CHUNKS, v),
+                v -> ops.revealRadius = v));
 
         rows.add(header(Component.translatable(Lang.SETTINGS_SERVER_SYNC)));
         rows.add(intSlider(
@@ -588,6 +596,7 @@ public class MapSettingsScreen extends Screen {
         final Set<MapLayer> defaultLayers = new LinkedHashSet<>();
         int bandMin;
         int bandMax;
+        int revealRadius;
         int pushRadius;
         int maxKb;
         int syncRate;
@@ -632,6 +641,7 @@ public class MapSettingsScreen extends Screen {
             List<Integer> bands = p.caveBands();
             s.bandMin = bands.isEmpty() ? -4 : Collections.min(bands);
             s.bandMax = bands.isEmpty() ? 7 : Collections.max(bands);
+            s.revealRadius = p.caveRevealRadiusChunks();
             s.pushRadius = p.pushRadiusRegions();
             s.maxKb = p.maxKbPerSecondPerPlayer();
             s.syncRate = p.syncRateTicks();
@@ -675,6 +685,7 @@ public class MapSettingsScreen extends Screen {
                     defaultLayers.stream().map(MapLayer::name).toList(),
                     shared,
                     bands,
+                    revealRadius,
                     pushRadius,
                     maxKb,
                     syncRate,

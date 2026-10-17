@@ -55,6 +55,7 @@ public final class OpsConfigPayloads {
             List<String> defaultLayers,
             List<String> sharedLayers,
             List<Integer> caveBands,
+            int caveRevealRadiusChunks,
             int pushRadiusRegions,
             int maxKbPerSecondPerPlayer,
             int syncRateTicks,
@@ -76,6 +77,7 @@ public final class OpsConfigPayloads {
             writeStringList(buf, p.sharedLayers);
             buf.writeVarInt(p.caveBands.size());
             p.caveBands.forEach(buf::writeVarInt);
+            buf.writeVarInt(p.caveRevealRadiusChunks);
             buf.writeVarInt(p.pushRadiusRegions);
             buf.writeVarInt(p.maxKbPerSecondPerPlayer);
             buf.writeVarInt(p.syncRateTicks);
@@ -101,6 +103,7 @@ public final class OpsConfigPayloads {
                     defaultLayers,
                     sharedLayers,
                     caveBands,
+                    buf.readVarInt(),
                     buf.readVarInt(),
                     buf.readVarInt(),
                     buf.readVarInt(),

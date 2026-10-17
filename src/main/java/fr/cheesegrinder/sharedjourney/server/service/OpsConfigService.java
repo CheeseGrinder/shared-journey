@@ -1,5 +1,6 @@
 package fr.cheesegrinder.sharedjourney.server.service;
 
+import fr.cheesegrinder.sharedjourney.common.config.CavesServerConfig;
 import fr.cheesegrinder.sharedjourney.common.config.LayersServerConfig;
 import fr.cheesegrinder.sharedjourney.common.config.PrivacyServerConfig;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
@@ -73,6 +74,7 @@ public final class OpsConfigService {
                 new ArrayList<>(LayersServerConfig.DEFAULT_LAYERS.get()),
                 new ArrayList<>(LayersServerConfig.SHARED_LAYERS.get()),
                 new ArrayList<>(LayersServerConfig.CAVE_BANDS.get()),
+                CavesServerConfig.REVEAL_RADIUS_CHUNKS.get(),
                 SyncServerConfig.PUSH_RADIUS_REGIONS.get(),
                 SyncServerConfig.MAX_KB_PER_SECOND_PER_PLAYER.get(),
                 SyncServerConfig.SYNC_RATE_TICKS.get(),
@@ -101,6 +103,7 @@ public final class OpsConfigService {
         LayersServerConfig.DEFAULT_LAYERS.set(defaultLayers);
         LayersServerConfig.SHARED_LAYERS.set(sharedLayers);
         LayersServerConfig.CAVE_BANDS.set(caveBands);
+        CavesServerConfig.REVEAL_RADIUS_CHUNKS.set(Math.clamp(p.caveRevealRadiusChunks(), 1, 16));
 
         SyncServerConfig.PUSH_RADIUS_REGIONS.set(Math.clamp(p.pushRadiusRegions(), 0, 8));
         SyncServerConfig.MAX_KB_PER_SECOND_PER_PLAYER.set(Math.clamp(p.maxKbPerSecondPerPlayer(), 32, 8192));

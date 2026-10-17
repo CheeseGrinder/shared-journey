@@ -23,6 +23,12 @@ settings edited through the in-game screen apply live and are saved on close.
 | `sharedLayers` | list `namespace:dim=L1,L2`, default `minecraft:overworld=DAY,NIGHT,TOPO,BIOME,CAVE`, `minecraft:the_nether=CAVE`, `minecraft:the_end=DAY` | valid dimension id, valid built-in layer names; empty layer list allowed (= all disabled) | Active layers per dimension |
 | `caveBands` | list of int, `-4..7` | each −8..20 | Cave bands rendered (`floor(y/16)`); must cover the world height |
 
+### `[caves]`
+
+| Key | Default | Range | Effect |
+|-----|---------|-------|--------|
+| `revealRadiusChunks` | 5 | 1–16 | Radius in chunks revealed on the CAVE layer around an underground player, on the band they are in (5 = 11×11 chunks); see [04 CAV-02](04-privacy-and-anti-exploit.md) |
+
 ### `[engine]`
 
 | Key | Default | Range | Effect |

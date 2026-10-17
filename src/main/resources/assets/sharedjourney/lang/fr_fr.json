@@ -134,6 +134,7 @@
   "sharedjourney.settings.server.cave_bands": "Bandes Y de la couche CAVE",
   "sharedjourney.settings.server.band_min": "Bande la plus basse",
   "sharedjourney.settings.server.band_max": "Bande la plus haute",
+  "sharedjourney.settings.server.reveal_radius": "Rayon de révélation",
   "sharedjourney.settings.server.sync": "Synchronisation",
   "sharedjourney.settings.server.push_radius": "Rayon de push (régions)",
   "sharedjourney.settings.server.max_kb": "Bande passante par joueur",
@@ -209,7 +210,14 @@
   "sharedjourney.configuration.caveBands.tooltip": "Bandes Y rendues pour la couche CAVE (bande = floor(y/16)). Ex : -1 → y=-16..-1.",
   "sharedjourney.configuration.caveBands.button": "Modifier",
 
-  "sharedjourney.configuration.engine": "Moteur",
+  "sharedjourney.configuration.caves": "Grottes",
+  "sharedjourney.configuration.caves.tooltip": "Jusqu'où la couche CAVE est révélée autour des joueurs sous terre.",
+  "sharedjourney.configuration.caves.button": "Configurer",
+
+  "sharedjourney.configuration.revealRadiusChunks": "Rayon de révélation (chunks)",
+  "sharedjourney.configuration.revealRadiusChunks.tooltip": "Rayon en chunks révélé sur la couche CAVE autour d'un joueur sous terre, sur la bande où il se trouve. 5 = 11x11 chunks. Un rayon plus grand montre plus de grottes alentour (derrière les murs aussi) et fait rendre plus de chunks la première fois qu'une zone est visitée.",
+
+  "sharedjourney.configuration.engine":"Moteur",
   "sharedjourney.configuration.engine.tooltip": "Paramètres de performance du moteur de rendu.",
   "sharedjourney.configuration.engine.button": "Configurer",
 

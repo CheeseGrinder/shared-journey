@@ -96,6 +96,7 @@ public final class Lang {
     public static final String SETTINGS_SERVER_BANDS = key("settings.server.cave_bands");
     public static final String SETTINGS_SERVER_BAND_MIN = key("settings.server.band_min");
     public static final String SETTINGS_SERVER_BAND_MAX = key("settings.server.band_max");
+    public static final String SETTINGS_SERVER_REVEAL_RADIUS = key("settings.server.reveal_radius");
     public static final String SETTINGS_SERVER_SYNC = key("settings.server.sync");
     public static final String SETTINGS_SERVER_PUSH_RADIUS = key("settings.server.push_radius");
     public static final String SETTINGS_SERVER_MAX_KB = key("settings.server.max_kb");

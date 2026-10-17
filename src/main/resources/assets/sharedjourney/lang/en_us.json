@@ -134,6 +134,7 @@
   "sharedjourney.settings.server.cave_bands": "CAVE layer Y bands",
   "sharedjourney.settings.server.band_min": "Lowest band",
   "sharedjourney.settings.server.band_max": "Highest band",
+  "sharedjourney.settings.server.reveal_radius": "Reveal radius",
   "sharedjourney.settings.server.sync": "Synchronization",
   "sharedjourney.settings.server.push_radius": "Push radius (regions)",
   "sharedjourney.settings.server.max_kb": "Bandwidth per player",
@@ -208,6 +209,13 @@
   "sharedjourney.configuration.caveBands": "Cave Bands",
   "sharedjourney.configuration.caveBands.tooltip": "Y-bands rendered for the CAVE layer (band = floor(y/16)). Example: -1 → y=-16..-1.",
   "sharedjourney.configuration.caveBands.button": "Edit list",
+
+  "sharedjourney.configuration.caves": "Caves",
+  "sharedjourney.configuration.caves.tooltip": "How far the CAVE layer is revealed around players underground.",
+  "sharedjourney.configuration.caves.button": "Configure",
+
+  "sharedjourney.configuration.revealRadiusChunks": "Reveal Radius (chunks)",
+  "sharedjourney.configuration.revealRadiusChunks.tooltip": "Radius in chunks revealed on the CAVE layer around a player underground, on the band he is in. 5 = 11x11 chunks. A larger radius shows more of the surrounding caves (behind walls too) and renders more chunks the first time an area is visited.",
 
   "sharedjourney.configuration.engine": "Engine",
   "sharedjourney.configuration.engine.tooltip": "Rendering engine performance settings.",
