@@ -245,6 +245,13 @@ public class MapSettingsScreen extends Screen {
                 MinimapClientConfig.MINIMAP_SHAPE.get(),
                 s -> Component.translatable(Lang.settingsValue(s.name())),
                 MinimapClientConfig.MINIMAP_SHAPE::set));
+        rows.add(cycle(
+                Component.translatable(Lang.SETTINGS_MINIMAP_FRAME),
+                Lang.configTooltip("frameTheme"),
+                List.of(MinimapClientConfig.FrameTheme.values()),
+                MinimapClientConfig.FRAME_THEME.get(),
+                t -> Component.translatable(Lang.settingsValue(t.name())),
+                MinimapClientConfig.FRAME_THEME::set));
         rows.add(configToggle(Lang.ACTION_ROTATE_MAP, "rotateWithPlayer", MinimapClientConfig.MINIMAP_ROTATE));
         rows.add(configToggle(Lang.SETTINGS_MINIMAP_COORDS, "showCoordinates", MinimapClientConfig.SHOW_COORDS));
         // Zoom in x0.25 notches (0.25 to 4.0 pixels per block).

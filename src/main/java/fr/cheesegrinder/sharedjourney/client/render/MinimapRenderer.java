@@ -9,6 +9,7 @@ import fr.cheesegrinder.sharedjourney.api.client.event.MapRenderEvent;
 import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapFullscreenBridge;
 import fr.cheesegrinder.sharedjourney.client.config.MapClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig;
+import fr.cheesegrinder.sharedjourney.client.config.MinimapClientConfig.FrameTheme;
 import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
@@ -59,16 +60,16 @@ public final class MinimapRenderer {
 
     private static final float ZOOM_MIN = 0.25f;
     private static final float ZOOM_MAX = 4.0f;
-    private static final int CIRCLE_SEGMENTS = 64;
+    static final int CIRCLE_SEGMENTS = 64;
 
     /**
      * Unit circle vertices for the round shapes (disc, rings, corner
      * mask), precomputed once: the shapes are re-emitted every frame and
      * recomputing 65+ cos/sin pairs per ring per frame added up.
      */
-    private static final float[] CIRCLE_COS = new float[CIRCLE_SEGMENTS + 1];
+    static final float[] CIRCLE_COS = new float[CIRCLE_SEGMENTS + 1];
 
-    private static final float[] CIRCLE_SIN = new float[CIRCLE_SEGMENTS + 1];
+    static final float[] CIRCLE_SIN = new float[CIRCLE_SEGMENTS + 1];
 
     static {
         for (int i = 0; i <= CIRCLE_SEGMENTS; i++) {
@@ -382,16 +383,18 @@ public final class MinimapRenderer {
         int half = size / 2;
         int cx = x + half, cy = y + half;
 
-        // Gray background (not-yet-received areas); the round border is
-        // drawn last, on top of the content.
+        // Gray background (not-yet-received areas); the texture frame
+        // (MinimapFrame) is drawn last, on top of the content. Every theme
+        // is opaque over the first 0.5 px outside the map edge, which is
+        // all the round background reaches.
+        FrameTheme frameTheme = MinimapClientConfig.FRAME_THEME.get();
         if (circle) {
             gg.flush();
-            fillCircle(gg, cx, cy, half + 1, BACKGROUND);
+            fillCircle(gg, cx, cy, half + 0.5f, BACKGROUND);
             // Depth mask: the square's corners (outside the circle) become
             // "in front of" the content, which then fails the depth test there.
             maskCorners(gg, cx, cy, half, half + 2);
         } else {
-            gg.fill(x - 1, y - 1, x + size + 1, y + size + 1, 0xFF202020);
             gg.fill(x, y, x + size, y + size, BACKGROUND);
         }
 
@@ -568,7 +571,9 @@ public final class MinimapRenderer {
             // the corners' depth so it doesn't interfere with later layers.
             gg.flush();
             resetDepth(gg, x - 2, y - 2, x + size + 2, y + size + 2);
-            drawMapBorder(gg, cx, cy, half);
+            MinimapFrame.drawRound(gg, cx, cy, half, frameTheme);
+        } else {
+            MinimapFrame.drawSquare(gg, x, y, size, frameTheme);
         }
 
         // ---- Waypoints in screen space: constant size, and pinned ON the
@@ -1063,30 +1068,6 @@ public final class MinimapRenderer {
         }
         BufferUploader.drawWithShader(buf.buildOrThrow());
         ringBand(mat, cx, cy, solid, argb, radius + FEATHER / 2f, argb & 0x00FFFFFF);
-        endShapeState();
-    }
-
-    /**
-     * Two-tone map border: a 1 px black liner on the map side, then a
-     * gray band outside, every edge feathered (alpha or color ramps
-     * interpolated per-pixel by the position/color shader — a cheap
-     * antialias with no framebuffer or MSAA involved). The black liner
-     * starts a quarter px INSIDE the mask radius so the per-pixel jagged
-     * depth-mask cut of the content hides under it.
-     */
-    private static void drawMapBorder(GuiGraphics gg, float cx, float cy, float half) {
-        Matrix4f mat = gg.pose().last().pose();
-        prepareShapeState();
-        int black = 0xFF141414;
-        int gray = 0xFFA8A8A8;
-        float rIn = half - 0.25f;
-        float rMid = half + 0.25f;
-        float rOut = half + 1.5f;
-        ringBand(mat, cx, cy, rIn - FEATHER, black & 0x00FFFFFF, rIn, black);
-        ringBand(mat, cx, cy, rIn, black, rMid - 0.25f, black);
-        ringBand(mat, cx, cy, rMid - 0.25f, black, rMid + 0.25f, gray);
-        ringBand(mat, cx, cy, rMid + 0.25f, gray, rOut, gray);
-        ringBand(mat, cx, cy, rOut, gray, rOut + FEATHER, gray & 0x00FFFFFF);
         endShapeState();
     }
 

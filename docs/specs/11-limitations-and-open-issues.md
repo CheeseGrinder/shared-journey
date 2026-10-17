@@ -42,6 +42,7 @@ Three kinds of entries, kept separate:
 | B-12 | Cache integrity detects accidental or casual tampering of a client's own cache files; it is not authentication against a malicious client (which could compute any hash). It protects the client's display consistency, not the server. | design |
 | B-13 | Player positions (dimension, x, z) of every non-hidden player are broadcast to everyone without distance limit — by design, that is the shared-map feature. Hiding is opt-in. | design |
 | B-14 | Server engine settings (`engine.*`) and the worker count are file-only and read at start; there is no in-game editor for them. | `OpsConfigService` |
+| B-15 | Minimap frame textures ([07 §2.1.1](07-client-ui.md)): straight square edges are stretched along their side (themes are uniform along the edge, no repeating pattern or per-edge ornaments); the round strip has finite angular resolution (512 texels), fine for smooth materials but it blurs sharp angular detail on very large minimaps; themes are bundled only (a resource pack can replace the PNGs but not the per-theme band geometry, which is fixed in code); the visual match of `CLASSIC` with the former procedural border was checked on a simulation of the sampling, not in game. | `MinimapFrame`, `tools/MinimapFrameGenerator.java` |
 
 ## C. Documentation gaps
 

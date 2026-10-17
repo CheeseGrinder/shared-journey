@@ -72,6 +72,7 @@ public final class Lang {
     public static final String SETTINGS_MINIMAP_SIZE = key("settings.minimap.size");
     public static final String SETTINGS_MINIMAP_CORNER = key("settings.minimap.corner");
     public static final String SETTINGS_MINIMAP_SHAPE = key("settings.minimap.shape");
+    public static final String SETTINGS_MINIMAP_FRAME = key("settings.minimap.frame");
     public static final String SETTINGS_MINIMAP_COORDS = key("settings.minimap.coords");
     public static final String SETTINGS_MINIMAP_ZOOM = key("settings.minimap.zoom_default");
 

@@ -81,6 +81,7 @@ settings edited through the in-game screen apply live and are saved on close.
 | `size` | 128 | 64–320 px |
 | `corner` | `TOP_RIGHT` | `TOP_LEFT`, `TOP_RIGHT`, `BOTTOM_LEFT`, `BOTTOM_RIGHT` |
 | `shape` | `CIRCLE` | `CIRCLE`, `SQUARE` |
+| `frameTheme` | `CLASSIC` | `CLASSIC`, `STONE`, `WOOD`, `THIN` — texture frame ([07 §2.1.1](07-client-ui.md)) |
 | `rotateWithPlayer` | false | — |
 | `showCoordinates` | true | — |
 | `zoomDefault` | 1.0 | 0.25–4.0 (px per block, session start) |

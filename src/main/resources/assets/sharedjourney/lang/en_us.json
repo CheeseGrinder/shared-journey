@@ -114,6 +114,7 @@
   "sharedjourney.settings.minimap.size": "Size",
   "sharedjourney.settings.minimap.corner": "Screen corner",
   "sharedjourney.settings.minimap.shape": "Shape",
+  "sharedjourney.settings.minimap.frame": "Frame theme",
   "sharedjourney.settings.minimap.coords": "Show coordinates",
   "sharedjourney.settings.minimap.zoom_default": "Session start zoom",
   "sharedjourney.settings.radar.enabled": "Entity radar",
@@ -154,6 +155,10 @@
   "sharedjourney.settings.value.bottom_right": "Bottom right",
   "sharedjourney.settings.value.circle": "Circle",
   "sharedjourney.settings.value.square": "Square",
+  "sharedjourney.settings.value.classic": "Classic",
+  "sharedjourney.settings.value.stone": "Stone",
+  "sharedjourney.settings.value.wood": "Wood",
+  "sharedjourney.settings.value.thin": "Thin",
   "sharedjourney.settings.value.server": "Server",
   "sharedjourney.settings.value.client": "Client",
   "sharedjourney.settings.value.off": "Off",
@@ -271,6 +276,9 @@
 
   "sharedjourney.configuration.shape": "Shape",
   "sharedjourney.configuration.shape.tooltip": "Minimap shape: round or square.",
+
+  "sharedjourney.configuration.frameTheme": "Frame Theme",
+  "sharedjourney.configuration.frameTheme.tooltip": "Texture theme of the minimap frame: classic (default), stone, wood or thin.",
 
   "sharedjourney.configuration.rotateWithPlayer": "Rotate with Player",
   "sharedjourney.configuration.rotateWithPlayer.tooltip": "Rotate the minimap to match the player's look direction (false = north always up).",

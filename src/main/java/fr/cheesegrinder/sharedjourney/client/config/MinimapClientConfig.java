@@ -15,6 +15,9 @@ public final class MinimapClientConfig {
     /** Dynamic minimap rotation following the player's view (spec §6.1). */
     public static ModConfigSpec.BooleanValue MINIMAP_ROTATE;
 
+    /** Texture theme of the minimap frame (see {@code MinimapFrame}). */
+    public static ModConfigSpec.EnumValue<FrameTheme> FRAME_THEME;
+
     public static ModConfigSpec.BooleanValue SHOW_COORDS;
 
     /** Zoom (screen pixels per block) the minimap starts each session with. */
@@ -34,6 +37,18 @@ public final class MinimapClientConfig {
         SQUARE
     }
 
+    /**
+     * Bundled minimap frame themes. The lower-case name is the texture
+     * prefix: {@code textures/gui/minimap_frame/<name>_round.png} and
+     * {@code <name>_square.png}.
+     */
+    public enum FrameTheme {
+        CLASSIC,
+        STONE,
+        WOOD,
+        THIN
+    }
+
     private MinimapClientConfig() {}
 
     static void define(ModConfigSpec.Builder b) {
@@ -42,6 +57,8 @@ public final class MinimapClientConfig {
         MINIMAP_SIZE = b.comment("Minimap size in screen pixels.").defineInRange("size", 128, 64, 320);
         MINIMAP_CORNER = b.defineEnum("corner", Corner.TOP_RIGHT);
         MINIMAP_SHAPE = b.comment("Minimap shape: circle or square.").defineEnum("shape", Shape.CIRCLE);
+        FRAME_THEME = b.comment("Minimap frame theme: classic, stone, wood or thin.")
+                .defineEnum("frameTheme", FrameTheme.CLASSIC);
         MINIMAP_ROTATE = b.comment("The map rotates with the player (otherwise fixed north).")
                 .define("rotateWithPlayer", false);
         SHOW_COORDS = b.define("showCoordinates", true);

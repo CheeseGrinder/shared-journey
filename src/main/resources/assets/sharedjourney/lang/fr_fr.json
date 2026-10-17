@@ -114,6 +114,7 @@
   "sharedjourney.settings.minimap.size": "Taille",
   "sharedjourney.settings.minimap.corner": "Coin de l'écran",
   "sharedjourney.settings.minimap.shape": "Forme",
+  "sharedjourney.settings.minimap.frame": "Thème du cadre",
   "sharedjourney.settings.minimap.coords": "Afficher les coordonnées",
   "sharedjourney.settings.minimap.zoom_default": "Zoom en début de session",
   "sharedjourney.settings.radar.enabled": "Radar d'entités",
@@ -154,6 +155,10 @@
   "sharedjourney.settings.value.bottom_right": "Bas droite",
   "sharedjourney.settings.value.circle": "Cercle",
   "sharedjourney.settings.value.square": "Carré",
+  "sharedjourney.settings.value.classic": "Classique",
+  "sharedjourney.settings.value.stone": "Pierre",
+  "sharedjourney.settings.value.wood": "Bois",
+  "sharedjourney.settings.value.thin": "Fin",
   "sharedjourney.settings.value.server": "Serveur",
   "sharedjourney.settings.value.client": "Client",
   "sharedjourney.settings.value.off": "Désactivée",
@@ -271,6 +276,9 @@
 
   "sharedjourney.configuration.shape": "Forme",
   "sharedjourney.configuration.shape.tooltip": "Forme de la minimap : ronde ou carrée.",
+
+  "sharedjourney.configuration.frameTheme": "Thème du cadre",
+  "sharedjourney.configuration.frameTheme.tooltip": "Thème de texture du cadre de la minimap : classique (défaut), pierre, bois ou fin.",
 
   "sharedjourney.configuration.rotateWithPlayer": "Tourner avec le joueur",
   "sharedjourney.configuration.rotateWithPlayer.tooltip": "Fait tourner la minimap dans le sens du regard (désactivé = nord toujours en haut).",

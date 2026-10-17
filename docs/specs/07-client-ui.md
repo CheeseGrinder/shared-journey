@@ -29,11 +29,25 @@ Registered as a GUI layer above the debug overlay. Hidden when: no player, GUI h
 | ID | Requirement |
 |----|-------------|
 | MM-01 | Size `minimap.size` (64–320, default 128) px square or circle (`minimap.shape`), anchored at `minimap.corner` (default TOP_RIGHT) with a 6 px margin. Top-anchored: 11 px reserved above for the time label. |
-| MM-02 | Background colour `#36393F` (unreceived areas); square gets a 1 px dark frame; circle gets a feathered border and a depth mask clipping the corners. |
+| MM-02 | Background colour `#36393F` (unreceived areas); the circle's background disc reaches 0.5 px past the map edge, and a depth mask clips the content's corners to a disc. The border is a texture frame (MM-07 to MM-09 and MM-12), drawn on top of the content. |
 | MM-03 | The centre is the player's **interpolated** position (partial tick), so movement is smooth rather than 20 Hz. |
 | MM-04 | While one block spans ≥ 1 physical pixel (`zoom × guiScale ≥ 1`), the anchor and icon positions are snapped to whole **physical** pixels (stops shimmering when walking); below that scale they glide sub-pixel. |
 | MM-05 | `rotateWithPlayer`: the content rotates around the centre so the player faces up and the arrow stays fixed; otherwise north is up and the arrow follows the yaw. Cardinal letters (N/E/S/W badges) sit 8 px inside the edge and follow the rotation. |
 | MM-06 | Region quads are drawn for all regions covering the window (a rotating square overshoots by √2); missing regions are loaded lazily and asynchronously from the disk cache ([03 ASM-05](03-sync-protocol.md)). |
+
+### 2.1.1 Frame (`MinimapFrame`)
+
+Pre-drawn textures replace the former procedural border. Textures live in
+`assets/sharedjourney/textures/gui/minimap_frame/<theme>_round.png` and `<theme>_square.png`,
+generated offline by `tools/MinimapFrameGenerator.java` (procedural description baked to PNG,
+supersampled; rerun after changing a theme).
+
+| ID | Requirement |
+|----|-------------|
+| MM-07 | **Theme.** `minimap.frameTheme` (`CLASSIC` default, `STONE`, `WOOD`, `THIN`) selects the texture pair; it applies live from the settings screen (Minimap tab, "Frame theme"). `CLASSIC` reproduces the former look: round = 1 px black liner on the map side + gray band, feathered over 0.75 px; square = 1 px `#202020` outline. |
+| MM-08 | **Band geometry.** Each theme has a band `thickness` and an `inset` (GUI px): the band overlaps the map by `inset` px (hiding the jagged cut of the circular depth mask and the background disc) and extends `thickness − inset` px outside it. Round: classic 3.25/1.0, stone and wood 4/1, thin 2.25/1. Square (integer px so edges stay pixel aligned): classic 1/0, stone and wood 4/1, thin 2/1. The frame is drawn after the content and the depth reset, before waypoints, markers, the player arrow and labels, and does **not** rotate with `rotateWithPlayer`. |
+| MM-09 | **Round frame = polar strip.** The `*_round.png` texture is 512 × 32 texels: X = angle (one seamless turn), Y = radius from the inner edge (first row) to the outer edge (last row); the first and last rows are fully transparent. It is wrapped on a 64-segment ring mesh (the same polygon as the clipping mask) at the exact on-screen radii, sampled with LINEAR filtering, so the circle is antialiased by the sampler at any `minimap.size` and GUI scale rather than being a bitmap resampled. Stone and wood bevels are lit from the top-left (the lighting is baked per angle). |
+| MM-12 | **Square frame = 9-slice.** The `*_square.png` texture is a 9-slice without centre authored at 4 texels per GUI px: corner size `thickness × 4` texels, stretched middle of 8 texels per edge (so edges are uniform along their length; corners are mitered). It is drawn as 8 quads at whole GUI px positions with LINEAR filtering. |
 
 ### 2.2 Zoom
 
@@ -71,7 +85,9 @@ each track their own displayed layer and cave band).
 3. Entity radar ([§4](#4-entity-radar)).
 4. Bridged plugin overlays (Create rails/trains, RNS deposits) via the JourneyMap fullscreen
    bridge, not on the CAVE layer, inside the scissor.
-5. `MapRenderEvent` overlays (public API), pose with `(0,0)` at the map's top-left.
+5. `MapRenderEvent` overlays (public API), pose with `(0,0)` at the map's top-left. The
+   texture frame ([§2.1.1](#211-frame-minimapframe)) is drawn right after, over the map edge
+   and under everything below.
 6. Declarative `MapMarker`s (API), then waypoints (constant screen size, **pinned to the
    border** when out of view: radial on a circle, clamped on a square), then other players'
    skin heads (8 px, white border, pinned like waypoints), then the player arrow.
@@ -180,7 +196,7 @@ Client tabs apply **live**; the file is saved once on close. Tabs:
 
 | Tab | Visible | Content |
 |-----|---------|---------|
-| Minimap | always | enabled, size, corner, shape, rotate, coordinates, default zoom (0.25 notches) |
+| Minimap | always | enabled, size, corner, shape, frame theme (cycle: Classic, Stone, Wood, Thin), rotate, coordinates, default zoom (0.25 notches) |
 | Radar | always | enabled, radius (label shows the server cap), mob heads, players, hostile, animals, pets, villagers, hide-from-map (sent immediately) |
 | Map | always | default layer, auto layer, cave auto-switch, remember layer, chunk grid, disk cache |
 | Waypoints | always | show waypoints, names, temp radius, beacons, beacon min/max distance, death waypoints |
@@ -229,3 +245,8 @@ before the handshake never writes server-managed waypoints to its local file).
 6. Open the map during a regen: purple veil on painted, unfinished chunks and a progress bar.
 7. As a non-OP the settings screen has no Server tab and no Debug button.
 8. Resize the window with the map open: addon buttons are rebuilt in their zones.
+9. Settings, Minimap tab: cycle "Frame theme" through Classic / Stone / Wood / Thin with both
+   shapes and at GUI scales 1 to 4: the frame follows live, circle edges stay smooth (no
+   stair-stepping), square edges stay pixel crisp, nothing overlaps the time label above a
+   top-anchored map, and Classic looks like the former border (black liner, gray band /
+   dark 1 px outline).
