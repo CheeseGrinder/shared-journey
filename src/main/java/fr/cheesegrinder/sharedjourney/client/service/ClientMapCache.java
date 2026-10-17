@@ -119,12 +119,21 @@ public final class ClientMapCache {
      * column's chunk has no synced data yet.
      */
     public static HoverInfo hoverInfo(int wx, int wz) {
+        return hoverInfo(MapLayer.INFO, 0, wx, wz);
+    }
+
+    /** Hover info of a column on one CAVE band (floor block and height), from its INFO_CAVE sidecar. */
+    public static HoverInfo caveHoverInfo(int band, int wx, int wz) {
+        return hoverInfo(MapLayer.INFO_CAVE, band, wx, wz);
+    }
+
+    private static HoverInfo hoverInfo(MapLayer layer, int band, int wx, int wz) {
         var mc = Minecraft.getInstance();
         if (mc.level == null) {
             return null;
         }
 
-        RegionKey key = RegionKey.of(mc.level.dimension(), MapLayer.INFO, 0, wx >> 4, wz >> 4);
+        RegionKey key = RegionKey.of(mc.level.dimension(), layer, band, wx >> 4, wz >> 4);
         HoverRegionData data = HOVER_REGIONS.get(key);
         if (data == null) {
             if (HOVER_MISSES.contains(key)) {
@@ -148,6 +157,27 @@ public final class ClientMapCache {
         }
 
         return new HoverInfo(column.y(), column.biomeId(), column.blockId());
+    }
+
+    /**
+     * Does the chunk hold painted content in the cached image of region
+     * {@code key}? False when the region is not cached; an image without a
+     * content mask counts as painted.
+     */
+    public static boolean isChunkPainted(RegionKey key, int chunkX, int chunkZ) {
+        Region region = getOrLoad(key);
+        if (region == null) {
+            return false;
+        }
+
+        long[] mask = region.contentMask();
+        if (mask == null) {
+            return true;
+        }
+
+        int bit = Math.floorMod(chunkZ, RegionKey.REGION_CHUNKS) * RegionKey.REGION_CHUNKS
+                + Math.floorMod(chunkX, RegionKey.REGION_CHUNKS);
+        return (mask[bit >> 6] & (1L << (bit & 63))) != 0;
     }
 
     /**
@@ -249,7 +279,8 @@ public final class ClientMapCache {
     // ------------------------------------------------------------------ assembly
 
     public static void acceptFragment(RegionKey key, long version, int part, int totalParts, byte[] data) {
-        if (versionOf(key) >= version && (REGIONS.containsKey(key) || key.layer() == MapLayer.INFO)) {
+        if (versionOf(key) >= version
+                && (REGIONS.containsKey(key) || key.layer().isData())) {
             return;
         }
 
@@ -281,7 +312,7 @@ public final class ClientMapCache {
             }
 
             // Hover sidecar: no texture, just persisted and re-parsed lazily.
-            if (key.layer() == MapLayer.INFO) {
+            if (key.layer().isData()) {
                 DiskCache.store(key, version, blob);
                 HOVER_REGIONS.remove(key);
                 HOVER_MISSES.remove(key);

@@ -306,6 +306,24 @@ public final class SyncService {
 
     // ------------------------------------------------------------------ fullscreen requests
 
+    /**
+     * Layers a client may request on demand: INFO (surface hover sidecar) is
+     * always requestable; INFO_CAVE (per-band hover sidecar, never pushed
+     * by the periodic delta) only where CAVE is active; display layers
+     * (built-in AND custom) must be active for the dimension.
+     */
+    private static boolean isRequestable(MapLayer layer, Set<MapLayer> active) {
+        if (layer == MapLayer.INFO) {
+            return true;
+        }
+
+        if (layer == MapLayer.INFO_CAVE) {
+            return active.contains(MapLayer.CAVE);
+        }
+
+        return active.contains(layer);
+    }
+
     public static void handleRegionRequest(Player playerRaw, RegionSyncPayloads.RegionRequestPayload payload) {
         if (!(playerRaw instanceof ServerPlayer player)) {
             return;
@@ -331,9 +349,7 @@ public final class SyncService {
                 continue;
             }
 
-            // INFO (hover sidecar) is always requestable; display layers
-            // (built-in AND custom) must be active for the dimension.
-            if (key.layer() != MapLayer.INFO && !active.contains(key.layer())) {
+            if (!isRequestable(key.layer(), active)) {
                 continue;
             }
 

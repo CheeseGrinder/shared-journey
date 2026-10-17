@@ -17,7 +17,9 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -201,7 +203,7 @@ public final class DiskCache {
         String needle = layerName.toLowerCase(Locale.ROOT);
         int[] deleted = {0};
         var removedKeys =
-                needle.equals("all") ? index.snapshot().keySet().stream().toList() : index.removeLayer(needle);
+                needle.equals("all") ? index.snapshot().keySet().stream().toList() : removeLayerWithSidecar(needle);
         if (needle.equals("all")) {
             removedKeys.forEach(index::remove);
         }
@@ -216,6 +218,16 @@ public final class DiskCache {
         }
         flushIndex();
         return deleted[0];
+    }
+
+    /** The entries of a layer, plus the per-band hover sidecars when purging CAVE. */
+    private static List<RegionKey> removeLayerWithSidecar(String needle) {
+        List<RegionKey> removed = new ArrayList<>(index.removeLayer(needle));
+        if (needle.equals("cave")) {
+            removed.addAll(index.removeLayer("info_cave"));
+        }
+
+        return removed;
     }
 
     private static Path pathOf(RegionKey key) {

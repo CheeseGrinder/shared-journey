@@ -22,11 +22,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * each band being stored and synchronized separately. Custom layers have
  * no bands.
  *
- * <p>{@link #INFO} is NOT a displayable layer: it is the hover-data sidecar
- * (surface heights, blocks, biomes per region), which rides the same
- * region pipeline (index, delta sync, disk cache) as the image layers. It
- * never appears in the server's layer settings, the layer cycling UI or
- * the admin layer command.
+ * <p>{@link #INFO} and {@link #INFO_CAVE} are NOT displayable layers: they
+ * are the hover-data sidecars (heights, blocks, biomes per region), which
+ * ride the same region pipeline (index, sync, disk cache) as the image
+ * layers. INFO holds the surface; INFO_CAVE holds the floor of one CAVE
+ * band, like the CAVE image bands it mirrors. They never appear in the
+ * server's layer settings, the layer cycling UI or the admin layer command
+ * ({@link #isData()}).
  */
 public final class MapLayer {
 
@@ -39,6 +41,7 @@ public final class MapLayer {
     public static final MapLayer BIOME = builtin("biome");
     public static final MapLayer CAVE = builtin("cave");
     public static final MapLayer INFO = builtin("info");
+    public static final MapLayer INFO_CAVE = builtin("info_cave");
 
     /**
      * Network codec: the layer id travels as a string (not an ordinal), so
@@ -110,9 +113,23 @@ public final class MapLayer {
         return id.toUpperCase(Locale.ROOT);
     }
 
-    /** One of the 5 built-in display layers or INFO (not mod-provided)? */
+    /** One of the 5 built-in display layers or a hover data layer (not mod-provided)? */
     public boolean isBuiltin() {
         return builtin;
+    }
+
+    /**
+     * A hover-data sidecar ({@link #INFO}, {@link #INFO_CAVE}) rather than
+     * a displayable layer: stored as {@code .bin}, never offered in the
+     * layer settings, cycling or commands.
+     */
+    public boolean isData() {
+        return this == INFO || this == INFO_CAVE;
+    }
+
+    /** Layers stored per vertical band: {@link #CAVE} and its hover data {@link #INFO_CAVE}. */
+    public boolean hasBands() {
+        return this == CAVE || this == INFO_CAVE;
     }
 
     public String translationKey() {
@@ -120,11 +137,11 @@ public final class MapLayer {
     }
 
     /**
-     * On-disk folder path (relative to the dimension). CAVE bands are grouped
-     * under a parent folder: "cave/<band>".
+     * On-disk folder path (relative to the dimension). Banded layers are
+     * grouped under a parent folder: "cave/<band>", "info_cave/<band>".
      */
     public String folderName(int caveBand) {
-        return this == CAVE ? "cave/" + caveBand : id;
+        return hasBands() ? id + "/" + caveBand : id;
     }
 
     @Override

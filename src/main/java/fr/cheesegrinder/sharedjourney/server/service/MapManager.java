@@ -9,6 +9,7 @@ import fr.cheesegrinder.sharedjourney.common.region.RegionHashes;
 import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
+import fr.cheesegrinder.sharedjourney.common.util.CaveFloor;
 import fr.cheesegrinder.sharedjourney.common.util.SurfaceHeight;
 import fr.cheesegrinder.sharedjourney.server.render.ChunkColorizer;
 
@@ -292,6 +293,12 @@ public final class MapManager {
                     if (writeChunk(key, cp.x, cp.z, pixels, quarantined)) {
                         touched.add(key);
                     }
+                    // Hover sidecar of the band (floor heights/blocks): same
+                    // unlock gate as the image. Deliberately NOT added to
+                    // `touched`: the clients pull it on demand, only while
+                    // they show the CAVE layer (12 bands x every region
+                    // would double the periodic push for a rarely used tooltip).
+                    writeCaveHoverChunk(level, chunk, band, quarantined);
 
                     caveUnlocks.remove(unlock);
                 }
@@ -445,7 +452,24 @@ public final class MapManager {
             }
         }
         publishHoverChunk(RegionKey.of(dim, MapLayer.INFO, 0, cx, cz), cx, cz, regionClean, touched);
+        publishCaveHoverChunks(dim, cx, cz, regionClean);
         return touched;
+    }
+
+    /**
+     * Quarantine drain of the per-band cave hover sidecars. Their keys are
+     * not returned for the sync push: like their writes, they are pulled
+     * on demand by the clients.
+     */
+    private void publishCaveHoverChunks(ResourceKey<Level> dim, int cx, int cz, boolean regionClean) {
+        if (!LayersServerConfig.layersFor(dim).contains(MapLayer.CAVE)) {
+            return;
+        }
+
+        List<RegionKey> ignored = new ArrayList<>();
+        for (int band : LayersServerConfig.CAVE_BANDS.get()) {
+            publishHoverChunk(RegionKey.of(dim, MapLayer.INFO_CAVE, band, cx, cz), cx, cz, regionClean, ignored);
+        }
     }
 
     private void publishImageChunk(RegionKey key, int cx, int cz, boolean regionClean, List<RegionKey> touched) {
@@ -606,9 +630,7 @@ public final class MapManager {
                 int y = SurfaceHeight.groundY(chunk, cp.getMinBlockX() + dx, cp.getMinBlockZ() + dz, pos);
                 heights[i] = (short) y;
                 BlockState state = chunk.getBlockState(pos);
-                blockIds[i] = state.isAir()
-                        ? ""
-                        : BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+                blockIds[i] = blockId(state);
             }
         }
 
@@ -628,6 +650,66 @@ public final class MapManager {
         }
 
         RegionKey key = RegionKey.of(level.dimension(), MapLayer.INFO, 0, cp.x, cp.z);
+        return storeHover(key, cp, heights, blockIds, biomeIds, quarantined);
+    }
+
+    /**
+     * Same as {@link #writeHoverChunk} for one CAVE band: the heights and
+     * blocks are the floor of the band's first air pocket
+     * ({@link CaveFloor}, the rule the CAVE image uses). A solid column
+     * reports the top block of the band, an open one no block. Stored in
+     * the band's INFO_CAVE sidecar.
+     */
+    private RegionKey writeCaveHoverChunk(ServerLevel level, ChunkAccess chunk, int band, boolean quarantined) {
+        ChunkPos cp = chunk.getPos();
+        short[] heights = new short[HoverRegionData.COLUMNS];
+        String[] blockIds = new String[HoverRegionData.COLUMNS];
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        for (int dz = 0; dz < 16; dz++) {
+            for (int dx = 0; dx < 16; dx++) {
+                int i = dz * 16 + dx;
+                int y = CaveFloor.floorY(chunk, cp.getMinBlockX() + dx, cp.getMinBlockZ() + dz, band, pos);
+                // The cursor is on the floor, the band top (solid) or the band bottom (open).
+                heights[i] = (short) pos.getY();
+                blockIds[i] = y == CaveFloor.OPEN ? "" : blockId(chunk.getBlockState(pos));
+            }
+        }
+
+        String[] biomeIds = new String[HoverRegionData.BIOME_CELLS];
+        for (int bz = 0; bz < 4; bz++) {
+            for (int bx = 0; bx < 4; bx++) {
+                // Center of the 4x4 cell, at its column's floor Y.
+                int dx = bx * 4 + 2;
+                int dz = bz * 4 + 2;
+                int y = heights[dz * 16 + dx];
+                biomeIds[bz * 4 + bx] = chunk.getNoiseBiome(
+                                (cp.getMinBlockX() + dx) >> 2, y >> 2, (cp.getMinBlockZ() + dz) >> 2)
+                        .unwrapKey()
+                        .map(k -> k.location().toString())
+                        .orElse("");
+            }
+        }
+
+        RegionKey key = RegionKey.of(level.dimension(), MapLayer.INFO_CAVE, band, cp.x, cp.z);
+        return storeHover(key, cp, heights, blockIds, biomeIds, quarantined);
+    }
+
+    /** Block registry id, "" for air. */
+    private static String blockId(BlockState state) {
+        if (state.isAir()) {
+            return "";
+        }
+
+        return BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+    }
+
+    /**
+     * Stores one chunk's hover data into the sidecar region {@code key}
+     * (quarantine freeze included). Returns the touched key, or null when
+     * the data is identical to what the sidecar already holds.
+     */
+    private RegionKey storeHover(
+            RegionKey key, ChunkPos cp, short[] heights, String[] blockIds, String[] biomeIds, boolean quarantined) {
         HoverRegion region = hoverRegion(key, true);
         long version;
         int localCx = Math.floorMod(cp.x, RegionKey.REGION_CHUNKS);
@@ -710,7 +792,7 @@ public final class MapManager {
     }
 
     private long publicVersionOf(RegionKey key) {
-        if (key.layer() == MapLayer.INFO) {
+        if (key.layer().isData()) {
             HoverRegion region = hoverRegion(key, false);
             if (region == null) {
                 return -1;
@@ -756,7 +838,7 @@ public final class MapManager {
             return fromIndex;
         }
 
-        if (key.layer() == MapLayer.INFO) {
+        if (key.layer().isData()) {
             HoverRegion hover = hoverRegions.get(key);
             if (hover != null) {
                 return hover.version;
@@ -795,7 +877,7 @@ public final class MapManager {
     }
 
     private byte[] publicDataOf(RegionKey key) {
-        if (key.layer() == MapLayer.INFO) {
+        if (key.layer().isData()) {
             HoverRegion region = hoverRegion(key, false);
             if (region == null) {
                 return null;
@@ -835,7 +917,7 @@ public final class MapManager {
      * hover blob for the INFO data layer (both cached until rewritten).
      */
     public byte[] dataOf(RegionKey key) {
-        if (key.layer() == MapLayer.INFO) {
+        if (key.layer().isData()) {
             return hoverBlobOf(key);
         }
 

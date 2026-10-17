@@ -24,14 +24,14 @@ public record RegionKey(ResourceKey<Level> dimension, MapLayer layer, int caveBa
         return new RegionKey(
                 dim,
                 layer,
-                layer == MapLayer.CAVE ? caveBand : 0,
+                layer.hasBands() ? caveBand : 0,
                 Math.floorDiv(chunkX, REGION_CHUNKS),
                 Math.floorDiv(chunkZ, REGION_CHUNKS));
     }
 
-    /** Spec-compliant file name: region_X_Z.png (.bin for the INFO data layer). */
+    /** Spec-compliant file name: region_X_Z.png (.bin for the INFO data layers). */
     public String fileName() {
-        String extension = layer == MapLayer.INFO ? ".bin" : ".png";
+        String extension = layer.isData() ? ".bin" : ".png";
         return "region_" + rx + "_" + rz + extension;
     }
 

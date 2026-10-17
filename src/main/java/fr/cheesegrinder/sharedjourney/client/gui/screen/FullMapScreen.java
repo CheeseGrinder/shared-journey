@@ -34,6 +34,7 @@ import fr.cheesegrinder.sharedjourney.common.network.PlayerVisibilityPayloads;
 import fr.cheesegrinder.sharedjourney.common.network.RegenPayloads;
 import fr.cheesegrinder.sharedjourney.common.network.RegionSyncPayloads;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
+import fr.cheesegrinder.sharedjourney.common.util.CaveFloor;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
 import fr.cheesegrinder.sharedjourney.common.util.SurfaceHeight;
 
@@ -898,9 +899,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     }
 
     /**
-     * Info for the hovered column: read from the local chunk if loaded
-     * (perfectly fresh), otherwise from the hover sidecars pushed by the
-     * server with the region sync — fully local, zero request.
+     * Info for the hovered column, for the DISPLAYED layer: read from the
+     * local chunk if loaded (perfectly fresh), otherwise from the hover
+     * sidecars pushed by the server — the surface one, or the band's one on
+     * the CAVE layer. Fully local: the sidecars are cached, a missing one
+     * is requested with the displayed regions.
      */
     private ClientMapCache.HoverInfo hoverInfoAt(Minecraft mc, int wx, int wz) {
         if (mc.level == null) {
@@ -908,25 +911,61 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         }
 
         LevelChunk chunk = mc.level.getChunkSource().getChunkNow(wx >> 4, wz >> 4);
+        if (layer == MapLayer.CAVE) {
+            return caveHoverInfoAt(mc, chunk, wx, wz);
+        }
+
         if (chunk != null) {
-            // Same ground rule as the server sidecar: hidden vegetation
-            // (short/tall grass...) is never reported as the surface block.
-            BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-            int top = SurfaceHeight.groundY(chunk, wx, wz, cursor);
-            BlockPos pos = cursor.immutable();
-            String biomeId = mc.level
-                    .getBiome(pos)
-                    .unwrapKey()
-                    .map(k -> k.location().toString())
-                    .orElse("");
-            BlockState state = chunk.getBlockState(pos);
-            String blockId = state.isAir()
-                    ? ""
-                    : BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-            return new ClientMapCache.HoverInfo(top, biomeId, blockId);
+            return surfaceHoverInfo(mc, chunk, wx, wz);
         }
 
         return ClientMapCache.hoverInfo(wx, wz);
+    }
+
+    private ClientMapCache.HoverInfo surfaceHoverInfo(Minecraft mc, LevelChunk chunk, int wx, int wz) {
+        // Same ground rule as the server sidecar: hidden vegetation
+        // (short/tall grass...) is never reported as the surface block.
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        int top = SurfaceHeight.groundY(chunk, wx, wz, cursor);
+        return hoverInfoOf(mc, chunk, cursor.immutable(), top, false);
+    }
+
+    /**
+     * Hover on the CAVE layer: the floor of the displayed band's first air
+     * pocket ({@link CaveFloor}, same rule as the CAVE image and its
+     * sidecar). Only where the band is painted on the map, so the tooltip
+     * never says more than the map shows.
+     */
+    private ClientMapCache.HoverInfo caveHoverInfoAt(Minecraft mc, LevelChunk chunk, int wx, int wz) {
+        int band = currentBand();
+        RegionKey bandImage = RegionKey.of(mc.level.dimension(), MapLayer.CAVE, band, wx >> 4, wz >> 4);
+        if (!ClientMapCache.isChunkPainted(bandImage, wx >> 4, wz >> 4)) {
+            return null;
+        }
+
+        if (chunk == null) {
+            return ClientMapCache.caveHoverInfo(band, wx, wz);
+        }
+
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        int floor = CaveFloor.floorY(chunk, wx, wz, band, cursor);
+        // The cursor is on the floor, the band top (solid) or the band bottom (open).
+        return hoverInfoOf(mc, chunk, cursor.immutable(), cursor.getY(), floor == CaveFloor.OPEN);
+    }
+
+    private ClientMapCache.HoverInfo hoverInfoOf(Minecraft mc, LevelChunk chunk, BlockPos pos, int y, boolean noBlock) {
+        String biomeId = mc.level
+                .getBiome(pos)
+                .unwrapKey()
+                .map(k -> k.location().toString())
+                .orElse("");
+        BlockState state = chunk.getBlockState(pos);
+        String blockId = "";
+        if (!noBlock && !state.isAir()) {
+            blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+        }
+
+        return new ClientMapCache.HoverInfo(y, biomeId, blockId);
     }
 
     private Waypoint nearestWaypoint(double mouseX, double mouseY) {
@@ -1446,8 +1485,13 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                 }
                 // Request if missing or potentially stale (throttled); the
                 // hover sidecar (INFO) rides along with the displayed layer.
+                // The CAVE band's own sidecar is never pushed by the server:
+                // it is requested here, only while that band is displayed.
                 requestIfStale(key, now, missing, knownVersions);
                 requestIfStale(new RegionKey(dim, MapLayer.INFO, 0, rx, rz), now, missing, knownVersions);
+                if (layer == MapLayer.CAVE) {
+                    requestIfStale(new RegionKey(dim, MapLayer.INFO_CAVE, band, rx, rz), now, missing, knownVersions);
+                }
             }
         }
 

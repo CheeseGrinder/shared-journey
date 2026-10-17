@@ -123,15 +123,15 @@ public final class LayersServerConfig {
             }
         }
 
-        // The INFO data layer rides the region pipeline but is not a
-        // render layer: never enabled through the config.
-        set.remove(MapLayer.INFO);
+        // The INFO data layers ride the region pipeline but are not render
+        // layers: never enabled through the config.
+        set.removeIf(MapLayer::isData);
         return set;
     }
 
     /**
-     * Valid display layer name ("DAY"... — INFO is never configurable,
-     * custom layers are not config-managed).
+     * Valid display layer name ("DAY"... — the INFO data layers are never
+     * configurable, custom layers are not config-managed).
      */
     public static boolean isValidLayer(Object o) {
         if (!(o instanceof String s)) {
@@ -140,7 +140,7 @@ public final class LayersServerConfig {
 
         try {
             MapLayer layer = MapLayer.valueOf(s.trim().toUpperCase(Locale.ROOT));
-            return layer.isBuiltin() && layer != MapLayer.INFO;
+            return layer.isBuiltin() && !layer.isData();
         } catch (IllegalArgumentException e) {
             return false;
         }

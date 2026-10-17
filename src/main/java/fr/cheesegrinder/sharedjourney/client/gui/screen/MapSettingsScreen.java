@@ -290,7 +290,7 @@ public class MapSettingsScreen extends Screen {
 
     private List<OptionRow> mapRows() {
         List<String> layerNames = MapLayer.values().stream()
-                .filter(l -> l != MapLayer.INFO)
+                .filter(l -> !l.isData())
                 .map(MapLayer::name)
                 .toList();
         String currentDefault = MapClientConfig.DEFAULT_LAYER.get().trim().toUpperCase(Locale.ROOT);
@@ -525,7 +525,7 @@ public class MapSettingsScreen extends Screen {
             for (MapLayer layer : MapLayer.values()) {
                 // Custom layers are not server-config-managed: the ops
                 // layer editor only shows the built-in display layers.
-                if (layer == MapLayer.INFO || !layer.isBuiltin()) {
+                if (layer.isData() || !layer.isBuiltin()) {
                     continue;
                 }
 
@@ -625,7 +625,7 @@ public class MapSettingsScreen extends Screen {
             ClientMapCache.layersByDim.forEach((dim, layers) -> s.layersByDim.computeIfAbsent(dim, d -> {
                 Set<MapLayer> set = new LinkedHashSet<>();
                 // Custom layers excluded: not server-config-managed.
-                layers.stream().filter(l -> l != MapLayer.INFO && l.isBuiltin()).forEach(set::add);
+                layers.stream().filter(l -> !l.isData() && l.isBuiltin()).forEach(set::add);
                 return set;
             }));
 
@@ -648,7 +648,7 @@ public class MapSettingsScreen extends Screen {
         private static void addLayer(Set<MapLayer> set, String name) {
             try {
                 MapLayer layer = MapLayer.valueOf(name.trim().toUpperCase(Locale.ROOT));
-                if (layer != MapLayer.INFO && layer.isBuiltin()) {
+                if (!layer.isData() && layer.isBuiltin()) {
                     set.add(layer);
                 }
             } catch (IllegalArgumentException ignored) {
