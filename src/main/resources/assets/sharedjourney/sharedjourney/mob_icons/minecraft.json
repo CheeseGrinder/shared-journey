@@ -1,0 +1,48 @@
+{
+  "_readme": [
+    "Framing of the radar mob icons (minimap and fullscreen map). Edit a copy in config/sharedjourney/mob_icons/*.json, or ship your own assets/<namespace>/sharedjourney/mob_icons/*.json from a mod or resource pack: files are merged field by field, later ones win. /sj icons reload re-reads them in game, /sj icons dump lists what was detected for every mob.",
+    "global.wholeModelScale: extra scale of whole-model icons (a body is much bigger than a head). global.maxFill / minFill: largest and smallest share of the icon cell a mob may span.",
+    "models: keyed by model class name, inherited by every mob rendered with that model (and by modded mobs reusing it). entities: keyed by entity type id, overrides the model entry.",
+    "Fields: scale (multiplies the natural size, 1 = a block is half a cell), rotX / rotY (degrees, tilt / turn the model), mode (auto | head | whole), headPart (part name or parent/child path of the head when detection fails), offsetX / offsetY (blocks, positive = right / down)."
+  ],
+
+  "global": {
+    "wholeModelScale": 0.5,
+    "maxFill": 0.5,
+    "minFill": 0.2
+  },
+
+  "models": {
+    "net.minecraft.client.model.CodModel": { "mode": "whole", "rotY": 90 },
+    "net.minecraft.client.model.SalmonModel": { "mode": "whole", "rotY": 90 },
+    "net.minecraft.client.model.ColorableHierarchicalModel": { "mode": "whole", "rotY": 90 },
+
+    "net.minecraft.client.model.BeeModel": { "mode": "whole" },
+    "net.minecraft.client.model.DolphinModel": { "mode": "whole" },
+    "net.minecraft.client.model.GuardianModel": { "mode": "whole" },
+    "net.minecraft.client.model.EndermiteModel": { "mode": "whole" },
+    "net.minecraft.client.model.LavaSlimeModel": { "mode": "whole" },
+    "net.minecraft.client.model.SlimeModel": { "mode": "whole" },
+    "net.minecraft.client.model.PufferfishBigModel": { "mode": "whole" },
+    "net.minecraft.client.model.PufferfishMidModel": { "mode": "whole" },
+    "net.minecraft.client.model.PufferfishSmallModel": { "mode": "whole" },
+    "net.minecraft.client.model.SilverfishModel": { "mode": "whole" },
+    "net.minecraft.client.model.WitherBossModel": { "mode": "whole" },
+    "net.minecraft.client.model.PhantomModel": { "mode": "whole", "rotX": 90 },
+
+    "net.minecraft.client.model.HorseModel": { "rotX": 65, "scale": 0.7 },
+    "net.minecraft.client.model.HoglinModel": { "rotX": 45, "scale": 0.5 },
+    "net.minecraft.client.model.LlamaModel": { "scale": 0.5 },
+    "net.minecraft.client.model.CamelModel": { "scale": 0.5 },
+    "net.minecraft.client.model.SnifferModel": { "scale": 0.5 },
+    "net.minecraft.client.model.BatModel": { "scale": 0.5 },
+    "net.minecraft.client.model.RavagerModel": { "scale": 0.5 },
+    "net.minecraft.client.model.GoatModel": { "scale": 0.7 },
+    "net.minecraft.client.model.PandaModel": { "scale": 0.7 },
+    "net.minecraft.client.model.WardenModel": { "scale": 0.7 }
+  },
+
+  "entities": {
+    "minecraft:ender_dragon": { "scale": 0.5 }
+  }
+}

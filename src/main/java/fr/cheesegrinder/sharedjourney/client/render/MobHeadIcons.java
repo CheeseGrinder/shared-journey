@@ -64,14 +64,18 @@ import java.util.TreeSet;
  *       simply not stored.</li>
  *   <li>The SCALE is fixed in pixels per block ({@link #NATURAL_SCALE}),
  *       so mobs keep their relative sizes (a bat head is smaller than a
- *       ravager's). Only the extremes are bent: frames wider than
- *       {@link #MAX_FILL} of the cell shrink to fit, frames narrower
- *       than {@link #MIN_FILL} grow to stay legible.</li>
+ *       ravager's). Whole-model icons are reduced by the global
+ *       {@code wholeModelScale} (a body is much bigger than a head) and
+ *       the per-mob {@code scale} scales down long-necked heads. Only
+ *       the extremes are bent: frames wider than the global
+ *       {@code maxFill} of the cell shrink to fit, frames narrower than
+ *       {@code minFill} grow to stay legible. All of it is read from
+ *       the JSON settings files described in {@link MobIconTweaks}.</li>
  *   <li>Mobs with no identifiable head, or a tiny one (parrot, fish),
  *       draw the whole model instead; shapes much deeper than wide
- *       (fish) are shown in profile rather than face-on.
- *       {@link MobIconTweaks} lists the models needing a tilt, a profile
- *       view or a forced whole-model framing.</li>
+ *       (fish) are shown in profile rather than face-on. The settings
+ *       files list the mobs needing a tilt, a profile view, a forced
+ *       whole-model framing or an explicit head part.</li>
  *   <li>The shared model is frozen in a neutral pose ({@code setupAnim}
  *       with all-zero parameters) before the capture — no bobbing.</li>
  * </ul>
@@ -97,12 +101,13 @@ public final class MobHeadIcons {
     /** Creation budget: at most one off-screen render per interval. */
     private static final long MIN_CREATION_INTERVAL_NANOS = 15_000_000L;
 
-    /** Natural icon scale: cell pixels per block (one block = half a cell). */
+    /**
+     * Natural icon scale: cell pixels per block (one block = half a cell).
+     * The tuning around it (whole-model reduction, smallest and largest
+     * share of the cell) lives in the mob icon settings files, see
+     * {@link MobIconTweaks}.
+     */
     private static final float NATURAL_SCALE = MobIconAtlas.CELL / 2f;
-    /** Largest share of the cell a frame may span before shrinking to fit. */
-    private static final float MAX_FILL = 0.88f;
-    /** Smallest share of the cell a frame may span before growing (tiny mobs). */
-    private static final float MIN_FILL = 0.2f;
 
     /** Head span (block units) under which the whole model reads better. */
     private static final float TINY_HEAD = 0.26f;
@@ -119,7 +124,8 @@ public final class MobHeadIcons {
      * draw the whole model. {@code rotX}/{@code rotY} (degrees) turn the
      * model before centering on ({@code cx}, {@code cy}, {@code cz}),
      * which are expressed in the rotated space; {@code scale} is in cell
-     * pixels per block. The model reference detects renderer swaps
+     * pixels per block and {@code span} the frame's size in blocks
+     * (diagnostics). The model reference detects renderer swaps
      * (resource reload) and triggers a full reset.
      */
     record Geometry(
@@ -130,7 +136,8 @@ public final class MobHeadIcons {
             float cx,
             float cy,
             float cz,
-            float scale) {}
+            float scale,
+            float span) {}
 
     private record IconKey(EntityType<?> type, ResourceLocation texture) {}
 
@@ -255,7 +262,7 @@ public final class MobHeadIcons {
     }
 
     /** Drops every cached icon, geometry and atlas page. */
-    private static void resetAll() {
+    static void resetAll() {
         GEOMETRY.clear();
         ICONS.clear();
         if (creator != null) {
@@ -266,12 +273,16 @@ public final class MobHeadIcons {
     // ------------------------------------------------------------------
     // Geometry resolution
 
-    /** Resolves what to draw and how to frame it for one entity type. */
-    private static Geometry build(Entity e, EntityModel<?> model) {
+    /**
+     * Resolves what to draw and how to frame it for one entity type, from
+     * the mob icon settings in force. Package-private for the diagnostics
+     * dump, which must not go through the icon cache.
+     */
+    static Geometry build(Entity e, EntityModel<?> model) {
         try {
             neutralPose(model, e);
-            MobIconTweaks.Tweak tweak = MobIconTweaks.forModel(model);
-            if (!tweak.wholeModel()) {
+            MobIconSettings.Tweak tweak = MobIconTweaks.forEntity(e.getType(), model);
+            if (tweak.mode() != MobIconSettings.Mode.WHOLE) {
                 Geometry head = headGeometry(model, tweak);
                 if (head != null) {
                     return head;
@@ -285,8 +296,12 @@ public final class MobHeadIcons {
     }
 
     /** Geometry of the model's head, or null when none is usable. */
-    private static Geometry headGeometry(EntityModel<?> model, MobIconTweaks.Tweak tweak) {
-        List<ModelPart> headParts = resolveHeadParts(model);
+    private static Geometry headGeometry(EntityModel<?> model, MobIconSettings.Tweak tweak) {
+        List<ModelPart> headParts = configuredHead(model, tweak.headPart());
+        if (headParts == null) {
+            headParts = resolveHeadParts(model);
+        }
+
         if (headParts == null) {
             return null;
         }
@@ -296,16 +311,16 @@ public final class MobHeadIcons {
             return null;
         }
 
-        return geometry(model, headParts, tweak.rotX(), tweak.rotY(), frame);
+        return geometry(model, headParts, tweak, tweak.rotY(), frame, tweak.scale());
     }
 
     /**
-     * Geometry of the whole model: forced by the tweak or fallen back to
-     * when no usable head exists. In profile when the shape is much
+     * Geometry of the whole model: forced by the settings or fallen back
+     * to when no usable head exists. In profile when the shape is much
      * deeper than wide (a face-on fish is a sliver). Framed on the union
      * of ALL cubes, so nothing of the body is left out.
      */
-    private static Geometry wholeModelGeometry(Entity e, EntityModel<?> model, MobIconTweaks.Tweak tweak) {
+    private static Geometry wholeModelGeometry(Entity e, EntityModel<?> model, MobIconSettings.Tweak tweak) {
         List<ModelPart> all = wholeModelParts(model);
         float rotY = tweak.rotY();
         float[] overall = unionBounds(collectCubes(all, tweak.rotX(), rotY));
@@ -326,7 +341,8 @@ public final class MobHeadIcons {
             return failed(model);
         }
 
-        return geometry(model, List.of(), tweak.rotX(), rotY, frame);
+        float factor = tweak.scale() * MobIconTweaks.globals().wholeModelScale();
+        return geometry(model, List.of(), tweak, rotY, frame, factor);
     }
 
     private static boolean isDeeperThanWide(float[] bounds) {
@@ -334,29 +350,115 @@ public final class MobHeadIcons {
     }
 
     private static Geometry failed(EntityModel<?> model) {
-        return new Geometry(model, null, 0f, 0f, 0f, 0f, 0f, 0f);
+        return new Geometry(model, null, 0f, 0f, 0f, 0f, 0f, 0f, 0f);
     }
 
-    private static Geometry geometry(EntityModel<?> model, List<ModelPart> parts, float rotX, float rotY, float[] f) {
+    /**
+     * Geometry framing {@code f}: centered on its middle shifted by the
+     * settings' offsets (the content moves right / down for positive
+     * offsets, hence the subtraction), rotated by the tweak's tilt and the
+     * given Y rotation, scaled by {@code factor} times the natural scale.
+     */
+    private static Geometry geometry(
+            EntityModel<?> model,
+            List<ModelPart> parts,
+            MobIconSettings.Tweak tweak,
+            float rotY,
+            float[] f,
+            float factor) {
+        float span = spanOf(f);
         return new Geometry(
                 model,
                 parts,
-                rotX,
+                tweak.rotX(),
                 rotY,
-                (f[0] + f[3]) / 2f,
-                (f[1] + f[4]) / 2f,
+                (f[0] + f[3]) / 2f - tweak.offsetX(),
+                (f[1] + f[4]) / 2f - tweak.offsetY(),
                 (f[2] + f[5]) / 2f,
-                scaleFor(spanOf(f)));
+                scaleFor(span, factor),
+                span);
     }
 
     /**
      * Cell pixels per block for a frame of {@code span} blocks: the
-     * natural scale, bent only to keep the frame between {@link #MIN_FILL}
-     * and {@link #MAX_FILL} of the cell.
+     * natural scale times {@code factor} (per-model reduction), bent only
+     * to keep the frame between the global {@code minFill} and
+     * {@code maxFill} shares of the cell.
      */
-    private static float scaleFor(float span) {
-        float scale = Math.min(NATURAL_SCALE, MobIconAtlas.CELL * MAX_FILL / span);
-        return Math.max(scale, MobIconAtlas.CELL * MIN_FILL / span);
+    private static float scaleFor(float span, float factor) {
+        MobIconSettings.Globals globals = MobIconTweaks.globals();
+        float scale = Math.min(NATURAL_SCALE * factor, MobIconAtlas.CELL * globals.maxFill() / span);
+        return Math.max(scale, MobIconAtlas.CELL * globals.minFill() / span);
+    }
+
+    /**
+     * The part named by a settings file's {@code headPart} (a plain name,
+     * or a {@code parent/child} path from a hierarchical model's root), or
+     * null when none is configured or it cannot be found — the automatic
+     * detection then takes over.
+     */
+    private static List<ModelPart> configuredHead(EntityModel<?> model, String path) {
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+
+        ModelPart part = namedPart(model, path.trim());
+        if (part == null) {
+            return null;
+        }
+
+        return List.of(part);
+    }
+
+    private static ModelPart namedPart(EntityModel<?> model, String path) {
+        try {
+            if (path.contains("/")) {
+                return partAtPath(model, path);
+            }
+
+            if (model instanceof HierarchicalModel<?> hierarchical) {
+                return hierarchical.getAnyDescendantWithName(path).orElse(null);
+            }
+
+            return fieldPart(model, path);
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private static ModelPart partAtPath(EntityModel<?> model, String path) {
+        if (!(model instanceof HierarchicalModel<?> hierarchical)) {
+            return null;
+        }
+
+        ModelPart part = hierarchical.root();
+        for (String name : path.split("/")) {
+            part = part.getChild(name);
+        }
+
+        return part;
+    }
+
+    /** The ModelPart field called exactly {@code name}, for models outside the vanilla hierarchies. */
+    private static ModelPart fieldPart(EntityModel<?> model, String name) {
+        for (Class<?> c = model.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+            for (Field f : c.getDeclaredFields()) {
+                if (f.getType() == ModelPart.class && f.getName().equals(name)) {
+                    return readPart(f, model);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static ModelPart readPart(Field field, EntityModel<?> model) {
+        try {
+            field.setAccessible(true);
+            return (ModelPart) field.get(model);
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     private static float spanOf(float[] f) {

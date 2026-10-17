@@ -2,6 +2,8 @@ package fr.cheesegrinder.sharedjourney.client.command;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
+import fr.cheesegrinder.sharedjourney.client.render.MobIconDump;
+import fr.cheesegrinder.sharedjourney.client.render.MobIconTweaks;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.DiskCache;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
@@ -18,6 +20,9 @@ import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
+
+import java.io.IOException;
 
 /**
  * CLIENT commands under the same /sharedjourney and /sj roots (spec §7).
@@ -80,6 +85,32 @@ public final class ClientCommands {
                                     ClientMapCache.pendingCount()),
                             false);
                     return 1;
-                }));
+                }))
+                // /sj icons reload|dump: radar mob icon framing settings
+                .then(Commands.literal("icons")
+                        .then(Commands.literal("reload").executes(ClientCommands::reloadIcons))
+                        .then(Commands.literal("dump").executes(ClientCommands::dumpIcons)));
+    }
+
+    /** Re-reads the mob icon settings files and rebuilds the icons. */
+    private static int reloadIcons(CommandContext<CommandSourceStack> ctx) {
+        int entries = MobIconTweaks.reloadNow();
+        ctx.getSource().sendSuccess(() -> Component.translatable(Lang.COMMAND_ICONS_RELOADED, entries), false);
+        return entries;
+    }
+
+    /** Writes the framing resolved for every living entity type to config/sharedjourney. */
+    private static int dumpIcons(CommandContext<CommandSourceStack> ctx) {
+        try {
+            MobIconDump.Result result = MobIconDump.write();
+            ctx.getSource()
+                    .sendSuccess(
+                            () -> Component.translatable(Lang.COMMAND_ICONS_DUMPED, result.mobs(), result.file()),
+                            false);
+            return result.mobs();
+        } catch (IOException ex) {
+            ctx.getSource().sendFailure(Component.translatable(Lang.COMMAND_ICONS_DUMP_FAILED, ex.getMessage()));
+            return 0;
+        }
     }
 }

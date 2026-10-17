@@ -34,6 +34,9 @@
   "sharedjourney.command.purged": "%s fichier(s) de région supprimé(s) du cache pour la couche '%s'",
   "sharedjourney.command.cache": "Cache local : %s région(s) sur disque, %s texture(s) chargée(s), %s en cours de réception",
   "sharedjourney.command.teleported": "Téléporté en %s %s %s",
+  "sharedjourney.command.icons.reloaded": "Réglages des icônes de mobs rechargés : %s entrées en vigueur",
+  "sharedjourney.command.icons.dumped": "Cadrage de %s mobs écrit dans %s",
+  "sharedjourney.command.icons.dump_failed": "Impossible d'écrire le dump des icônes de mobs : %s",
 
   "sharedjourney.context.teleport": "Se téléporter ici",
   "sharedjourney.context.waypoints": "Waypoints",

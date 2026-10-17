@@ -4,6 +4,7 @@ import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
+import fr.cheesegrinder.sharedjourney.client.render.MobIconTweaks;
 import fr.cheesegrinder.sharedjourney.client.render.WaypointIconShader;
 import fr.cheesegrinder.sharedjourney.common.network.PlayerVisibilityPayloads;
 
@@ -15,6 +16,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.config.ModConfigEvent;
+import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
@@ -86,6 +88,12 @@ public final class ClientSetupEvents {
             PacketDistributor.sendToServer(
                     new PlayerVisibilityPayloads.MapVisibilityPayload(RadarClientConfig.HIDE_FROM_MAP.get()));
         }
+    }
+
+    /** Mob icon framing settings: re-read with the resources (JSON files, see MobIconTweaks). */
+    @SubscribeEvent
+    public static void onRegisterReloadListeners(RegisterClientReloadListenersEvent event) {
+        event.registerReloadListener(MobIconTweaks.reloadListener());
     }
 
     /** Core shader of the in-world waypoint icons (sharp bilinear sampling). */

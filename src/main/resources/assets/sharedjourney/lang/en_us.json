@@ -34,6 +34,9 @@
   "sharedjourney.command.purged": "%s cached region file(s) deleted for layer '%s'",
   "sharedjourney.command.cache": "Local cache: %s region(s) on disk, %s texture(s) loaded, %s being received",
   "sharedjourney.command.teleported": "Teleported to %s %s %s",
+  "sharedjourney.command.icons.reloaded": "Mob icon settings reloaded: %s entries in force",
+  "sharedjourney.command.icons.dumped": "Wrote the framing of %s mobs to %s",
+  "sharedjourney.command.icons.dump_failed": "Could not write the mob icon dump: %s",
 
   "sharedjourney.context.teleport": "Teleport here",
   "sharedjourney.context.waypoints": "Waypoints",

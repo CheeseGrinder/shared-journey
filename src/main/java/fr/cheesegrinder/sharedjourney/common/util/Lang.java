@@ -227,6 +227,9 @@ public final class Lang {
     public static final String COMMAND_PURGED = key("command.purged");
     public static final String COMMAND_CACHE = key("command.cache");
     public static final String COMMAND_TELEPORTED = key("command.teleported");
+    public static final String COMMAND_ICONS_RELOADED = key("command.icons.reloaded");
+    public static final String COMMAND_ICONS_DUMPED = key("command.icons.dumped");
+    public static final String COMMAND_ICONS_DUMP_FAILED = key("command.icons.dump_failed");
     public static final String REGEN_SCAN = key("regen.scan");
     public static final String REGEN_BOSSBAR = key("regen.bossbar");
 
