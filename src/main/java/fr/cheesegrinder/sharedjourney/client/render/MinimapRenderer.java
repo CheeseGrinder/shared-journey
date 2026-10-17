@@ -467,16 +467,7 @@ public final class MinimapRenderer {
                     continue;
                 }
 
-                gg.blit(
-                        region.texture(),
-                        rx * RegionKey.REGION_BLOCKS,
-                        rz * RegionKey.REGION_BLOCKS,
-                        0f,
-                        0f,
-                        RegionKey.REGION_BLOCKS,
-                        RegionKey.REGION_BLOCKS,
-                        RegionKey.REGION_BLOCKS,
-                        RegionKey.REGION_BLOCKS);
+                region.draw(gg, rx * RegionKey.REGION_BLOCKS, rz * RegionKey.REGION_BLOCKS);
                 if (ClientMapCache.regenActive) {
                     drawRegenVeil(gg, dim.location(), rx, rz, region.contentMask());
                 }

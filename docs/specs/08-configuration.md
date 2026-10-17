@@ -139,6 +139,8 @@ settings edited through the in-game screen apply live and are saved on close.
 | `autoLayer` | true | Auto day/night/cave on the minimap |
 | `rememberLayer` | false | Fullscreen map reopens on its last layer |
 | `diskCache` | true | Persist received regions under `sharedjourney_cache/` |
+| `lodEnabled` | true | Fullscreen map draws reduced-resolution region textures when zoomed out ([07 §3.5](07-client-ui.md)). Needs `diskCache`. Settings screen, Map tab |
+| `textureBudgetMb` | 256 (64–2048) | Memory cap of the loaded region textures, counting each texture twice (GPU copy plus the CPU copy `DynamicTexture` keeps); least recently drawn released first ([07 LOD-10](07-client-ui.md)). Config file / NeoForge config screen only |
 
 ## 4. Non-config data files
 

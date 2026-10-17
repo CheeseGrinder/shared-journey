@@ -73,13 +73,20 @@ public final class LayerTransition {
         band = newBand;
     }
 
-    /**
-     * The region to draw for {@code key}: its own texture when available,
-     * else (inside the fallback window) the same region of the previous
-     * layer, else null (background).
-     */
+    /** The full-resolution region to draw for {@code key}; see {@link #regionFor(RegionKey, int)}. */
     public ClientMapCache.Region regionFor(RegionKey key) {
-        ClientMapCache.Region region = ClientMapCache.getOrLoad(key);
+        return regionFor(key, 0);
+    }
+
+    /**
+     * The region to draw for {@code key} at a level of detail: its own
+     * texture when available (the wanted level, else another level of the
+     * same region, see {@link ClientMapCache#getOrLoad(RegionKey, int)}),
+     * else (inside the fallback window) the same region of the previous
+     * layer at the closest level in RAM, else null (background).
+     */
+    public ClientMapCache.Region regionFor(RegionKey key, int level) {
+        ClientMapCache.Region region = ClientMapCache.getOrLoad(key, level);
         if (region != null || previousLayer == null) {
             return region;
         }
@@ -90,7 +97,7 @@ public final class LayerTransition {
 
         int oldBand = previousLayer.hasBands() ? previousBand : 0;
         RegionKey old = new RegionKey(key.dimension(), previousLayer, oldBand, key.rx(), key.rz());
-        return ClientMapCache.peek(old);
+        return ClientMapCache.peek(old, level);
     }
 
     /** Opacity of the layer name label: 0 when hidden, 1 when fully shown. */

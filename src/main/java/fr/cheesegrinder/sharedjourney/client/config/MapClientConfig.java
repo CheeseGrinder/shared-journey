@@ -5,7 +5,8 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 /**
  * "map" section of the client config: bridged plugin overlays, server-computed
  * chunk overlays (force-loaded, slime), chunk grid, layer selection
- * (default/auto/cave) and the disk cache toggle.
+ * (default/auto/cave), the disk cache toggle and the region texture settings
+ * (level of detail, memory cap).
  */
 public final class MapClientConfig {
 
@@ -34,6 +35,11 @@ public final class MapClientConfig {
 
     public static ModConfigSpec.BooleanValue DISK_CACHE_ENABLED;
 
+    /** Reduced-resolution region textures when the fullscreen map is zoomed out (needs the disk cache). */
+    public static ModConfigSpec.BooleanValue LOD_ENABLED;
+    /** Cap on the memory held by region textures (GPU copy plus the CPU copy kept by the texture), in MiB. */
+    public static ModConfigSpec.IntValue TEXTURE_BUDGET_MB;
+
     private MapClientConfig() {}
 
     static void define(ModConfigSpec.Builder b) {
@@ -61,6 +67,12 @@ public final class MapClientConfig {
                 .define("rememberLayer", false);
         DISK_CACHE_ENABLED = b.comment("Disk cache of received tiles (.minecraft/sharedjourney_cache/).")
                 .define("diskCache", true);
+        LOD_ENABLED = b.comment("Draw reduced-resolution region textures when the fullscreen map is zoomed out"
+                        + " (fewer and smaller textures). Needs the disk cache.")
+                .define("lodEnabled", true);
+        TEXTURE_BUDGET_MB = b.comment("Memory cap for the region textures kept loaded (GPU copy plus the CPU copy"
+                        + " the texture keeps), in MiB. Least recently drawn textures are released first.")
+                .defineInRange("textureBudgetMb", 256, 64, 2048);
         b.pop();
     }
 }

@@ -343,6 +343,7 @@ public class MapSettingsScreen extends Screen {
         rows.add(configToggle(Lang.SETTINGS_MAP_REMEMBER_LAYER, "rememberLayer", MapClientConfig.REMEMBER_LAYER));
         rows.add(configToggle(Lang.ACTION_SHOW_GRID, "showGrid", MapClientConfig.SHOW_GRID));
         rows.add(configToggle(Lang.SETTINGS_MAP_DISK_CACHE, "diskCache", MapClientConfig.DISK_CACHE_ENABLED));
+        rows.add(configToggle(Lang.SETTINGS_MAP_LOD, "lodEnabled", MapClientConfig.LOD_ENABLED));
         rows.add(header(Component.translatable(Lang.SETTINGS_MAP_OVERLAYS)));
         rows.add(overlayRow(
                 ChunkOverlayKind.FORCED_CHUNKS,

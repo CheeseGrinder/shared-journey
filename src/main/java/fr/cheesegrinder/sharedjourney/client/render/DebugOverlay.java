@@ -1,6 +1,8 @@
 package fr.cheesegrinder.sharedjourney.client.render;
 
 import fr.cheesegrinder.sharedjourney.api.MapLayer;
+import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
+import fr.cheesegrinder.sharedjourney.client.service.LodChain;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 
 import net.minecraft.client.Minecraft;
@@ -10,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -82,6 +85,17 @@ public final class DebugOverlay {
             lines.add(String.format(Locale.ROOT, "player   %d, %d, %d", p.getX(), p.getY(), p.getZ()));
             lines.add("region   " + rx + ", " + rz);
         }
+        if (surface.equals("fullscreen")) {
+            int lod = ClientMapCache.lodLevelFor(snap);
+            lines.add(String.format(Locale.ROOT, "lod      L%d (%d px/region)", lod, LodChain.sizeOf(lod)));
+        }
+
+        lines.add(String.format(
+                Locale.ROOT,
+                "tex      %d  %.1f MiB",
+                ClientMapCache.loadedCount(),
+                ClientMapCache.residentBytes() / (1024.0 * 1024.0)));
+        lines.add("by lod   " + Arrays.toString(ClientMapCache.tilesPerLevel()));
         lines.add("fps      " + mc.getFps());
 
         int pad = 3;

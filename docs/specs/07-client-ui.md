@@ -33,7 +33,7 @@ Registered as a GUI layer above the debug overlay. Hidden when: no player, GUI h
 | MM-03 | The centre is the player's **interpolated** position (partial tick), so movement is smooth rather than 20 Hz. |
 | MM-04 | While one block spans ≥ 1 physical pixel (`zoom × guiScale ≥ 1`), the anchor and icon positions are snapped to whole **physical** pixels (stops shimmering when walking); below that scale they glide sub-pixel. |
 | MM-05 | `rotateWithPlayer`: the content rotates around the centre so the player faces up and the arrow stays fixed; otherwise north is up and the arrow follows the yaw. Cardinal letters (N/E/S/W badges) sit 8 px inside the edge and follow the rotation. |
-| MM-06 | Region quads are drawn for all regions covering the window (a rotating square overshoots by √2); missing regions are loaded lazily and asynchronously from the disk cache ([03 ASM-05](03-sync-protocol.md)). |
+| MM-06 | Region quads are drawn for all regions covering the window (a rotating square overshoots by √2); missing regions are loaded lazily and asynchronously from the disk cache ([03 ASM-05](03-sync-protocol.md)). The minimap always draws full-resolution textures ([§3.5](#35-level-of-detail-when-zoomed-out-lodchain-clientmapcache)). |
 
 ### 2.1.1 Frame (`MinimapFrame`)
 
@@ -160,6 +160,38 @@ Map tiles (0) → plugin overlays (up to ≈ 150) → `MapRenderEvent` → annot
 (markers, waypoints, other players, radar) → player arrow → UI chrome at **z = 200** →
 legend (300) → context menu (500) → debug overlay.
 
+### 3.5 Level of detail when zoomed out (`LodChain`, `ClientMapCache`)
+
+Zoomed far out, a 512×512 region covers a few dozen screen pixels; uploading and keeping the
+full image of hundreds of regions only to shrink it with nearest-neighbour sampling is
+wasteful. The fullscreen map therefore draws **reduced versions** of each region, built
+locally from the region PNG already in the disk cache. Nothing changes on the wire (the server
+and the sync protocol know nothing about it), and the hover sidecars, overlays and grid are
+independent of it.
+
+| ID | Requirement |
+|----|-------------|
+| LOD-01 | **Levels.** Level 0 is the full 512×512 region image. Level *n* (1 to 4) is level *n − 1* halved with a 2×2 box filter: 256, 128, 64 and 32 texels wide. Level 4 holds one texel per chunk. Every level texture covers the whole region and is painted over 512 blocks (`Region.draw`), whatever its size. |
+| LOD-02 | **Selection (fullscreen map only).** Per frame, with `P = 512 × zoom × guiScale` (physical pixels one region spans on screen), the level is the coarsest *n* ≤ 4 such that `512 >> n ≥ P` (tolerance 0.001): at least one texel per screen pixel, so no level is ever magnified. `P ≥ 512` gives level 0. At GUI scale 2 the zoom labels 1 024, 512, 256, 128 and 64 map to levels 0, 1, 2, 3 and 4 (a higher GUI scale means more physical pixels per region and lands on a finer level, a lower one on a coarser level, capped at 4). The zoom is a power of two, so the level changes only on a zoom step; there is no hysteresis. |
+| LOD-03 | **Availability.** Reduced levels exist only while `map.lodEnabled` is on **and** the disk cache is persisting (`map.diskCache` on, session open), because the PNG on disk is their source. Otherwise every request is level 0 and the map behaves as before. The minimap always draws level 0 (it shows a handful of regions). The INFO / INFO_CAVE sidecars are never reduced. |
+| LOD-04 | **Alpha-aware averaging.** A texel's colour is the mean of the four source colours weighted by their alpha, so unexplored (transparent) pixels never darken the colours next to them. Its alpha is the mean alpha, never rounded below 1 while any source pixel is visible. A fully transparent texel touching a visible one receives the mean colour of its visible neighbours (alpha stays 0), so bilinear sampling fades an explored edge into nothing instead of into black. |
+| LOD-05 | **Content mask.** The per-chunk content mask ([03 ASM-04](03-sync-protocol.md)) of a reduced texture is computed from its own alpha and equals the mask of the full image (LOD-04 keeps alpha ≥ 1 wherever a source pixel is visible). `isChunkPainted` (fullscreen CAVE hover) accepts any resident level and, if none, loads the coarsest. |
+| LOD-06 | **Sampling.** Level 0 keeps `NEAREST` (pixel exact when magnified). Levels 1–4 use `LINEAR` with `CLAMP_TO_EDGE`: they are drawn at one to two texels per screen pixel, where bilinear averaging is the right reconstruction. |
+| LOD-07 | **Stand-ins.** While the wanted level of a region loads, the nearest resident level of the *same* region is drawn (a finer one first, otherwise a coarser, blurrier one), so zooming never blanks tiles. Only if none exists does the layer-transition stand-in apply ([LT-01](#231-smooth-layer-changes-minimap-and-fullscreen)), at the closest level of the previous layer that is in RAM. |
+| LOD-08 | **Production.** Runs on the two region loader threads, never on the render thread. A level ≥ 2 is read from the region's sidecar `region_X_Z.lod` ([01 CLI-05](01-regions-layers-storage.md)) when it carries the version the index announces; otherwise (no sidecar, other version, corrupt) the PNG is decoded, the whole chain is rebuilt (≈ 5 ms), and the sidecar is rewritten. Level 1 is not stored (it would nearly double the file) and is always rebuilt from the PNG; it is only drawn while few regions are visible. |
+| LOD-09 | **Network pushes.** A completed region is first persisted (disk cache on). Only the levels already resident, or loading, are then re-decoded, on a loader thread and from the bytes in hand; the previous texture stays drawn until the new one is uploaded. A region no view displays costs no texture and no decode: it is loaded from disk the first time it is drawn. With the disk cache off, the region is decoded and uploaded as level 0 at once, as before. |
+| LOD-10 | **Bounded cost.** Per frame, the render thread uploads decoded textures up to a budget of 4 × 512² texels (four full images, or sixteen level-1, or a thousand level-4 textures) and at most 32 uploads; at most 8 loads are in flight. The resident textures are capped by `map.textureBudgetMb` (default 256): a texture counts twice its RGBA size (GPU copy plus the pixel copy `DynamicTexture` keeps). Above the cap, the least recently drawn textures (any level, all layers and bands) are released until memory is back under 90 % of the cap; a texture drawn in the last second is never released, so the visible set cannot thrash, and neither is a texture of a region absent from the disk cache (it could not be reloaded). |
+| LOD-11 | **Invalidation.** A region PNG with a newer version refreshes the resident levels (LOD-09); its sidecar is detected stale by its version header and rewritten on the next reduced load. `DiskCache.purge` deletes the sidecars with the PNGs and `evict` drops every level. |
+
+Bounded working set: with at least one texel per pixel and at most two, the texture memory of
+the visible regions is bounded by the screen size (at most about `W × H × 16` bytes of GPU
+texture, ≈ 33 MiB at 1920 × 1080 for a fully explored view) whatever the zoom, where full
+images grow with the number of visible regions.
+
+The debug overlay ([§5](#5-settings-screen-mapsettingsscreen-from-the-maps-settings-button),
+"Debug…") shows, on the fullscreen map, the current level and, on both maps, the number and
+memory of resident textures per level; `/sj cache` prints the same totals in chat.
+
 ## 4. Entity radar
 
 | ID | Requirement |
@@ -204,11 +236,11 @@ Client tabs apply **live**; the file is saved once on close. Tabs:
 |-----|---------|---------|
 | Minimap | always | enabled, size, corner, shape, frame theme (cycle: Classic, Stone, Wood, Thin), rotate, coordinates, default zoom (0.25 notches) |
 | Radar | always | enabled, radius (label shows the server cap), mob heads, height fade (toggle, start and full-fade sliders, offset label, arrow; RDR-06/07), players, hostile, animals, pets, villagers, hide-from-map (sent immediately) |
-| Map | always | default layer, auto layer, cave auto-switch, remember layer, chunk grid, disk cache; then a "Chunk overlays" section: force-loaded chunks and slime chunks toggles, each replaced by a "disabled by the server" notice when the server does not allow it ([13 OVL-18](13-chunk-overlays.md)) |
+| Map | always | default layer, auto layer, cave auto-switch, remember layer, chunk grid, disk cache, reduced detail when zoomed out (`map.lodEnabled`, LOD-03); then a "Chunk overlays" section: force-loaded chunks and slime chunks toggles, each replaced by a "disabled by the server" notice when the server does not allow it ([13 OVL-18](13-chunk-overlays.md)) |
 | Waypoints | always | show waypoints, names, temp radius, beacons, beacon min/max distance, death waypoints |
 | Addons | iff `create` or `create_rns` loaded | one section per mod: train overlay, deposit overlay |
 | Server | OP only (≥ 2) | working copy of the server config; **Apply** button ([05 §3](05-regen-commands-admin.md)): layer checkboxes per dimension (+ defaults), cave band min/max, sync, waypoints (death, storage, bed / nether portal / respawn anchor automatic waypoints), privacy |
-| Debug… | OP only, bottom-left button (hidden tab) | "Rendering overlay" toggle (runtime only, never persisted; draws zoom px/block, GUI scale, `z×gui` `[aligned]`/`[fractional]`, layer/band/dim, player region, fps on minimap and map) |
+| Debug… | OP only, bottom-left button (hidden tab) | "Rendering overlay" toggle (runtime only, never persisted; draws zoom px/block, GUI scale, `z×gui` `[aligned]`/`[fractional]`, layer/band/dim, player region, fps on minimap and map; the fullscreen map adds its level of detail, both add the resident texture count, memory and count per level) |
 
 Sync rate is stored in ticks and shown in seconds (`ticks / 20`). Row tooltips reuse the
 `configuration.*.tooltip` keys of the NeoForge config screen. The NeoForge config screen
@@ -224,7 +256,7 @@ matching text keeps its style; nested component structure is flattened.
 
 | Store | Content | Lifetime |
 |-------|---------|----------|
-| `ClientMapCache` (RAM) | Region textures, pending assemblies, in-flight disk loads, hover LRU (8), server announcements, hidden players, player positions, regen state/masks/progress, last ops snapshot | Per session; cleared on login/logout |
+| `ClientMapCache` (RAM) | Region textures at every level of detail (LRU, capped by `map.textureBudgetMb`, [§3.5](#35-level-of-detail-when-zoomed-out-lodchain-clientmapcache)), pending assemblies, in-flight disk loads, hover LRU (8), server announcements, hidden players, player positions, regen state/masks/progress, last ops snapshot | Per session; cleared on login/logout |
 | `ChunkOverlayStore` (RAM) | Allowed overlays announced by the server, chunk bitmaps per region (LRU 4 096), pending requests ([13](13-chunk-overlays.md)) | Per session; data cleared on login, everything on logout |
 | `DiskCache` | Region files + `index.json` | Persistent per server/world ([01 §5.2](01-regions-layers-storage.md)) |
 | `WaypointStore` | All known waypoints | RAM; local file for locally-stored ones ([06](06-waypoints.md)) |
@@ -259,3 +291,16 @@ before the handshake never writes server-managed waypoints to its local file).
    stair-stepping), square edges stay pixel crisp, nothing overlaps the time label above a
    top-anchored map, and Classic looks like the former border (black liner, gray band /
    dark 1 px outline).
+10. Level of detail ([§3.5](#35-level-of-detail-when-zoomed-out-lodchain-clientmapcache)): on
+   a cached world of at least a few dozen regions, open the fullscreen map with the debug
+   overlay on and zoom out step by step: the `lod` line goes L0 → L4, the resident texture
+   count stays roughly the number of explored regions on screen while the memory line drops
+   (≈ 4 KiB ×2 per region at L4), the map is never blank during a step, and unexplored areas
+   show no dark fringe around explored ones. Zoom back in: full-resolution pixels return.
+10b. Same map with `map.lodEnabled = false` (or `map.diskCache = false`): the `lod` line stays
+   at L0 and the map looks and loads as it did before the feature.
+10c. Walk around so the server pushes new region versions while the map is zoomed out and
+   while it is zoomed in: tiles update in place with no flash to background, and a region
+   never displayed produces no texture (`/sj cache` texture count does not jump).
+10d. Lower `map.textureBudgetMb` to 64, pan across a large explored area at full zoom:
+   the texture memory stays under the cap, tiles that scroll back into view reload from disk.

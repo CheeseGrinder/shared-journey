@@ -1473,6 +1473,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         int band = layer == MapLayer.CAVE ? currentBand() : 0;
         transition.update(layer, band);
         ClientMapCache.pumpLoads();
+        // Reduced-resolution textures when zoomed out (physical pixels per block).
+        int lod = ClientMapCache.lodLevelFor(zoom * mc.getWindow().getGuiScale());
 
         double blocksHalfW = (width / 2.0) / zoom;
         double blocksHalfH = (height / 2.0) / zoom;
@@ -1494,18 +1496,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         for (int rx = minRx; rx <= maxRx; rx++) {
             for (int rz = minRz; rz <= maxRz; rz++) {
                 RegionKey key = new RegionKey(dim, layer, layer == MapLayer.CAVE ? band : 0, rx, rz);
-                ClientMapCache.Region region = transition.regionFor(key);
+                ClientMapCache.Region region = transition.regionFor(key, lod);
                 if (region != null) {
-                    gg.blit(
-                            region.texture(),
-                            rx * RegionKey.REGION_BLOCKS,
-                            rz * RegionKey.REGION_BLOCKS,
-                            0f,
-                            0f,
-                            RegionKey.REGION_BLOCKS,
-                            RegionKey.REGION_BLOCKS,
-                            RegionKey.REGION_BLOCKS,
-                            RegionKey.REGION_BLOCKS);
+                    region.draw(gg, rx * RegionKey.REGION_BLOCKS, rz * RegionKey.REGION_BLOCKS);
                     if (ClientMapCache.regenActive) {
                         MinimapRenderer.drawRegenVeil(gg, dim.location(), rx, rz, region.contentMask());
                     }

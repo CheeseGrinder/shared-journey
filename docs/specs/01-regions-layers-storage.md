@@ -108,14 +108,17 @@ index.json                       what the client owns: {key: version}
 waypoints.json                   local waypoints (see 06)
 <dim>/<layer>/region_<rx>_<rz>.png     (same layout as the server)
 <dim>/info/region_<rx>_<rz>.bin
+<dim>/<layer>/region_<rx>_<rz>.lod     reduced-detail sidecar of an image layer (client only)
 ```
 
 | ID | Requirement |
 |----|-------------|
 | CLI-01 | `serverId` = the server address lower-cased with every char outside `[a-z0-9._-]` replaced by `_`; in singleplayer `sp_<world FOLDER name>` (never the `level.dat` display name, which two worlds can share); `unknown` as a last resort. |
-| CLI-02 | The disk cache can be disabled (`map.diskCache = false`): newly received regions are no longer written to disk (they live in RAM for the session). Files and index already on disk are still read and declared at handshake. |
+| CLI-02 | The disk cache can be disabled (`map.diskCache = false`): newly received regions are no longer written to disk (they live in RAM for the session, decoded and uploaded at once, [03 ASM-06](03-sync-protocol.md)). Files and index already on disk are still read and declared at handshake. The reduced levels of detail ([07 LOD-03](07-client-ui.md)) need the disk cache and are off while it is. |
 | CLI-03 | Disk writes go through a single-thread writer: submission order = write order, atomic per file. |
-| CLI-04 | `DiskCache.purge(layer)` accepts a layer id, `layer/band` form (`cave/2`) or `all`; it removes index entries, files and in-RAM textures. |
+| CLI-04 | `DiskCache.purge(layer)` accepts a layer id, `layer/band` form (`cave/2`) or `all`; it removes index entries, files (including the `.lod` sidecars) and in-RAM textures (every level). |
+| CLI-05 | **Reduced-detail sidecar** `region_<rx>_<rz>.lod`, written next to a region PNG by the client when it first needs a level ≥ 2 of that region ([07 LOD-08](07-client-ui.md)). Not indexed, not declared in the handshake, never sent: it is derived data. Layout: big-endian header `magic 0x534A4C44 ("SJLD")`, `format` int (1), `sourceVersion` long (the region version it was built from), `coarsestLevel` int (4); then one raw-deflate (zlib, `BEST_SPEED`) stream of the little-endian ABGR pixels of levels 2, 3 and 4 in order (128², 64², 32² texels). A reader accepts it only if magic, format, level count and size all match and `sourceVersion` equals the version the index announces; otherwise it is ignored and rebuilt from the PNG. Written atomically ([STO-02](#51-server--worlddatasharedjourney)) on the single writer thread; ≈ 25–30 KB per region on real data, i.e. ≈ 35 % of a region PNG. |
+| CLI-06 | A blob handed to `DiskCache.store` stays readable (`DiskCache.read` answers from the in-flight map) until its file write completes, because the index announces the new version immediately while the write is only queued; a loader thread therefore never gets the previous content labelled with the new version. |
 
 ## Acceptance checks
 
@@ -127,3 +130,6 @@ waypoints.json                   local waypoints (see 06)
 4. Create two singleplayer worlds with the same display name: their client caches do not
    mix (distinct folder names).
 5. Place a legacy `<dim>/cave_3` folder in a cache and start: it appears as `cave/3`.
+6. Open the fullscreen map zoomed far out on a cached world, then close the game and look at
+   a visited layer folder: `region_X_Z.lod` files sit next to the PNGs. Delete one, reopen:
+   it is rebuilt. Run `/sj purge day`: the day PNGs and their `.lod` files are both gone.

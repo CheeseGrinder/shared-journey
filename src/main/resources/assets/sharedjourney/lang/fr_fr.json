@@ -37,6 +37,7 @@
   "sharedjourney.waypoint.type.tooltip": "Privé : visible par vous seul. Public : partagé avec tous les joueurs du serveur. Temporaire : supprimé automatiquement à l'approche.",
   "sharedjourney.command.purged": "%s fichier(s) de région supprimé(s) du cache pour la couche '%s'",
   "sharedjourney.command.cache": "Cache local : %s région(s) sur disque, %s texture(s) chargée(s), %s en cours de réception",
+  "sharedjourney.command.cache_textures": "Textures de carte : %s Mio utilisés, par niveau de détail (0 = complet, 4 = le plus grossier) : %s",
   "sharedjourney.command.teleported": "Téléporté en %s %s %s",
   "sharedjourney.command.icons.reloaded": "Réglages des icônes de mobs rechargés : %s entrées en vigueur",
   "sharedjourney.command.icons.dumped": "Cadrage de %s mobs écrit dans %s",
@@ -141,6 +142,7 @@
   "sharedjourney.settings.map.auto_layer": "Couche automatique (jour/nuit, grottes)",
   "sharedjourney.settings.map.remember_layer": "Rouvrir le plein écran sur sa dernière couche",
   "sharedjourney.settings.map.disk_cache": "Cache disque des tuiles reçues",
+  "sharedjourney.settings.map.lod": "Détail réduit en dézoom",
   "sharedjourney.settings.map.overlays": "Overlays de chunks",
   "sharedjourney.settings.overlay.server_disabled": "%s : désactivé par le serveur",
   "sharedjourney.settings.waypoints.names": "Noms des waypoints",
@@ -424,6 +426,12 @@
 
   "sharedjourney.configuration.diskCache": "Cache disque",
   "sharedjourney.configuration.diskCache.tooltip": "Met en cache les tuiles reçues sur le disque (.minecraft/sharedjourney_cache/).",
+
+  "sharedjourney.configuration.lodEnabled": "Détail réduit en dézoom",
+  "sharedjourney.configuration.lodEnabled.tooltip": "Dessine des textures plus petites et pré-moyennées quand la carte plein écran est dézoomée : beaucoup moins de textures à charger, et plus légères. Nécessite le cache disque.",
+
+  "sharedjourney.configuration.textureBudgetMb": "Mémoire des textures de carte (Mio)",
+  "sharedjourney.configuration.textureBudgetMb.tooltip": "Plafond de mémoire des textures de carte chargées (copie GPU plus copie CPU conservée par chaque texture). Les textures dessinées le moins récemment sont libérées en premier.",
 
   "sharedjourney.configuration.debugLogging": "Logs de débogage",
   "sharedjourney.configuration.debugLogging.tooltip": "Active les logs détaillés de rendu et de synchronisation.",

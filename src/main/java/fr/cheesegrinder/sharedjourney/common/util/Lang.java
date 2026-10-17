@@ -91,6 +91,7 @@ public final class Lang {
     public static final String SETTINGS_MAP_AUTO_LAYER = key("settings.map.auto_layer");
     public static final String SETTINGS_MAP_REMEMBER_LAYER = key("settings.map.remember_layer");
     public static final String SETTINGS_MAP_DISK_CACHE = key("settings.map.disk_cache");
+    public static final String SETTINGS_MAP_LOD = key("settings.map.lod");
     public static final String SETTINGS_MAP_OVERLAYS = key("settings.map.overlays");
     public static final String SETTINGS_OVERLAY_SERVER_DISABLED = key("settings.overlay.server_disabled");
 
@@ -256,6 +257,7 @@ public final class Lang {
 
     public static final String COMMAND_PURGED = key("command.purged");
     public static final String COMMAND_CACHE = key("command.cache");
+    public static final String COMMAND_CACHE_TEXTURES = key("command.cache_textures");
     public static final String COMMAND_TELEPORTED = key("command.teleported");
     public static final String COMMAND_ICONS_RELOADED = key("command.icons.reloaded");
     public static final String COMMAND_ICONS_DUMPED = key("command.icons.dumped");

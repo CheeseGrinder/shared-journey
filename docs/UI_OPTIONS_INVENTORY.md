@@ -54,6 +54,8 @@ NeoForge aujourd'hui.
 | map | showCave | **UI** + config | oui |
 | map | defaultLayer / autoLayer | config | oui |
 | map | diskCache | config | oui (technique, onglet avancé) |
+| map | lodEnabled | **UI** (écran Map) + config | oui (détail réduit en dézoom, nécessite diskCache, specs/07 §3.5) |
+| map | textureBudgetMb | config | non (technique : plafond mémoire des textures de carte, 64–2048 Mio, specs/07 LOD-10) |
 | waypoints | tempWaypointRadius | config | oui |
 | waypoints | waypointBeacons / beaconMin/MaxDistance | config | oui |
 | waypoints | showWaypointNames | config | oui |

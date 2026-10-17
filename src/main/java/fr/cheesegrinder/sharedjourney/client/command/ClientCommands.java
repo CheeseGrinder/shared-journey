@@ -24,6 +24,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * CLIENT commands under the same /sharedjourney and /sj roots (spec §7).
@@ -84,6 +85,12 @@ public final class ClientCommands {
                                     DiskCache.index().size(),
                                     ClientMapCache.loadedCount(),
                                     ClientMapCache.pendingCount()),
+                            false);
+                    src.sendSuccess(
+                            () -> Component.translatable(
+                                    Lang.COMMAND_CACHE_TEXTURES,
+                                    ClientMapCache.residentBytes() / (1024 * 1024),
+                                    Arrays.toString(ClientMapCache.tilesPerLevel())),
                             false);
                     return 1;
                 }))

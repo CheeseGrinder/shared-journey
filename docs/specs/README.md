@@ -52,6 +52,7 @@ the discrepancy is listed in [11-limitations-and-open-issues.md](11-limitations-
 | Waypoints (private/public/temp/banner/death) | Implemented |
 | Automatic waypoints: bed, nether portal, respawn anchor ([06 §3.4](06-waypoints.md)) | Implemented, not yet checked in game |
 | Fullscreen map, minimap, radar | Implemented |
+| Level of detail when zoomed out ([07 §3.5](07-client-ui.md)) | Implemented, not yet checked in game |
 | Radar rules in JSON ([12](12-radar-rules.md)) | Implemented, not yet checked in game |
 | Chunk overlays: force-loaded and slime ([13](13-chunk-overlays.md)) | Implemented, not yet checked in game |
 | Public API (waypoints, map, layers, markers, UI events) | Implemented; the toolbar, render and info-bar events are consumed internally by the chunk overlays ([09 §8](09-public-api.md)) |

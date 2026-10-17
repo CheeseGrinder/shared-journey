@@ -37,6 +37,7 @@
   "sharedjourney.waypoint.type.tooltip": "Private: only you see it. Public: shared with every player on the server. Temporary: automatically deleted when reached.",
   "sharedjourney.command.purged": "%s cached region file(s) deleted for layer '%s'",
   "sharedjourney.command.cache": "Local cache: %s region(s) on disk, %s texture(s) loaded, %s being received",
+  "sharedjourney.command.cache_textures": "Map textures: %s MiB held, by level of detail (0 = full, 4 = coarsest): %s",
   "sharedjourney.command.teleported": "Teleported to %s %s %s",
   "sharedjourney.command.icons.reloaded": "Mob icon settings reloaded: %s entries in force",
   "sharedjourney.command.icons.dumped": "Wrote the framing of %s mobs to %s",
@@ -141,6 +142,7 @@
   "sharedjourney.settings.map.auto_layer": "Automatic layer (day/night, caves)",
   "sharedjourney.settings.map.remember_layer": "Reopen fullscreen map on its last layer",
   "sharedjourney.settings.map.disk_cache": "Disk cache of received tiles",
+  "sharedjourney.settings.map.lod": "Reduced detail when zoomed out",
   "sharedjourney.settings.map.overlays": "Chunk overlays",
   "sharedjourney.settings.overlay.server_disabled": "%s: disabled by the server",
   "sharedjourney.settings.waypoints.names": "Waypoint name labels",
@@ -424,6 +426,12 @@
 
   "sharedjourney.configuration.diskCache": "Disk Cache",
   "sharedjourney.configuration.diskCache.tooltip": "Cache received map tiles to disk (.minecraft/sharedjourney_cache/).",
+
+  "sharedjourney.configuration.lodEnabled": "Reduced Detail When Zoomed Out",
+  "sharedjourney.configuration.lodEnabled.tooltip": "Draw smaller, pre-averaged textures when the fullscreen map is zoomed out: far fewer and lighter textures to load. Needs the disk cache.",
+
+  "sharedjourney.configuration.textureBudgetMb": "Map Texture Memory (MiB)",
+  "sharedjourney.configuration.textureBudgetMb.tooltip": "Memory cap for the loaded map textures (GPU copy plus the CPU copy each texture keeps). The least recently drawn textures are released first.",
 
   "sharedjourney.configuration.debugLogging": "Debug Logging",
   "sharedjourney.configuration.debugLogging.tooltip": "Enable verbose render/sync logging.",

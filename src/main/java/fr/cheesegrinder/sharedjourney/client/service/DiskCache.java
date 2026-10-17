@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -54,6 +55,15 @@ public final class DiskCache {
 
     private static final RegionIndex index = new RegionIndex();
 
+    /**
+     * Blobs handed to {@link #store} whose file write has not completed yet.
+     * {@link #read} answers from here first: the index already announces the
+     * new version when the write is only queued, and a loader thread reading
+     * the file at that moment would otherwise get the previous content
+     * labelled with the new version.
+     */
+    private static final Map<RegionKey, byte[]> PENDING_WRITES = new ConcurrentHashMap<>();
+
     private DiskCache() {}
 
     // ------------------------------------------------------------------ session
@@ -81,6 +91,7 @@ public final class DiskCache {
         } else {
             id = "unknown";
         }
+        PENDING_WRITES.clear();
         currentRoot = mc.gameDirectory.toPath().resolve("sharedjourney_cache").resolve(id);
         RegionStorage.migrateLegacyCaveFolders(currentRoot);
         index.load(currentRoot.resolve(RegionIndex.FILE_NAME));
@@ -111,21 +122,68 @@ public final class DiskCache {
 
     // ------------------------------------------------------------------ IO
 
+    /**
+     * True when received regions are persisted: a session is open and the
+     * disk cache is enabled. The reduced-detail textures need it (their
+     * source is the cached file).
+     */
+    public static boolean isPersisting() {
+        return currentRoot != null && MapClientConfig.DISK_CACHE_ENABLED.get();
+    }
+
     /** Writes a region PNG received from the server (async) and updates the index. */
     public static void store(RegionKey key, long version, byte[] png) {
-        if (currentRoot == null || !MapClientConfig.DISK_CACHE_ENABLED.get()) {
+        if (!isPersisting()) {
             return;
         }
 
         index.put(key, version);
         Path file = pathOf(key);
+        PENDING_WRITES.put(key, png);
         WRITER.execute(() -> {
             try {
                 RegionStorage.writeAtomically(file, png);
             } catch (IOException e) {
                 LOGGER.error("Failed to write cache {}", file, e);
+            } finally {
+                PENDING_WRITES.remove(key, png);
             }
         });
+    }
+
+    /**
+     * Writes the reduced-detail sidecar of a region (async, atomic). It sits
+     * next to the PNG and carries the version of the image it was built from,
+     * so a stale one is detected by its reader.
+     */
+    public static void storeLod(RegionKey key, byte[] data) {
+        Path root = currentRoot;
+        if (root == null) {
+            return;
+        }
+
+        Path file = lodPathOf(root, key);
+        WRITER.execute(() -> {
+            try {
+                RegionStorage.writeAtomically(file, data);
+            } catch (IOException e) {
+                LOGGER.error("Failed to write LOD cache {}", file, e);
+            }
+        });
+    }
+
+    /** Reads the reduced-detail sidecar of a region, or null. Safe from any thread. */
+    public static byte[] readLod(RegionKey key) {
+        Path root = currentRoot;
+        if (root == null) {
+            return null;
+        }
+
+        try {
+            return Files.readAllBytes(lodPathOf(root, key));
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     /**
@@ -134,6 +192,11 @@ public final class DiskCache {
      * middle cannot turn it into a NullPointerException).
      */
     public static byte[] read(RegionKey key) {
+        byte[] pending = PENDING_WRITES.get(key);
+        if (pending != null) {
+            return pending;
+        }
+
         Path root = currentRoot;
         if (root == null) {
             return null;
@@ -219,6 +282,8 @@ public final class DiskCache {
                 if (Files.deleteIfExists(pathOf(key))) {
                     deleted[0]++;
                 }
+
+                Files.deleteIfExists(lodPathOf(currentRoot, key));
             } catch (IOException ignored) {
             }
             ClientMapCache.evict(key);
@@ -243,9 +308,18 @@ public final class DiskCache {
 
     /** Root passed explicitly: async jobs must survive a logout mid-run. */
     private static Path pathOf(Path root, RegionKey key) {
+        return layerDir(root, key).resolve(key.fileName());
+    }
+
+    /** Reduced-detail sidecar: {@code region_X_Z.lod} next to the region file. */
+    private static Path lodPathOf(Path root, RegionKey key) {
+        return layerDir(root, key).resolve("region_" + key.rx() + "_" + key.rz() + ".lod");
+    }
+
+    private static Path layerDir(Path root, RegionKey key) {
         String dim = key.dimension().location().getNamespace().equals("minecraft")
                 ? key.dimension().location().getPath()
                 : key.dimension().location().toString().replace(':', '_');
-        return root.resolve(dim).resolve(key.layer().folderName(key.caveBand())).resolve(key.fileName());
+        return root.resolve(dim).resolve(key.layer().folderName(key.caveBand()));
     }
 }
