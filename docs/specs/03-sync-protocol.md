@@ -71,7 +71,7 @@ sequenceDiagram
 | ASM-02 | Fragments of one `(key, version)` are collected in a `PENDING` assembly; a newer version replaces an older pending assembly; out-of-range or duplicate parts are ignored. |
 | ASM-03 | When complete: image layers are decoded into a `DynamicTexture` (wrap mode `CLAMP_TO_EDGE` on S and T to avoid one-pixel seams at region borders), registered, and stored to the disk cache; INFO blobs are only stored to disk and their parsed copy invalidated. |
 | ASM-04 | On upload the client computes a per-chunk **content mask** (bit `localZ*32 + localX` = chunk has ≥ 1 non-transparent pixel), used to veil only painted chunks during a regen. |
-| ASM-05 | `ClientMapCache.getOrLoad` lazily loads a region from the disk cache on first display (one attempt; misses are remembered until a new version arrives). Hover sidecars are parsed lazily into a bounded LRU of **8** regions. |
+| ASM-05 | `ClientMapCache.getOrLoad` lazily and **asynchronously** loads a region from the disk cache on first display: the file read and PNG decode run on two worker threads, and `pumpLoads()` (called once per frame by the minimap and the fullscreen map) uploads at most **4** decoded textures per frame on the render thread. At most **8** loads are in flight; `getOrLoad` returns null until one completes and callers retry next frame. A result is dropped if the key was evicted/cleared meanwhile or a newer version arrived from the server. One attempt per key; misses are remembered until a new version arrives. Hover sidecars are parsed lazily into a bounded LRU of **8** regions. |
 
 ## 6. On-demand requests (fullscreen map)
 

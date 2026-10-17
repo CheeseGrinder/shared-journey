@@ -87,6 +87,20 @@ public final class MinimapRenderer {
     private static MapLayer currentLayer = null; // null = not yet initialized from config
     private static Boolean autoMode = null; // null = not yet initialized from config
     private static int caveBandIndex = 0;
+
+    /** Steady ticks (1 s) a different automatic layer must be wanted before the switch. */
+    private static final int AUTO_SWITCH_DELAY_TICKS = 20;
+
+    /** Layer committed by the auto mode; null until the first tick, or when auto is off. */
+    private static MapLayer autoLayer;
+
+    /** Layer the auto mode wants when it differs from {@link #autoLayer}, and for how many ticks. */
+    private static MapLayer autoCandidate;
+
+    private static int autoCandidateTicks;
+
+    /** Fallback textures and layer name label of the HUD minimap. */
+    private static final LayerTransition TRANSITION = new LayerTransition();
     /** Screen pixels per block; negative = not yet seeded from zoomDefault. */
     private static float zoom = -1f;
 
@@ -111,9 +125,10 @@ public final class MinimapRenderer {
     }
 
     /**
-     * Actually displayed layer. In auto mode: CAVE if the player is
-     * underground, else NIGHT at night, else DAY — among the layers
-     * allowed by the server for the current dimension.
+     * Actually displayed layer. In auto mode: the layer committed by
+     * {@link #tickAutoLayer()} (CAVE if the player is underground, else
+     * NIGHT at night, else DAY — among the layers allowed by the server for
+     * the current dimension), or the raw wish before the first commit.
      */
     public static MapLayer displayedLayer() {
         Minecraft mc = Minecraft.getInstance();
@@ -121,6 +136,77 @@ public final class MinimapRenderer {
             return currentLayer();
         }
 
+        if (autoLayer != null && isAllowed(autoLayer)) {
+            return autoLayer;
+        }
+
+        return wantedAutoLayer(mc);
+    }
+
+    private static boolean isAllowed(MapLayer layer) {
+        List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
+        return allowed.isEmpty() || allowed.contains(layer);
+    }
+
+    /**
+     * Auto mode, once per client tick: moves the committed layer toward the
+     * wanted one, but only after the wish held steadily for
+     * {@link #AUTO_SWITCH_DELAY_TICKS} ticks. Without this delay, standing
+     * where the underground rule flips with a block of movement (under an
+     * overhang, at a cave mouth) made the minimap flap between CAVE and
+     * DAY. A committed layer the server stopped allowing (dimension change)
+     * is replaced at once. Posts {@link MapLayerChangedEvent} on a switch.
+     */
+    public static void tickAutoLayer() {
+        Minecraft mc = Minecraft.getInstance();
+        if (!autoMode() || mc.level == null || mc.player == null) {
+            autoLayer = null;
+            autoCandidate = null;
+            return;
+        }
+
+        MapLayer wanted = wantedAutoLayer(mc);
+        if (autoLayer == null || !isAllowed(autoLayer)) {
+            commitAutoLayer(wanted);
+            return;
+        }
+
+        if (wanted == autoLayer) {
+            autoCandidate = null;
+            autoCandidateTicks = 0;
+            return;
+        }
+
+        if (wanted != autoCandidate) {
+            autoCandidate = wanted;
+            autoCandidateTicks = 0;
+        }
+
+        autoCandidateTicks++;
+        if (autoCandidateTicks >= AUTO_SWITCH_DELAY_TICKS) {
+            commitAutoLayer(wanted);
+        }
+    }
+
+    private static void commitAutoLayer(MapLayer layer) {
+        MapLayer previous = autoLayer;
+        autoLayer = layer;
+        autoCandidate = null;
+        autoCandidateTicks = 0;
+        if (previous != null && previous != layer) {
+            NeoForge.EVENT_BUS.post(new MapLayerChangedEvent(layer, true, true));
+        }
+    }
+
+    /** Forgets the committed auto layer (login, logout): the next tick picks one at once. */
+    public static void resetAutoLayer() {
+        autoLayer = null;
+        autoCandidate = null;
+        autoCandidateTicks = 0;
+    }
+
+    /** Layer the auto mode wants right now, with no hysteresis. */
+    private static MapLayer wantedAutoLayer(Minecraft mc) {
         List<MapLayer> allowed = ClientMapCache.layersForCurrentDim();
         if (allowed.contains(MapLayer.CAVE)
                 && MapClientConfig.SHOW_CAVE.get()
@@ -167,6 +253,8 @@ public final class MinimapRenderer {
             int idx = allowed.indexOf(currentLayer());
             if (idx < 0 || idx == allowed.size() - 1) {
                 autoMode = true;
+                // Back to auto: follow the wish at once, no hysteresis.
+                resetAutoLayer();
             } else {
                 currentLayer = allowed.get(idx + 1);
             }
@@ -333,6 +421,8 @@ public final class MinimapRenderer {
         }
         int band = layer == MapLayer.CAVE ? currentCaveBand() : 0;
         var dim = player.level().dimension();
+        TRANSITION.update(layer, band);
+        ClientMapCache.pumpLoads();
 
         gg.enableScissor(x, y, x + size, y + size);
 
@@ -368,7 +458,7 @@ public final class MinimapRenderer {
         for (int rx = minRx; rx <= maxRx; rx++) {
             for (int rz = minRz; rz <= maxRz; rz++) {
                 RegionKey key = new RegionKey(dim, layer, layer == MapLayer.CAVE ? band : 0, rx, rz);
-                ClientMapCache.Region region = ClientMapCache.getOrLoad(key);
+                ClientMapCache.Region region = TRANSITION.regionFor(key);
                 if (region == null) {
                     continue;
                 }
@@ -594,6 +684,8 @@ public final class MinimapRenderer {
         // the border), following the map's rotation.
         drawCardinals(gg, mc, cx, cy, half - 8, rotate ? -yaw - 180f : 0f);
 
+        drawLayerLabel(gg, mc, cx, cy + half / 2);
+
         // Labels (reduced scale) on translucent black pills: time +
         // period above the map, biome and coordinates below (or stacked
         // above if the map is bottom-anchored). The three strings are
@@ -710,6 +802,31 @@ public final class MinimapRenderer {
         float halfW = mc.font.width(text) / 2f + 1f;
         drawPill(gg, -halfW, halfW, 3.5f, 6f, LABEL_BG);
         gg.drawCenteredString(mc.font, text, 0, 0, color);
+        gg.pose().popPose();
+    }
+
+    /**
+     * Layer name over the lower half of the map, shown for about a second
+     * after a layer change and fading out (same pill style as the other
+     * labels, with the opacity applied to both pill and text).
+     */
+    private static void drawLayerLabel(GuiGraphics gg, Minecraft mc, int cx, int y) {
+        float alpha = TRANSITION.labelAlpha();
+        int textColor = LayerTransition.withAlpha(0xFFFFFF, alpha, 0xFF);
+        int pillColor = LayerTransition.withAlpha(0x101010, alpha, 0xB0);
+        if (textColor == 0 || pillColor == 0) {
+            return;
+        }
+
+        String text = TRANSITION.labelText().getString();
+        // The pill is drawn in immediate mode: flush the pending GUI batch first.
+        gg.flush();
+        gg.pose().pushPose();
+        gg.pose().translate(cx, y, 0);
+        gg.pose().scale(0.75f, 0.75f, 1f);
+        float halfW = mc.font.width(text) / 2f + 3f;
+        drawPill(gg, -halfW, halfW, 3.5f, 7f, pillColor);
+        gg.drawCenteredString(mc.font, text, 0, 0, textColor);
         gg.pose().popPose();
     }
 

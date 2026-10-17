@@ -33,7 +33,7 @@ Registered as a GUI layer above the debug overlay. Hidden when: no player, GUI h
 | MM-03 | The centre is the player's **interpolated** position (partial tick), so movement is smooth rather than 20 Hz. |
 | MM-04 | While one block spans ≥ 1 physical pixel (`zoom × guiScale ≥ 1`), the anchor and icon positions are snapped to whole **physical** pixels (stops shimmering when walking); below that scale they glide sub-pixel. |
 | MM-05 | `rotateWithPlayer`: the content rotates around the centre so the player faces up and the arrow stays fixed; otherwise north is up and the arrow follows the yaw. Cardinal letters (N/E/S/W badges) sit 8 px inside the edge and follow the rotation. |
-| MM-06 | Region quads are drawn for all regions covering the window (a rotating square overshoots by √2); missing regions are loaded lazily from the disk cache. |
+| MM-06 | Region quads are drawn for all regions covering the window (a rotating square overshoots by √2); missing regions are loaded lazily and asynchronously from the disk cache ([03 ASM-05](03-sync-protocol.md)). |
 
 ### 2.2 Zoom
 
@@ -48,8 +48,21 @@ Registered as a GUI layer above the debug overlay. Hidden when: no player, GUI h
 |----|-------------|
 | MM-20 | The displayed layer is `defaultLayer` until changed. In **auto mode** (`map.autoLayer`, default on): CAVE if the player is underground and `map.showCave` is on and CAVE is allowed; else NIGHT between world time 13 000 and 23 000 if allowed; else DAY if allowed (or the allowed list is empty); else the first allowed layer. |
 | MM-21 | The layer is always clamped to the layers the server announced for the current dimension. |
-| MM-22 | Cycle (`,`): Auto → layer 1 → … → layer N → Auto, over the allowed list. A manual pick suspends auto mode. Explicit changes post `MapLayerChangedEvent`; automatic switches do not. |
+| MM-22 | Cycle (`,`): Auto → layer 1 → … → layer N → Auto, over the allowed list. A manual pick suspends auto mode. Explicit changes post `MapLayerChangedEvent` (`isAutomatic() == false`). Cycling back to Auto adopts the wanted layer at once (no delay). |
 | MM-23 | CAVE band follows the player's own band when it is configured, else the last band index (clamped). |
+| MM-24 | **Auto-mode hysteresis.** The auto rule of MM-20 is re-evaluated once per client tick (`MinimapRenderer.tickAutoLayer`) but only *commits* a different layer after the wanted layer has held steadily for **20 ticks (1 s)**; if the wish changes back or to a third layer in the meantime, the count restarts. This prevents CAVE/DAY flapping under overhangs and at cave mouths. Exceptions, adopted immediately: the first evaluation after login/logout, a committed layer the server no longer allows (e.g. dimension change), and the return to Auto from the manual cycle. |
+| MM-25 | An automatic switch posts `MapLayerChangedEvent(layer, minimap = true, automatic = true)` ([09](09-public-api.md)). The initial pick after login and the return to Auto post no automatic event (the cycle posts its own explicit one). |
+
+### 2.3.1 Smooth layer changes (minimap and fullscreen)
+
+Implemented by `LayerTransition`, one instance per view (the minimap and the fullscreen map
+each track their own displayed layer and cave band).
+
+| ID | Requirement |
+|----|-------------|
+| LT-01 | Whenever the drawn `(layer, band)` changes — explicit pick, automatic switch or cave band change — the previous pair is remembered for **1.5 s**. During that window a region of the new layer that is not available yet is drawn from the *same region of the previous layer* if that texture is in RAM (never triggers a load), instead of the grey background. A region that becomes available replaces the stand-in immediately. After the window an unavailable region is plain background, so a region with nothing on the new layer does not show the old layer for longer than that. |
+| LT-02 | The first `(layer, band)` a view draws is a baseline: it starts no transition and no label. |
+| LT-03 | **Layer name label.** When the *layer* changes (not a band-only change) its translated name (`sharedjourney.layer.<id>`, raw id for mod layers without a lang key) is shown for **1.1 s**: fully opaque for 0.7 s, then a linear fade over 0.4 s. Minimap: on a translucent pill over the lower half of the map (0.75 scale); fullscreen: centred at y = 72, under the regen progress bar. |
 
 ### 2.4 Content, bottom to top
 
@@ -189,7 +202,7 @@ matching text keeps its style; nested component structure is flattened.
 
 | Store | Content | Lifetime |
 |-------|---------|----------|
-| `ClientMapCache` (RAM) | Region textures, pending assemblies, hover LRU (8), server announcements, hidden players, player positions, regen state/masks/progress, last ops snapshot | Per session; cleared on login/logout |
+| `ClientMapCache` (RAM) | Region textures, pending assemblies, in-flight disk loads, hover LRU (8), server announcements, hidden players, player positions, regen state/masks/progress, last ops snapshot | Per session; cleared on login/logout |
 | `DiskCache` | Region files + `index.json` | Persistent per server/world ([01 §5.2](01-regions-layers-storage.md)) |
 | `WaypointStore` | All known waypoints | RAM; local file for locally-stored ones ([06](06-waypoints.md)) |
 | `MapMarkerStore` | API marker providers | Process |
@@ -205,6 +218,11 @@ before the handshake never writes server-managed waypoints to its local file).
 2. Rotate-with-player: arrow fixed, N/E/S/W letters orbit, labels stay horizontal.
 3. Cycle layers with `,` on the minimap: Auto → each allowed layer → Auto; the label of the
    toolbar highlights match.
+3b. Stand at a cave mouth / under an overhang so the underground rule flips repeatedly: the
+   minimap does not flap; it switches only after ~1 s of a steady state, and a listener of
+   `MapLayerChangedEvent` sees `isAutomatic() == true` for that switch.
+3c. Switch layers on the minimap and in the fullscreen map: no grey flash, the old layer
+   stays until the new texture is ready, and the layer name fades out in about a second.
 4. In the Nether (only CAVE configured): the layer buttons for the others are disabled.
 5. Right-click a block: menu shows the clicked coords; "Position in chat" opens the chat
    pre-filled `[x, z] `; the received message becomes a link that opens the map there.

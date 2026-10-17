@@ -25,9 +25,13 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * In-memory client state. The client NEVER renders the map itself: it
@@ -89,6 +93,26 @@ public final class ClientMapCache {
     private static final Map<RegionKey, Assembly> PENDING = new ConcurrentHashMap<>();
     /** Regions already looked up (and absent) on disk: avoids retrying every frame. */
     private static final Set<RegionKey> DISK_MISSES = ConcurrentHashMap.newKeySet();
+    /** Maximum asynchronous disk loads running or waiting for upload at once. */
+    private static final int MAX_LOADS_IN_FLIGHT = 8;
+
+    /** Decoded textures uploaded to the GPU per frame (spreads the GL cost). */
+    private static final int MAX_UPLOADS_PER_FRAME = 4;
+
+    /** A cached region decoded off-thread; {@code image} is null when the read or decode failed. */
+    private record LoadedRegion(RegionKey key, long version, NativeImage image, long[] contentMask) {}
+
+    private static final ExecutorService LOADER = Executors.newFixedThreadPool(2, r -> {
+        Thread t = new Thread(r, "SharedJourney-RegionLoader");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /** Keys whose disk load was started and not yet uploaded (or discarded). */
+    private static final Set<RegionKey> LOADING = ConcurrentHashMap.newKeySet();
+
+    private static final Queue<LoadedRegion> LOADED = new ConcurrentLinkedQueue<>();
+
     /** On-demand request anti-spam. */
     public static final Map<RegionKey, Long> LAST_REQUESTED = new ConcurrentHashMap<>();
 
@@ -203,8 +227,13 @@ public final class ClientMapCache {
     // ------------------------------------------------------------------ access
 
     /**
-     * Region for display. If absent from RAM but present in the session's
-     * disk cache, it is loaded on the fly (single attempt).
+     * Region for display, or null when it is not available YET. If absent
+     * from RAM but present in the session's disk cache, an asynchronous load
+     * is started (file read and PNG decode on a worker thread, texture upload
+     * on the render thread by {@link #pumpLoads()}) and null is returned
+     * until it completes: callers retry on the next frame and may keep
+     * drawing something else meanwhile. At most {@link #MAX_LOADS_IN_FLIGHT}
+     * loads run at once; the others are simply retried on later frames.
      */
     public static Region getOrLoad(RegionKey key) {
         Region r = REGIONS.get(key);
@@ -212,7 +241,7 @@ public final class ClientMapCache {
             return r;
         }
 
-        if (DISK_MISSES.contains(key)) {
+        if (DISK_MISSES.contains(key) || LOADING.contains(key) || LOADING.size() >= MAX_LOADS_IN_FLIGHT) {
             return null;
         }
 
@@ -221,13 +250,81 @@ public final class ClientMapCache {
             DISK_MISSES.add(key);
             return null;
         }
-        byte[] png = DiskCache.read(key);
-        if (png == null) {
-            DISK_MISSES.add(key);
-            return null;
-        }
-        uploadTexture(key, diskVersion, png);
+
+        LOADING.add(key);
+        LOADER.execute(() -> decodeFromDisk(key, diskVersion));
+        return null;
+    }
+
+    /** The region if it is already in RAM; never starts a load. */
+    public static Region peek(RegionKey key) {
         return REGIONS.get(key);
+    }
+
+    /** Worker thread: reads and decodes a cached region, then queues it for upload. */
+    private static void decodeFromDisk(RegionKey key, long version) {
+        LoadedRegion result = new LoadedRegion(key, version, null, null);
+        try {
+            byte[] png = DiskCache.read(key);
+            if (png != null) {
+                NativeImage image = NativeImage.read(new ByteArrayInputStream(png));
+                result = new LoadedRegion(key, version, image, computeContentMask(image));
+            }
+        } catch (IOException | RuntimeException e) {
+            LOGGER.error("Invalid cached region PNG for {}", key, e);
+        }
+
+        LOADED.add(result);
+    }
+
+    /**
+     * Render thread, once per frame before drawing regions: uploads the
+     * textures decoded by the loader threads (at most
+     * {@link #MAX_UPLOADS_PER_FRAME}, to spread the GL cost over frames).
+     */
+    public static void pumpLoads() {
+        int uploaded = 0;
+        while (uploaded < MAX_UPLOADS_PER_FRAME) {
+            LoadedRegion loaded = LOADED.poll();
+            if (loaded == null) {
+                return;
+            }
+
+            if (acceptLoaded(loaded)) {
+                uploaded++;
+            }
+        }
+    }
+
+    /** Registers a decoded region; true when a texture was actually uploaded. */
+    private static boolean acceptLoaded(LoadedRegion loaded) {
+        RegionKey key = loaded.key();
+        // Evicted or cleared while the worker was running: drop the result.
+        if (!LOADING.remove(key)) {
+            closeQuietly(loaded.image());
+            return false;
+        }
+
+        if (loaded.image() == null) {
+            DISK_MISSES.add(key);
+            return false;
+        }
+
+        // A newer version may have arrived from the server meanwhile.
+        Region existing = REGIONS.get(key);
+        if (existing != null && existing.version() >= loaded.version()) {
+            closeQuietly(loaded.image());
+            return false;
+        }
+
+        registerTexture(key, loaded.version(), loaded.image(), loaded.contentMask());
+        return true;
+    }
+
+    private static void closeQuietly(NativeImage image) {
+        if (image != null) {
+            image.close();
+        }
     }
 
     public static long versionOf(RegionKey key) {
@@ -246,6 +343,7 @@ public final class ClientMapCache {
         }
 
         DISK_MISSES.remove(key);
+        LOADING.remove(key);
         HOVER_REGIONS.remove(key);
         HOVER_MISSES.remove(key);
     }
@@ -260,6 +358,13 @@ public final class ClientMapCache {
         REGIONS.clear();
         PENDING.clear();
         DISK_MISSES.clear();
+        LOADING.clear();
+        LoadedRegion stale = LOADED.poll();
+        while (stale != null) {
+            closeQuietly(stale.image());
+            stale = LOADED.poll();
+        }
+
         LAST_REQUESTED.clear();
         HOVER_REGIONS.clear();
         HOVER_MISSES.clear();
@@ -324,27 +429,32 @@ public final class ClientMapCache {
         }
     }
 
+    /** Network path (render thread): decodes and uploads a pushed region synchronously. */
     private static void uploadTexture(RegionKey key, long version, byte[] png) {
         try {
             NativeImage image = NativeImage.read(new ByteArrayInputStream(png));
-            long[] contentMask = computeContentMask(image);
-            ResourceLocation rl = textureId(key);
-            DynamicTexture texture = new DynamicTexture(image);
-            // Region quads are drawn edge to edge under a fractional
-            // zoom/pan transform; with the GL default REPEAT wrap, edge
-            // samples occasionally land on exactly u/v = 1.0 (float
-            // precision) and wrap to the OPPOSITE row/column of the same
-            // region — a 1px line of shifted pixels along region borders.
-            GlStateManager._bindTexture(texture.getId());
-            GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
-            GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
-            GlStateManager._bindTexture(0);
-            Minecraft.getInstance().getTextureManager().register(rl, texture);
-            REGIONS.put(key, new Region(version, rl, contentMask));
-            DISK_MISSES.remove(key);
+            registerTexture(key, version, image, computeContentMask(image));
         } catch (IOException e) {
             LOGGER.error("Invalid region PNG for {}", key, e);
         }
+    }
+
+    /** Render thread: turns a decoded image into a registered GL texture. */
+    private static void registerTexture(RegionKey key, long version, NativeImage image, long[] contentMask) {
+        ResourceLocation rl = textureId(key);
+        DynamicTexture texture = new DynamicTexture(image);
+        // Region quads are drawn edge to edge under a fractional
+        // zoom/pan transform; with the GL default REPEAT wrap, edge
+        // samples occasionally land on exactly u/v = 1.0 (float
+        // precision) and wrap to the OPPOSITE row/column of the same
+        // region — a 1px line of shifted pixels along region borders.
+        GlStateManager._bindTexture(texture.getId());
+        GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+        GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+        GlStateManager._bindTexture(0);
+        Minecraft.getInstance().getTextureManager().register(rl, texture);
+        REGIONS.put(key, new Region(version, rl, contentMask));
+        DISK_MISSES.remove(key);
     }
 
     /**

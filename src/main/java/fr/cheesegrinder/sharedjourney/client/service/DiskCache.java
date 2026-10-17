@@ -49,7 +49,9 @@ public final class DiskCache {
         return t;
     });
 
-    private static Path currentRoot;
+    /** Volatile: {@link #read} is also called from the region loader threads. */
+    private static volatile Path currentRoot;
+
     private static final RegionIndex index = new RegionIndex();
 
     private DiskCache() {}
@@ -126,13 +128,18 @@ public final class DiskCache {
         });
     }
 
-    /** Reads a PNG from the disk cache, or null. (Blocking call: fast local read.) */
+    /**
+     * Reads a PNG from the disk cache, or null. Blocking local read, safe to
+     * call from any thread (the root is captured once, so a logout in the
+     * middle cannot turn it into a NullPointerException).
+     */
     public static byte[] read(RegionKey key) {
-        if (currentRoot == null) {
+        Path root = currentRoot;
+        if (root == null) {
             return null;
         }
 
-        Path file = pathOf(key);
+        Path file = pathOf(root, key);
         if (!Files.exists(file)) {
             return null;
         }

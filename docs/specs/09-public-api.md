@@ -81,7 +81,7 @@ rendered regions are not repainted (use `/sj admin regen`).
 | `MapView` | Read-only view of a map being drawn: `isMinimap`, `dimension`, `currentLayer`, `caveBand`, `centerX/Z` (blocks), `zoomScale` (GUI px per block), `viewWidth/Height`, and conversions `screenX/screenY/worldX/worldZ`. Screen coordinates are GUI pixels local to the view (origin top-left). |
 | `MapRenderEvent` | Once per frame per visible map (minimap and fullscreen), after the tiles and bridged overlays, below player markers and widgets; draw with `getGraphics()`; clipped to the map area. On a rotating minimap the pose is rotated, so world-anchored draws land correctly but rotate with the map. |
 | `FullMapScreenEvent.Opened(view)` / `.Closed` | Visibility semantics: also fired when the map is temporarily replaced (waypoint modal, chat) and shown again. |
-| `MapLayerChangedEvent(layer, minimap)` | Explicit selections only (toolbar, keyboard), never automatic day/night/cave switches. |
+| `MapLayerChangedEvent(layer, minimap[, automatic])` | Posted for explicit selections (toolbar, keyboard; `isAutomatic() == false`) and for the minimap's automatic day/night/cave switches (`isAutomatic() == true`, after the 1 s hysteresis of [07 MM-24](07-client-ui.md)). The fullscreen map has no automatic mode. |
 
 ## 6. Declarative markers (client)
 

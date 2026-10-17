@@ -61,6 +61,7 @@ public final class ClientInputEvents {
         while (ClientSetupEvents.CYCLE_LAYER.consumeClick()) {
             MinimapRenderer.cycleLayer();
         }
+        MinimapRenderer.tickAutoLayer();
         while (ClientSetupEvents.ZOOM_IN.consumeClick()) {
             MinimapRenderer.zoomIn();
         }

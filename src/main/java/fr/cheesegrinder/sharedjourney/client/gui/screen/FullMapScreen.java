@@ -22,6 +22,7 @@ import fr.cheesegrinder.sharedjourney.client.gui.util.IconButton;
 import fr.cheesegrinder.sharedjourney.client.gui.util.UiColors;
 import fr.cheesegrinder.sharedjourney.client.render.DebugOverlay;
 import fr.cheesegrinder.sharedjourney.client.render.EntityDots;
+import fr.cheesegrinder.sharedjourney.client.render.LayerTransition;
 import fr.cheesegrinder.sharedjourney.client.render.MapMarkerRenderer;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
 import fr.cheesegrinder.sharedjourney.client.render.MobHeadIcons;
@@ -132,6 +133,9 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
     private float zoom = 1.0f; // screen pixels per block
     private MapLayer layer;
     private int bandIndex;
+    /** Previous-layer textures while a new layer loads, and the layer name label. */
+    private final LayerTransition transition = new LayerTransition();
+
     private boolean dragged;
     /**
      * Create train being followed (clicked on the map): the view re-centers
@@ -1195,6 +1199,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         renderTopInfoBar(gg, mc);
         renderHoverBar(gg, mc, mouseX, mouseY);
         renderRegenProgress(gg);
+        renderLayerLabel(gg);
 
         // Incoming chat messages over the map (JourneyMap style): the HUD
         // chat is painted under this screen, so redraw it on top. Skipped
@@ -1330,6 +1335,25 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         gg.fill(x0, y0 + 12, x0 + fillW, y0 + 16, 0xFF4CBB6A);
     }
 
+    /**
+     * Name of the layer just selected, centered under the regen progress
+     * area, for about a second with a fade-out.
+     */
+    private void renderLayerLabel(GuiGraphics gg) {
+        float alpha = transition.labelAlpha();
+        int textColor = LayerTransition.withAlpha(0xE0E0E0, alpha, 0xFF);
+        int backColor = LayerTransition.withAlpha(0x101010, alpha, 0xA0);
+        if (textColor == 0 || backColor == 0) {
+            return;
+        }
+
+        String text = transition.labelText().getString();
+        int x = (width - font.width(text)) / 2;
+        int y = 72;
+        gg.fill(x - 4, y - 2, x + font.width(text) + 4, y + 10, backColor);
+        gg.drawString(font, text, x, y, textColor);
+    }
+
     /** Centered text line over a translucent background (JourneyMap style). */
     private void drawInfoBar(GuiGraphics gg, String text, int y) {
         int w = font.width(text);
@@ -1446,6 +1470,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
 
         var dim = mc.level.dimension();
         int band = layer == MapLayer.CAVE ? currentBand() : 0;
+        transition.update(layer, band);
+        ClientMapCache.pumpLoads();
 
         double blocksHalfW = (width / 2.0) / zoom;
         double blocksHalfH = (height / 2.0) / zoom;
@@ -1467,7 +1493,7 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         for (int rx = minRx; rx <= maxRx; rx++) {
             for (int rz = minRz; rz <= maxRz; rz++) {
                 RegionKey key = new RegionKey(dim, layer, layer == MapLayer.CAVE ? band : 0, rx, rz);
-                ClientMapCache.Region region = ClientMapCache.getOrLoad(key);
+                ClientMapCache.Region region = transition.regionFor(key);
                 if (region != null) {
                     gg.blit(
                             region.texture(),
