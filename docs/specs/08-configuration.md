@@ -93,6 +93,11 @@ settings edited through the in-game screen apply live and are saved on close.
 | `enabled` | true | — |
 | `radius` | 48 | 8–128 (capped by the server) |
 | `mobHeads` | true | head icons vs dots |
+| `heightFade` | true | fade radar entities far above / below the player ([07 RDR-06](07-client-ui.md)) |
+| `heightFadeStart` | 6 | 1–64 blocks of vertical offset before the fade starts |
+| `heightFadeFull` | 24 | 2–64 blocks at which the fade is complete (opacity floor 0.25); used as start + 1 when not above `heightFadeStart` |
+| `heightFadeLabel` | false | signed Y offset label next to faded entities |
+| `heightFadeArrow` | true | up / down arrow next to faded entities |
 | `showPlayers` | true | — |
 | `hideFromMap` | false | server-enforced preference |
 | `showHostile` / `showPassive` / `showPets` / `showVillagers` | true / false / true / true | — |

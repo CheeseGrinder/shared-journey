@@ -79,6 +79,11 @@ public final class Lang {
     public static final String SETTINGS_RADAR_ENABLED = key("settings.radar.enabled");
     public static final String SETTINGS_RADAR_RADIUS = key("settings.radar.radius");
     public static final String SETTINGS_RADAR_HEADS = key("settings.radar.mob_heads");
+    public static final String SETTINGS_RADAR_HEIGHT_FADE = key("settings.radar.height_fade");
+    public static final String SETTINGS_RADAR_HEIGHT_FADE_START = key("settings.radar.height_fade_start");
+    public static final String SETTINGS_RADAR_HEIGHT_FADE_FULL = key("settings.radar.height_fade_full");
+    public static final String SETTINGS_RADAR_HEIGHT_FADE_LABEL = key("settings.radar.height_fade_label");
+    public static final String SETTINGS_RADAR_HEIGHT_FADE_ARROW = key("settings.radar.height_fade_arrow");
 
     public static final String SETTINGS_MAP_DEFAULT_LAYER = key("settings.map.default_layer");
     public static final String SETTINGS_MAP_AUTO_LAYER = key("settings.map.auto_layer");

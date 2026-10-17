@@ -174,12 +174,12 @@ public final class MobHeadIcons {
     /**
      * Draws the head icon of {@code e} centered on (x, y) in the current
      * pose, {@code size} units square for the whole atlas cell (see
-     * {@link #ICON_SIZE}). Queued when a batch is open, drawn right away
-     * otherwise. Returns false when no icon can be rendered for this
+     * {@link #ICON_SIZE}) at opacity {@code alpha} (1 = opaque). Queued
+     * when a batch is open, drawn right away otherwise. Returns false when no icon can be rendered for this
      * entity type (or none exists yet this frame): the caller draws its
      * dot instead.
      */
-    public static boolean draw(GuiGraphics gg, Entity e, float x, float y, float size) {
+    public static boolean draw(GuiGraphics gg, Entity e, float x, float y, float size, float alpha) {
         Minecraft mc = Minecraft.getInstance();
         var renderer = mc.getEntityRenderDispatcher().getRenderer(e);
         if (!(renderer instanceof LivingEntityRenderer<?, ?> living) || !(e instanceof LivingEntity)) {
@@ -222,7 +222,7 @@ public final class MobHeadIcons {
             return false;
         }
 
-        drawIcon(gg, slot.get(), x, y, size);
+        drawIcon(gg, slot.get(), x, y, size, alpha);
         return true;
     }
 
@@ -249,15 +249,15 @@ public final class MobHeadIcons {
      * is open (an atlas page has no ResourceLocation for the batched GUI
      * render types, hence the dedicated immediate path).
      */
-    private static void drawIcon(GuiGraphics gg, MobIconAtlas.Slot slot, float x, float y, float size) {
+    private static void drawIcon(GuiGraphics gg, MobIconAtlas.Slot slot, float x, float y, float size, float alpha) {
         Matrix4f pose = gg.pose().last().pose();
         if (MobIconBatch.isActive()) {
-            MobIconBatch.add(slot, pose, x, y, size);
+            MobIconBatch.add(slot, pose, x, y, size, alpha);
             return;
         }
 
         MobIconBatch.begin();
-        MobIconBatch.add(slot, pose, x, y, size);
+        MobIconBatch.add(slot, pose, x, y, size, alpha);
         MobIconBatch.flush(gg);
     }
 

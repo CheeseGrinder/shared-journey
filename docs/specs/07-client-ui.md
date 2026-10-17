@@ -166,6 +166,9 @@ legend (300) → context menu (500) → debug overlay.
 | RDR-03 | With `radar.mobHeads` on, mobs are flat **head icons** rendered from the entity's own model and texture; if an icon is not ready or cannot be built, the coloured dot (5×5 with black outline) is drawn. |
 | RDR-04 | Icons are constant screen size and kept upright (counter-rotated/scaled against the map pose); one batched draw per surface per frame. |
 | RDR-05 | Other players are drawn from the server's `PlayerPositionsPayload` as skin heads (`radar.showPlayers`), using the live entity position when the client tracks that player. Hidden players are absent from the payload. |
+| RDR-06 | **Height fade** (`radar.heightFade`, default on), minimap and fullscreen map. For each radar entity, `dy = entity.getY() - player.getY()` (feet to feet). Opacity is 1 while `\|dy\| ≤ heightFadeStart` (default 6), then falls linearly to a floor of **0.25** at `\|dy\| ≥ heightFadeFull` (default 24; treated as start + 1 when not above the start). The floor keeps faded entities faintly visible. Fading applies to both the head icon and the dot fallback, and is a pure multiplier on opacity (no change to what is drawn, to filters or to radius). With the feature off, opacity is always 1 and drawing is identical to before. |
+| RDR-07 | While `\|dy\| > heightFadeStart`, an optional **up / down arrow** (`heightFadeArrow`, default on; up when the entity is above the player) and an optional **signed Y offset label** (`heightFadeLabel`, default off; `+12`, `-7`, rounded to whole blocks, half-scale text) are drawn to the right of the icon, white with a black outline/shadow. They are drawn after the icon batch is flushed (so icons never cover them), at constant screen size and upright (counter-rotated/scaled against the minimap pose). Their opacity follows the entity's but never drops under 0.7. |
+| RDR-08 | The vertical query window stays ±32 blocks around the player's bounding box (RDR-01): entities beyond it are not drawn at all, whatever the fade distances. The config is read once per frame (snapshot), not per entity. |
 
 ### 4.1 Mob head icons (`MobHeadIcons`, v3)
 
@@ -197,7 +200,7 @@ Client tabs apply **live**; the file is saved once on close. Tabs:
 | Tab | Visible | Content |
 |-----|---------|---------|
 | Minimap | always | enabled, size, corner, shape, frame theme (cycle: Classic, Stone, Wood, Thin), rotate, coordinates, default zoom (0.25 notches) |
-| Radar | always | enabled, radius (label shows the server cap), mob heads, players, hostile, animals, pets, villagers, hide-from-map (sent immediately) |
+| Radar | always | enabled, radius (label shows the server cap), mob heads, height fade (toggle, start and full-fade sliders, offset label, arrow; RDR-06/07), players, hostile, animals, pets, villagers, hide-from-map (sent immediately) |
 | Map | always | default layer, auto layer, cave auto-switch, remember layer, chunk grid, disk cache |
 | Waypoints | always | show waypoints, names, temp radius, beacons, beacon min/max distance, death waypoints |
 | Addons | iff `create` or `create_rns` loaded | one section per mod: train overlay, deposit overlay |

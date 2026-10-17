@@ -74,6 +74,27 @@ public final class EntityDots {
         gg.fill(x - 1, y - 1, x + 2, y + 2, argb);
     }
 
+    /**
+     * Dot at the given opacity (1 = the plain dot). The translucent form
+     * paints the outline as a ring rather than under the fill, so the fill
+     * is not tinted by the black behind it.
+     */
+    public static void draw(GuiGraphics gg, int x, int y, int argb, float alpha) {
+        if (alpha >= 1f) {
+            draw(gg, x, y, argb);
+            return;
+        }
+
+        int a = Math.clamp(Math.round(alpha * 255f), 0, 255);
+        int outline = a << 24;
+        int fill = (Math.round((argb >>> 24) * alpha) << 24) | (argb & 0xFFFFFF);
+        gg.fill(x - 2, y - 2, x + 3, y - 1, outline);
+        gg.fill(x - 2, y + 2, x + 3, y + 3, outline);
+        gg.fill(x - 2, y - 1, x - 1, y + 2, outline);
+        gg.fill(x + 2, y - 1, x + 3, y + 2, outline);
+        gg.fill(x - 1, y - 1, x + 2, y + 2, fill);
+    }
+
     /** A player's head (skin face), centered, with a white border. */
     public static void drawPlayerHead(GuiGraphics gg, int x, int y, UUID playerId, int size) {
         var connection = Minecraft.getInstance().getConnection();

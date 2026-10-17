@@ -26,6 +26,7 @@ import fr.cheesegrinder.sharedjourney.client.render.LayerTransition;
 import fr.cheesegrinder.sharedjourney.client.render.MapMarkerRenderer;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
 import fr.cheesegrinder.sharedjourney.client.render.MobHeadIcons;
+import fr.cheesegrinder.sharedjourney.client.render.RadarHeightFade;
 import fr.cheesegrinder.sharedjourney.client.render.WaypointIcons;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.DisplayNames;
@@ -1659,6 +1660,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         if (RadarClientConfig.RADAR_ENABLED.get() && ClientMapCache.radarMaxRadius > 0) {
             int radius = Math.min(RadarClientConfig.RADAR_RADIUS.get(), ClientMapCache.radarMaxRadius);
             AABB box = mc.player.getBoundingBox().inflate(radius, 32, radius);
+            RadarHeightFade fade = RadarHeightFade.current();
+            List<RadarHeightFade.Mark> marks = null;
             MobHeadIcons.beginBatch();
             try {
                 for (Entity e : mc.level.getEntities(mc.player, box)) {
@@ -1678,16 +1681,35 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                         continue;
                     }
 
+                    double dy = e.getY() - mc.player.getY();
+                    float alpha = fade.alphaFor(dy);
+                    if (fade.hasMarker(dy)) {
+                        if (marks == null) {
+                            marks = new ArrayList<>();
+                        }
+                        marks.add(new RadarHeightFade.Mark(sx, sy, dy, alpha));
+                    }
+
                     boolean head = false;
                     if (RadarClientConfig.RADAR_MOB_HEADS.get()) {
-                        head = MobHeadIcons.draw(gg, e, sx, sy, MobHeadIcons.ICON_SIZE);
+                        head = MobHeadIcons.draw(gg, e, sx, sy, MobHeadIcons.ICON_SIZE, alpha);
                     }
                     if (!head) {
-                        EntityDots.draw(gg, sx, sy, color);
+                        EntityDots.draw(gg, sx, sy, color, alpha);
                     }
                 }
             } finally {
                 MobHeadIcons.endBatch(gg);
+            }
+
+            // Arrows and offset labels on top of the flushed icons.
+            if (marks != null) {
+                for (RadarHeightFade.Mark mark : marks) {
+                    pose.pushPose();
+                    pose.translate((float) mark.x(), (float) mark.y(), 0f);
+                    fade.drawMarker(gg, mark.dy(), mark.alpha());
+                    pose.popPose();
+                }
             }
         }
 

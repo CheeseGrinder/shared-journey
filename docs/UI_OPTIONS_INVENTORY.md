@@ -39,6 +39,7 @@ NeoForge aujourd'hui.
 | radar | enabled | config | oui |
 | radar | radius | config | oui (slider, cap serveur affiché) |
 | radar | mobHeads | config | oui |
+| radar | heightFade / heightFadeStart / heightFadeFull / heightFadeLabel / heightFadeArrow | config | oui (toggle + 2 sliders + 2 toggles) |
 | radar | showPlayers | config | oui |
 | radar | hideFromMap | **UI** + config | oui |
 | radar | showHostile/Passive/Pets/Villagers | **UI** + config | oui |

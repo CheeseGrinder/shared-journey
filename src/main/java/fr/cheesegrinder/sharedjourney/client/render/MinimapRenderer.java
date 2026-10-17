@@ -45,6 +45,7 @@ import com.mojang.math.Axis;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -503,6 +504,8 @@ public final class MinimapRenderer {
             AABB box = player.getBoundingBox().inflate(radius, 32, radius);
             // One batched draw for all head icons, flushed while the
             // minimap's scissor and content pose are still in place.
+            RadarHeightFade fade = RadarHeightFade.current();
+            List<RadarHeightFade.Mark> marks = null;
             MobHeadIcons.beginBatch();
             try {
                 for (Entity e : player.level().getEntities(player, box)) {
@@ -516,6 +519,15 @@ public final class MinimapRenderer {
                         continue;
                     }
 
+                    double dy = e.getY() - player.getY();
+                    float alpha = fade.alphaFor(dy);
+                    if (fade.hasMarker(dy)) {
+                        if (marks == null) {
+                            marks = new ArrayList<>();
+                        }
+                        marks.add(new RadarHeightFade.Mark(e.getX(), e.getZ(), dy, alpha));
+                    }
+
                     // Head icon at constant screen size, kept upright: the
                     // content pose is zoom-scaled (and rotated in rotate
                     // mode), so both are countered locally. Dot fallback.
@@ -527,15 +539,30 @@ public final class MinimapRenderer {
                             gg.pose().mulPose(Axis.ZP.rotationDegrees(yaw + 180f));
                         }
                         gg.pose().scale(1f / zoom, 1f / zoom, 1f);
-                        head = MobHeadIcons.draw(gg, e, 0f, 0f, MobHeadIcons.ICON_SIZE);
+                        head = MobHeadIcons.draw(gg, e, 0f, 0f, MobHeadIcons.ICON_SIZE, alpha);
                         gg.pose().popPose();
                     }
                     if (!head) {
-                        EntityDots.draw(gg, (int) Math.floor(e.getX()), (int) Math.floor(e.getZ()), color);
+                        EntityDots.draw(gg, (int) Math.floor(e.getX()), (int) Math.floor(e.getZ()), color, alpha);
                     }
                 }
             } finally {
                 MobHeadIcons.endBatch(gg);
+            }
+
+            // Arrows and offset labels go on top of the flushed icons, at
+            // constant screen size and upright like the icons.
+            if (marks != null) {
+                for (RadarHeightFade.Mark mark : marks) {
+                    gg.pose().pushPose();
+                    gg.pose().translate((float) mark.x(), (float) mark.y(), 0f);
+                    if (rotate) {
+                        gg.pose().mulPose(Axis.ZP.rotationDegrees(yaw + 180f));
+                    }
+                    gg.pose().scale(1f / zoom, 1f / zoom, 1f);
+                    fade.drawMarker(gg, mark.dy(), mark.alpha());
+                    gg.pose().popPose();
+                }
             }
         }
 

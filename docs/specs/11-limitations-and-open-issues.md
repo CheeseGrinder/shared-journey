@@ -43,6 +43,7 @@ Three kinds of entries, kept separate:
 | B-13 | Player positions (dimension, x, z) of every non-hidden player are broadcast to everyone without distance limit — by design, that is the shared-map feature. Hiding is opt-in. | design |
 | B-14 | Server engine settings (`engine.*`) and the worker count are file-only and read at start; there is no in-game editor for them. | `OpsConfigService` |
 | B-15 | Minimap frame textures ([07 §2.1.1](07-client-ui.md)): straight square edges are stretched along their side (themes are uniform along the edge, no repeating pattern or per-edge ornaments); the round strip has finite angular resolution (512 texels), fine for smooth materials but it blurs sharp angular detail on very large minimaps; themes are bundled only (a resource pack can replace the PNGs but not the per-theme band geometry, which is fixed in code); the visual match of `CLASSIC` with the former procedural border was checked on a simulation of the sampling, not in game. | `MinimapFrame`, `tools/MinimapFrameGenerator.java` |
+| B-16 | Radar height fade ([07 RDR-06..08](07-client-ui.md)): entities never fade out completely (opacity floor 0.25); the fade distances are not coupled to the fixed ±32 block query window, so a full-fade distance above ~32 is never reached by a drawn entity; the arrow and label placement (right of the icon, fixed offset) was not checked against every icon size in game; fullscreen labels do not avoid overlapping neighbouring icons. | `RadarHeightFade` |
 
 ## C. Documentation gaps
 

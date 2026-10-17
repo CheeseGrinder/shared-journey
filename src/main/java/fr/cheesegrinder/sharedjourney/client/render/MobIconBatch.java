@@ -33,13 +33,14 @@ final class MobIconBatch {
 
     /** Floats per queued icon: 4 vertices of (x, y, z, u, v). */
     private static final int FLOATS_PER_ICON = 20;
-    /** Bytes per POSITION_TEX vertex, 4 vertices per icon. */
-    private static final int BYTES_PER_ICON = 4 * 20;
+    /** Bytes per POSITION_TEX_COLOR vertex, 4 vertices per icon. */
+    private static final int BYTES_PER_ICON = 4 * 24;
 
     private static final ByteBufferBuilder BYTES = new ByteBufferBuilder(BYTES_PER_ICON * 64);
     private static final Vector3f SCRATCH = new Vector3f();
 
     private static float[] vertices = new float[FLOATS_PER_ICON * 64];
+    private static float[] alphas = new float[64];
     private static int[] pages = new int[64];
     private static int count;
     private static boolean active;
@@ -59,9 +60,10 @@ final class MobIconBatch {
     /**
      * Queues the icon of {@code slot} centered on (x, y) in the space of
      * {@code pose}, {@code size} units square for the whole cell (the
-     * sampled inner area is smaller by the atlas inset).
+     * sampled inner area is smaller by the atlas inset), at opacity
+     * {@code alpha} (1 = opaque).
      */
-    static void add(MobIconAtlas.Slot slot, Matrix4f pose, float x, float y, float size) {
+    static void add(MobIconAtlas.Slot slot, Matrix4f pose, float x, float y, float size, float alpha) {
         ensureCapacity();
         float inner = (MobIconAtlas.CELL - 2f * MobIconAtlas.INSET) / MobIconAtlas.CELL;
         float half = size * inner / 2f;
@@ -79,6 +81,7 @@ final class MobIconBatch {
         put(base + 10, pose, x + half, y + half, u1, vBottom);
         put(base + 15, pose, x + half, y - half, u1, vTop);
         pages[count] = slot.textureId();
+        alphas[count] = alpha;
         count++;
     }
 
@@ -105,12 +108,12 @@ final class MobIconBatch {
 
     /** Draws every queued icon of one atlas page, then marks them done. */
     private static void drawPage(int textureId) {
-        RenderSystem.setShader(GameRenderer::getPositionTexShader);
+        RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
         RenderSystem.setShaderTexture(0, textureId);
-        BufferBuilder buf = new BufferBuilder(BYTES, VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        BufferBuilder buf = new BufferBuilder(BYTES, VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
         for (int i = 0; i < count; i++) {
             if (pages[i] == textureId) {
-                emit(buf, i * FLOATS_PER_ICON);
+                emit(buf, i * FLOATS_PER_ICON, alphas[i]);
                 pages[i] = 0;
             }
         }
@@ -118,10 +121,12 @@ final class MobIconBatch {
         BufferUploader.drawWithShader(buf.buildOrThrow());
     }
 
-    private static void emit(BufferBuilder buf, int base) {
+    private static void emit(BufferBuilder buf, int base, float alpha) {
         for (int v = 0; v < 4; v++) {
             int o = base + v * 5;
-            buf.addVertex(vertices[o], vertices[o + 1], vertices[o + 2]).setUv(vertices[o + 3], vertices[o + 4]);
+            buf.addVertex(vertices[o], vertices[o + 1], vertices[o + 2])
+                    .setUv(vertices[o + 3], vertices[o + 4])
+                    .setColor(1f, 1f, 1f, alpha);
         }
     }
 
@@ -142,6 +147,7 @@ final class MobIconBatch {
 
         int capacity = pages.length * 2;
         pages = Arrays.copyOf(pages, capacity);
+        alphas = Arrays.copyOf(alphas, capacity);
         vertices = Arrays.copyOf(vertices, capacity * FLOATS_PER_ICON);
     }
 }

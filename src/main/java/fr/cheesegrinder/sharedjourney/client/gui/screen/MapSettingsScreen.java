@@ -278,6 +278,27 @@ public class MapSettingsScreen extends Screen {
                 v -> Component.translatable(Lang.UNIT_BLOCKS, v),
                 RadarClientConfig.RADAR_RADIUS::set));
         rows.add(configToggle(Lang.SETTINGS_RADAR_HEADS, "mobHeads", RadarClientConfig.RADAR_MOB_HEADS));
+        rows.add(configToggle(Lang.SETTINGS_RADAR_HEIGHT_FADE, "heightFade", RadarClientConfig.HEIGHT_FADE));
+        rows.add(intSlider(
+                Component.translatable(Lang.SETTINGS_RADAR_HEIGHT_FADE_START),
+                Lang.configTooltip("heightFadeStart"),
+                1,
+                64,
+                RadarClientConfig.HEIGHT_FADE_START.get(),
+                v -> Component.translatable(Lang.UNIT_BLOCKS, v),
+                RadarClientConfig.HEIGHT_FADE_START::set));
+        rows.add(intSlider(
+                Component.translatable(Lang.SETTINGS_RADAR_HEIGHT_FADE_FULL),
+                Lang.configTooltip("heightFadeFull"),
+                2,
+                64,
+                RadarClientConfig.HEIGHT_FADE_FULL.get(),
+                v -> Component.translatable(Lang.UNIT_BLOCKS, v),
+                RadarClientConfig.HEIGHT_FADE_FULL::set));
+        rows.add(configToggle(
+                Lang.SETTINGS_RADAR_HEIGHT_FADE_LABEL, "heightFadeLabel", RadarClientConfig.HEIGHT_FADE_LABEL));
+        rows.add(configToggle(
+                Lang.SETTINGS_RADAR_HEIGHT_FADE_ARROW, "heightFadeArrow", RadarClientConfig.HEIGHT_FADE_ARROW));
         rows.add(configToggle(Lang.ACTION_SHOW_PLAYERS, "showPlayers", RadarClientConfig.RADAR_PLAYERS));
         rows.add(configToggle(Lang.ACTION_SHOW_MOBS, "showHostile", RadarClientConfig.RADAR_HOSTILE));
         rows.add(configToggle(Lang.ACTION_SHOW_ANIMALS, "showPassive", RadarClientConfig.RADAR_PASSIVE));
