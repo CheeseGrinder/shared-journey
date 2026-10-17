@@ -89,6 +89,10 @@
   "sharedjourney.action.show_players": "Show players",
   "sharedjourney.action.show_trains": "Show Create trains and tracks",
   "sharedjourney.action.show_deposits": "Show Rock & Stone deposits",
+  "sharedjourney.action.show_forced_chunks": "Show force-loaded chunks",
+  "sharedjourney.action.show_slime_chunks": "Show slime chunks",
+  "sharedjourney.overlay.forced_chunk": "Force-loaded chunk",
+  "sharedjourney.overlay.slime_chunk": "Slime chunk",
   "sharedjourney.action.rotate_map": "Rotate the minimap with the player (off: north up)",
   "sharedjourney.action.hide_from_map": "Hide me from other players' maps",
   "sharedjourney.action.show_keys": "Show legend",
@@ -130,6 +134,8 @@
   "sharedjourney.settings.map.auto_layer": "Automatic layer (day/night, caves)",
   "sharedjourney.settings.map.remember_layer": "Reopen fullscreen map on its last layer",
   "sharedjourney.settings.map.disk_cache": "Disk cache of received tiles",
+  "sharedjourney.settings.map.overlays": "Chunk overlays",
+  "sharedjourney.settings.overlay.server_disabled": "%s: disabled by the server",
   "sharedjourney.settings.waypoints.names": "Waypoint name labels",
   "sharedjourney.settings.waypoints.temp_radius": "Temp waypoint removal radius",
   "sharedjourney.settings.waypoints.beacons": "In-world beacons",
@@ -267,6 +273,16 @@
   "sharedjourney.configuration.quarantineDrainMinutes": "Quarantine Delay (minutes)",
   "sharedjourney.configuration.quarantineDrainMinutes.tooltip": "Delay before a quarantined chunk is broadcast to distant players. Randomized per chunk (+/-25%) so the reveal does not replay the hidden player's trajectory.",
 
+  "sharedjourney.configuration.overlays": "Overlays",
+  "sharedjourney.configuration.overlays.tooltip": "Server-computed chunk overlays (force-loaded chunks, slime chunks).",
+  "sharedjourney.configuration.overlays.button": "Configure",
+
+  "sharedjourney.configuration.forcedChunksEnabled": "Force-Loaded Chunks Overlay",
+  "sharedjourney.configuration.forcedChunksEnabled.tooltip": "Allow the force-loaded chunks overlay. Chunk positions are only sent for regions already explored on the shared map.",
+
+  "sharedjourney.configuration.slimeChunksEnabled": "Slime Chunks Overlay",
+  "sharedjourney.configuration.slimeChunksEnabled.tooltip": "Allow the slime chunks overlay (overworld only). Computed server-side from the world seed (never sent) and only for regions already explored on the shared map.",
+
   "sharedjourney.configuration.minimap": "Minimap",
   "sharedjourney.configuration.minimap.tooltip": "Minimap HUD settings.",
   "sharedjourney.configuration.minimap.button": "Configure",
@@ -366,6 +382,11 @@
   "sharedjourney.configuration.showTrainOverlay.tooltip": "Show Create tracks, stations and trains on the maps (via the JourneyMap bridge).",
   "sharedjourney.configuration.showDepositOverlay": "RNS Deposit Overlay",
   "sharedjourney.configuration.showDepositOverlay.tooltip": "Show discovered Create: Rock & Stone deposits on the maps (via the JourneyMap bridge).",
+
+  "sharedjourney.configuration.showForcedChunks": "Show Force-Loaded Chunks",
+  "sharedjourney.configuration.showForcedChunks.tooltip": "Highlight force-loaded chunks on the minimap and the fullscreen map (only if the server allows it).",
+  "sharedjourney.configuration.showSlimeChunks": "Show Slime Chunks",
+  "sharedjourney.configuration.showSlimeChunks.tooltip": "Highlight slime chunks on the minimap and the fullscreen map, overworld only (only if the server allows it).",
 
   "sharedjourney.configuration.showGrid": "Show Chunk Grid",
   "sharedjourney.configuration.showGrid.tooltip": "Overlay the chunk grid on the minimap and the fullscreen map.",

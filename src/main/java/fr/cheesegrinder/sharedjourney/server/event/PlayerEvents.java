@@ -2,6 +2,7 @@ package fr.cheesegrinder.sharedjourney.server.event;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.server.service.BannerWaypointService;
+import fr.cheesegrinder.sharedjourney.server.service.ChunkOverlayService;
 import fr.cheesegrinder.sharedjourney.server.service.PlayerWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.PublicWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.RegenService;
@@ -23,6 +24,7 @@ public final class PlayerEvents {
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer sp) {
             SyncService.onPlayerJoin(sp);
+            ChunkOverlayService.onPlayerJoin(sp);
             SyncService.sendHiddenPlayers(sp);
             RegenService.sendStateTo(sp);
             PublicWaypointService.sendAllTo(sp);
@@ -35,6 +37,7 @@ public final class PlayerEvents {
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer sp) {
             SyncService.onPlayerLeave(sp);
+            ChunkOverlayService.onPlayerLeave(sp);
             SyncService.clearHiddenPlayer(sp);
         }
     }
@@ -43,6 +46,7 @@ public final class PlayerEvents {
     public static void onDimensionChange(PlayerEvent.PlayerChangedDimensionEvent event) {
         if (event.getEntity() instanceof ServerPlayer sp) {
             SyncService.sendLayerSettings(sp);
+            ChunkOverlayService.onDimensionChange(sp);
         }
     }
 }

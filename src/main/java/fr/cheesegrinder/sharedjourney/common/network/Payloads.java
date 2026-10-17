@@ -16,7 +16,8 @@ import java.util.function.Consumer;
  * {@link RegionSyncPayloads} (layers, region data, handshake, requests),
  * {@link PlayerVisibilityPayloads} (hide-me preference, hidden list,
  * positions), {@link RegenPayloads} (regen state/masks/progress),
- * {@link TrainPathPayloads} (Create bridge), {@link WaypointPayloads}
+ * {@link TrainPathPayloads} (Create bridge), {@link ChunkOverlayPayloads}
+ * (server-computed chunk overlays), {@link WaypointPayloads}
  * (public + player + banner) and {@link OpsConfigPayloads} (ops config
  * screen). This class is the thin orchestrator: the {@link Hooks} handler
  * indirection, the shared payload id factory and the registration entry
@@ -60,6 +61,10 @@ public final class Payloads {
         public static BiConsumer<Player, RegionSyncPayloads.ClientIndexPayload> serverClientIndex = (pl, p) -> {};
         public static BiConsumer<Player, PlayerVisibilityPayloads.MapVisibilityPayload> serverMapVisibility =
                 (pl, p) -> {};
+        public static Consumer<ChunkOverlayPayloads.OverlaySettingsPayload> clientOverlaySettings = p -> {};
+        public static Consumer<ChunkOverlayPayloads.OverlayRegionDataPayload> clientOverlayRegionData = p -> {};
+        public static BiConsumer<Player, ChunkOverlayPayloads.OverlayRegionRequestPayload> serverOverlayRegionRequest =
+                (pl, p) -> {};
         public static Consumer<OpsConfigPayloads.OpsConfigPayload> clientOpsConfig = p -> {};
         public static BiConsumer<Player, OpsConfigPayloads.OpsConfigRequestPayload> serverOpsConfigRequest =
                 (pl, p) -> {};
@@ -85,6 +90,7 @@ public final class Payloads {
         PlayerVisibilityPayloads.register(registrar);
         RegenPayloads.register(registrar);
         TrainPathPayloads.register(registrar);
+        ChunkOverlayPayloads.register(registrar);
         WaypointPayloads.register(registrar);
         OpsConfigPayloads.register(registrar);
     }

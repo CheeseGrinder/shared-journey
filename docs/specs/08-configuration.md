@@ -10,7 +10,8 @@ config spec; the in-game ops tab clamps again server-side.
 | `SERVER` | defaults in `defaultconfigs/sharedjourney-server.toml`, overridden per world in `<world>/serverconfig/sharedjourney-server.toml` | Per world |
 
 Hot reload: server reload invalidates parsed caches (layers, hidden blocks, colour
-overrides), clears the block-colour cache and re-broadcasts the layer settings. Client
+overrides), clears the block-colour cache and re-broadcasts the layer settings and the
+allowed chunk overlays. Client
 settings edited through the in-game screen apply live and are saved on close.
 
 ## 1. SERVER
@@ -63,6 +64,13 @@ settings edited through the in-game screen apply live and are saved on close.
 | `hiddenAreaPolicy` | `QUARANTINE` | `OFF`, `QUARANTINE`, `EXCLUDE` | Gating of map updates near hidden players ([04](04-privacy-and-anti-exploit.md)) |
 | `quarantineRadiusChunks` | 8 | 1–32 | Radius (floored to view distance + 1) |
 | `quarantineDrainMinutes` | 10 | 1–120 | Mean delay before a quarantined chunk is broadcast (±25 %) |
+
+### `[overlays]`
+
+| Key | Default | Effect |
+|-----|---------|--------|
+| `forcedChunksEnabled` | true | Allow the force-loaded chunks overlay ([13](13-chunk-overlays.md)). When false the server never answers nor pushes it and announces it as disabled (clients hide the button and the settings row). Not editable in the in-game ops tab (file / NeoForge config screen only) |
+| `slimeChunksEnabled` | true | Same for the slime chunks overlay (overworld only). The slime data is computed server-side from the world seed, which is never sent |
 
 ## 2. COMMON
 
@@ -119,6 +127,8 @@ settings edited through the in-game screen apply live and are saved on close.
 |-----|---------|--------|
 | `showTrainOverlay` | true | Create trains/tracks (bridge) |
 | `showDepositOverlay` | true | Create: Rock & Stone deposits (bridge) |
+| `showForcedChunks` | false | Highlight force-loaded chunks on the maps; also needs `overlays.forcedChunksEnabled` on the server ([13](13-chunk-overlays.md)) |
+| `showSlimeChunks` | false | Highlight slime chunks (overworld only, from zoom 0.25 px per block); also needs `overlays.slimeChunksEnabled` on the server |
 | `showGrid` | false | Chunk grid (minimap from zoom 1.0, fullscreen from label 1024) |
 | `showWaypoints` | true | Global waypoint overlay switch |
 | `showCave` | true | Allow the auto-switch to CAVE underground |
@@ -145,3 +155,5 @@ settings edited through the in-game screen apply live and are saved on close.
 3. Set `syncRateTicks=1200`: new terrain still reaches players promptly (immediate push on
    render) while periodic catch-up becomes slow.
 4. Put an invalid layer in `defaultLayers`: the config screen/loader rejects it.
+5. Set `overlays.slimeChunksEnabled=false` and reload: clients receive the new flags and the
+   slime button / settings toggle become unavailable ([13](13-chunk-overlays.md)).

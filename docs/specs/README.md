@@ -25,6 +25,7 @@ the discrepancy is listed in [11-limitations-and-open-issues.md](11-limitations-
 | 10 | [Compatibility bridges](10-compat-bridges.md) | JourneyMap bridge, fullscreen bridge, Create trains, `jmshim` |
 | 11 | [Limitations and open issues](11-limitations-and-open-issues.md) | Accepted limits, suspected defects, doc/code gaps |
 | 12 | [Radar rules](12-radar-rules.md) | JSON radar categories: matchers, effects, merging, defaults |
+| 13 | [Chunk overlays](13-chunk-overlays.md) | Force-loaded and slime chunks: server-computed bitmaps, sync, privacy, toggles |
 
 ## Conventions
 
@@ -51,6 +52,7 @@ the discrepancy is listed in [11-limitations-and-open-issues.md](11-limitations-
 | Waypoints (private/public/temp/banner/death) | Implemented |
 | Fullscreen map, minimap, radar | Implemented |
 | Radar rules in JSON ([12](12-radar-rules.md)) | Implemented, not yet checked in game |
-| Public API (waypoints, map, layers, markers, UI events) | Implemented, no internal consumer for the toolbar API |
+| Chunk overlays: force-loaded and slime ([13](13-chunk-overlays.md)) | Implemented, not yet checked in game |
+| Public API (waypoints, map, layers, markers, UI events) | Implemented; the toolbar, render and info-bar events are consumed internally by the chunk overlays ([09 §8](09-public-api.md)) |
 | Player marker texture | Planned (TODO P3, waiting for the asset) |
 | Create rail flicker at low zoom (minification) | Known, accepted (TODO P5) |

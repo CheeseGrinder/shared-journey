@@ -16,11 +16,13 @@ import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
 import fr.cheesegrinder.sharedjourney.client.gui.util.OptionList;
 import fr.cheesegrinder.sharedjourney.client.gui.util.OptionList.OptionRow;
 import fr.cheesegrinder.sharedjourney.client.gui.util.UiColors;
+import fr.cheesegrinder.sharedjourney.client.overlay.ChunkOverlayStore;
 import fr.cheesegrinder.sharedjourney.client.render.DebugOverlay;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.common.config.PrivacyServerConfig;
 import fr.cheesegrinder.sharedjourney.common.network.OpsConfigPayloads;
 import fr.cheesegrinder.sharedjourney.common.network.PlayerVisibilityPayloads;
+import fr.cheesegrinder.sharedjourney.common.overlay.ChunkOverlayKind;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
 
 import net.minecraft.client.Minecraft;
@@ -35,6 +37,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
 import net.neoforged.fml.ModList;
+import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import org.jetbrains.annotations.NotNull;
@@ -340,7 +343,31 @@ public class MapSettingsScreen extends Screen {
         rows.add(configToggle(Lang.SETTINGS_MAP_REMEMBER_LAYER, "rememberLayer", MapClientConfig.REMEMBER_LAYER));
         rows.add(configToggle(Lang.ACTION_SHOW_GRID, "showGrid", MapClientConfig.SHOW_GRID));
         rows.add(configToggle(Lang.SETTINGS_MAP_DISK_CACHE, "diskCache", MapClientConfig.DISK_CACHE_ENABLED));
+        rows.add(header(Component.translatable(Lang.SETTINGS_MAP_OVERLAYS)));
+        rows.add(overlayRow(
+                ChunkOverlayKind.FORCED_CHUNKS,
+                Lang.ACTION_SHOW_FORCED_CHUNKS,
+                "showForcedChunks",
+                MapClientConfig.SHOW_FORCED_CHUNKS));
+        rows.add(overlayRow(
+                ChunkOverlayKind.SLIME_CHUNKS,
+                Lang.ACTION_SHOW_SLIME_CHUNKS,
+                "showSlimeChunks",
+                MapClientConfig.SHOW_SLIME_CHUNKS));
         return rows;
+    }
+
+    /**
+     * Toggle of a server-computed chunk overlay, or a notice when the
+     * server does not allow it (the client toggle would have no effect).
+     */
+    private static OptionRow overlayRow(
+            ChunkOverlayKind kind, String labelKey, String configKey, ModConfigSpec.BooleanValue value) {
+        if (ChunkOverlayStore.isAllowed(kind)) {
+            return configToggle(labelKey, configKey, value);
+        }
+
+        return info(Component.translatable(Lang.SETTINGS_OVERLAY_SERVER_DISABLED, Component.translatable(labelKey)));
     }
 
     private List<OptionRow> waypointRows() {

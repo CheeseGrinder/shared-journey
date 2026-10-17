@@ -6,6 +6,7 @@ import fr.cheesegrinder.sharedjourney.common.config.CommonConfig;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
 import fr.cheesegrinder.sharedjourney.common.network.Payloads;
 import fr.cheesegrinder.sharedjourney.server.compat.CreateTrainPathService;
+import fr.cheesegrinder.sharedjourney.server.service.ChunkOverlayService;
 import fr.cheesegrinder.sharedjourney.server.service.MapApiService;
 import fr.cheesegrinder.sharedjourney.server.service.OpsConfigService;
 import fr.cheesegrinder.sharedjourney.server.service.PlayerWaypointService;
@@ -46,6 +47,7 @@ public class SharedJourney {
         Payloads.Hooks.serverClientIndex = SyncService::handleClientIndex;
         Payloads.Hooks.serverMapVisibility = SyncService::handleMapVisibility;
         Payloads.Hooks.serverTrainPathRequest = CreateTrainPathService::handleRequest;
+        Payloads.Hooks.serverOverlayRegionRequest = ChunkOverlayService::handleRequest;
         Payloads.Hooks.serverPublicWaypoint = PublicWaypointService::handleUpsert;
         Payloads.Hooks.serverPublicWaypointRemove = PublicWaypointService::handleRemove;
         Payloads.Hooks.serverPlayerWaypoint = PlayerWaypointService::handleUpsert;

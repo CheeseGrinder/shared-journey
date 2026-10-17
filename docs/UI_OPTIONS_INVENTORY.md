@@ -14,6 +14,10 @@ face à JourneyMap, et ce qui devrait devenir configurable.
 | Overlays (groupe dédié) | grille de chunks, waypoints, joueurs — les overlays bridgés (trains Create, gisements RNS) gardent leurs propres toggles sur la carte, configs dans l'onglet Addons de l'écran de réglages |
 | — | Fermer (à droite) |
 
+### Zone addons (haut-gauche, y = 30, via `FullMapToolbarEvent`)
+Chunks chargés en permanence (lodestone) et slime chunks (slime ball, overworld) — boutons
+fournis par les overlays intégrés (specs/13), affichés seulement si le serveur les autorise.
+
 ### Barre de gauche
 Aller aux coordonnées (X/Z), centrer sur le joueur, zoom +/−, gestionnaire de waypoints.
 
@@ -45,6 +49,7 @@ NeoForge aujourd'hui.
 | radar | showHostile/Passive/Pets/Villagers | **UI** + config | oui |
 | radar | règles JSON (`config/sharedjourney/radar_rules/*.json`, `/sj radar reload`) | fichier (hors config TOML) | non (édition de fichier ; les 4 toggles ci-dessus filtrent les règles par catégorie, cf. specs/12) |
 | map | showTrainOverlay / showDepositOverlay | **UI** + config | oui |
+| map | showForcedChunks / showSlimeChunks | **UI** (addon zone TOP_LEFT, only if the server allows it) + config + settings screen Map tab (specs/13) | oui |
 | map | showGrid | **UI** + config | oui |
 | map | showCave | **UI** + config | oui |
 | map | defaultLayer / autoLayer | config | oui |
@@ -69,6 +74,7 @@ NeoForge aujourd'hui.
 | sync | pushRadiusRegions / maxKbPerSecond / syncRateTicks / allowOnDemandRequests / radarMaxRadius | onglet ops |
 | waypoints | deathWaypointsEnabled / waypointStorage | onglet ops |
 | privacy | hiddenAreaPolicy / quarantineRadiusChunks / quarantineDrainMinutes | onglet ops |
+| overlays | forcedChunksEnabled / slimeChunksEnabled | config only today (file / NeoForge config screen), not yet in the ops tab (specs/13, B-18) |
 
 ## 3. Face à JourneyMap — ce qui manque
 

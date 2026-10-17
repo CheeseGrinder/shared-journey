@@ -93,11 +93,13 @@ sequenceDiagram
 | `RegenChunksPayload(dim, rx, rz, mask[16])` | S2C | Done-chunk bitmask of one region, ~1/s for touched regions. |
 | `RegenProgressPayload(active, done, total)` | S2C | Numeric progress, ~1/s; `active=false` clears. |
 | `TrainPathRequestPayload(trainId)` / `TrainPathPayload(trainId, xs[], zs[])` | C2S / S2C | Create bridge ([10](10-compat-bridges.md)). |
+| `OverlaySettingsPayload(forcedChunks, slimeChunks)` | S2C | Chunk overlays the server allows ([13](13-chunk-overlays.md)). Sent at login and on config reload. |
+| `OverlayRegionRequestPayload(kind, dimension, rxs[], rzs[])` / `OverlayRegionDataPayload(kind, dimension, [(rx, rz, bitmap)])` | C2S / S2C | Per-region chunk bitmaps of the force-loaded and slime chunk overlays ([13](13-chunk-overlays.md)); forced-chunk changes are pushed with the same data payload. |
 | `PublicWaypoint[Remove]Payload`, `PlayerWaypoint[Remove]Payload` | C2S + S2C | Waypoints ([06](06-waypoints.md)). |
 | `BannerWaypoint[Remove]Payload` | S2C | Banner waypoints. |
 | `OpsConfigRequestPayload` / `OpsConfigPayload` | C2S / both | In-game server config ([05](05-regen-commands-admin.md)). |
 
-Total: **20** payload registrations on one registrar versioned **`"1"`**.
+Total: **23** payload registrations on one registrar versioned **`"1"`**.
 
 | ID | Requirement |
 |----|-------------|

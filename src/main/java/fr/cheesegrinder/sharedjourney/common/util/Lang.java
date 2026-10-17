@@ -39,6 +39,8 @@ public final class Lang {
     public static final String ACTION_SHOW_PLAYERS = action("show_players");
     public static final String ACTION_SHOW_TRAINS = action("show_trains");
     public static final String ACTION_SHOW_DEPOSITS = action("show_deposits");
+    public static final String ACTION_SHOW_FORCED_CHUNKS = action("show_forced_chunks");
+    public static final String ACTION_SHOW_SLIME_CHUNKS = action("show_slime_chunks");
     public static final String ACTION_ROTATE_MAP = action("rotate_map");
     public static final String ACTION_HIDE_FROM_MAP = action("hide_from_map");
     public static final String ACTION_SHOW_KEYS = action("show_keys");
@@ -89,6 +91,8 @@ public final class Lang {
     public static final String SETTINGS_MAP_AUTO_LAYER = key("settings.map.auto_layer");
     public static final String SETTINGS_MAP_REMEMBER_LAYER = key("settings.map.remember_layer");
     public static final String SETTINGS_MAP_DISK_CACHE = key("settings.map.disk_cache");
+    public static final String SETTINGS_MAP_OVERLAYS = key("settings.map.overlays");
+    public static final String SETTINGS_OVERLAY_SERVER_DISABLED = key("settings.overlay.server_disabled");
 
     public static final String SETTINGS_WAYPOINT_NAMES = key("settings.waypoints.names");
     public static final String SETTINGS_WAYPOINT_TEMP_RADIUS = key("settings.waypoints.temp_radius");
@@ -173,6 +177,11 @@ public final class Lang {
     public static final String LEGEND_KEY_C = key("legend.key_c");
     public static final String LEGEND_KEY_F = key("legend.key_f");
     public static final String LEGEND_KEY_T = key("legend.key_t");
+
+    // ------------------------------------------------------------------ chunk overlays (hover info)
+
+    public static final String OVERLAY_FORCED_CHUNK = key("overlay.forced_chunk");
+    public static final String OVERLAY_SLIME_CHUNK = key("overlay.slime_chunk");
 
     // ------------------------------------------------------------------ minimap
 

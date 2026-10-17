@@ -3,6 +3,7 @@ package fr.cheesegrinder.sharedjourney.client.event;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapBridge;
 import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
+import fr.cheesegrinder.sharedjourney.client.overlay.ChunkOverlayStore;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
 import fr.cheesegrinder.sharedjourney.client.render.RadarRules;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
@@ -31,6 +32,7 @@ public final class ClientSessionEvents {
     @SubscribeEvent
     public static void onLogin(ClientPlayerNetworkEvent.LoggingIn event) {
         ClientMapCache.clear();
+        ChunkOverlayStore.clear();
         MinimapRenderer.resetAutoLayer();
         DiskCache.openSession();
         WaypointStore.openSession();
@@ -70,6 +72,7 @@ public final class ClientSessionEvents {
         DiskCache.closeSession();
         WaypointStore.closeSession();
         ClientMapCache.clear();
+        ChunkOverlayStore.reset();
         MinimapRenderer.resetAutoLayer();
     }
 }

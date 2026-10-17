@@ -7,6 +7,7 @@ import fr.cheesegrinder.sharedjourney.server.command.MapCommands;
 import fr.cheesegrinder.sharedjourney.server.render.BlockPalette;
 import fr.cheesegrinder.sharedjourney.server.service.BannerWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.CaveTracker;
+import fr.cheesegrinder.sharedjourney.server.service.ChunkOverlayService;
 import fr.cheesegrinder.sharedjourney.server.service.MapManager;
 import fr.cheesegrinder.sharedjourney.server.service.PlayerWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.PublicWaypointService;
@@ -63,6 +64,7 @@ public final class ServerLifecycleEvents {
         BannerWaypointService.shutdown();
         MapManager.shutdown();
         QuarantineService.shutdown();
+        ChunkOverlayService.shutdown();
     }
 
     @SubscribeEvent
@@ -82,6 +84,7 @@ public final class ServerLifecycleEvents {
         QuarantineService.tick(event.getServer());
         RegenService.tick(event.getServer());
         SyncService.tick(event.getServer());
+        ChunkOverlayService.tick(event.getServer());
     }
 
     @SubscribeEvent

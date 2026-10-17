@@ -3,8 +3,9 @@ package fr.cheesegrinder.sharedjourney.client.config;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
- * "map" section of the client config: bridged plugin overlays, chunk grid,
- * layer selection (default/auto/cave) and the disk cache toggle.
+ * "map" section of the client config: bridged plugin overlays, server-computed
+ * chunk overlays (force-loaded, slime), chunk grid, layer selection
+ * (default/auto/cave) and the disk cache toggle.
  */
 public final class MapClientConfig {
 
@@ -12,6 +13,11 @@ public final class MapClientConfig {
     public static ModConfigSpec.BooleanValue SHOW_TRAIN_OVERLAY;
     /** Create: Rock & Stone deposit overlay (through the JourneyMap bridge). */
     public static ModConfigSpec.BooleanValue SHOW_DEPOSIT_OVERLAY;
+
+    /** Force-loaded chunks highlighted on the maps (server must allow it). */
+    public static ModConfigSpec.BooleanValue SHOW_FORCED_CHUNKS;
+    /** Slime chunks highlighted on the maps (overworld only, server must allow it). */
+    public static ModConfigSpec.BooleanValue SHOW_SLIME_CHUNKS;
 
     /** Chunk grid overlaid on the minimap and the fullscreen map. */
     public static ModConfigSpec.BooleanValue SHOW_GRID;
@@ -36,6 +42,10 @@ public final class MapClientConfig {
                 .define("showTrainOverlay", true);
         SHOW_DEPOSIT_OVERLAY = b.comment("Create: Rock & Stone deposit overlay (JourneyMap bridge).")
                 .define("showDepositOverlay", true);
+        SHOW_FORCED_CHUNKS = b.comment("Highlight force-loaded chunks on the maps (if the server allows it).")
+                .define("showForcedChunks", false);
+        SHOW_SLIME_CHUNKS = b.comment("Highlight slime chunks on the maps, overworld only (if the server allows it).")
+                .define("showSlimeChunks", false);
         SHOW_GRID = b.comment("Chunk grid overlaid on the minimap and the fullscreen map.")
                 .define("showGrid", false);
         SHOW_WAYPOINTS = b.comment("Waypoints drawn on the minimap and the fullscreen map.")

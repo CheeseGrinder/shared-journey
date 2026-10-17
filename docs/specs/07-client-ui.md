@@ -85,7 +85,8 @@ each track their own displayed layer and cave band).
 3. Entity radar ([§4](#4-entity-radar)).
 4. Bridged plugin overlays (Create rails/trains, RNS deposits) via the JourneyMap fullscreen
    bridge, not on the CAVE layer, inside the scissor.
-5. `MapRenderEvent` overlays (public API), pose with `(0,0)` at the map's top-left. The
+5. `MapRenderEvent` overlays (public API), pose with `(0,0)` at the map's top-left; this is
+   where the force-loaded and slime chunk overlays ([13](13-chunk-overlays.md)) draw. The
    texture frame ([§2.1.1](#211-frame-minimapframe)) is drawn right after, over the map edge
    and under everything below.
 6. Declarative `MapMarker`s (API), then waypoints (constant screen size, **pinned to the
@@ -133,7 +134,9 @@ assume it; the compass toggle only controls the **minimap**).
   `y = 30` (starting after the reserved footprint of bridged widgets, ~64 px each for
   Create's train toggle and the Create: Rock & Stone toggle) and `TOP_RIGHT` marching left
   from Close. Contributed through `FullMapToolbarEvent`, re-posted on every widget rebuild
-  (open and resize).
+  (open and resize). The built-in chunk overlays use this zone too: a force-loaded chunks
+  toggle (lodestone) and, in the overworld, a slime chunks toggle (slime ball), each only if
+  the server allows it ([13 OVL-16](13-chunk-overlays.md)).
 - **Info bars**: top (`player ■ x,z,y ■ biome ■ Zoom: N`, y = 30) and bottom hover bar
   (`block ■ x, z, y ■ biome`, or just `x, z` when nothing is known). Segments from
   `FullMapInfoBarEvent.Top/Hover` are appended with ` ■ `.
@@ -201,7 +204,7 @@ Client tabs apply **live**; the file is saved once on close. Tabs:
 |-----|---------|---------|
 | Minimap | always | enabled, size, corner, shape, frame theme (cycle: Classic, Stone, Wood, Thin), rotate, coordinates, default zoom (0.25 notches) |
 | Radar | always | enabled, radius (label shows the server cap), mob heads, height fade (toggle, start and full-fade sliders, offset label, arrow; RDR-06/07), players, hostile, animals, pets, villagers, hide-from-map (sent immediately) |
-| Map | always | default layer, auto layer, cave auto-switch, remember layer, chunk grid, disk cache |
+| Map | always | default layer, auto layer, cave auto-switch, remember layer, chunk grid, disk cache; then a "Chunk overlays" section: force-loaded chunks and slime chunks toggles, each replaced by a "disabled by the server" notice when the server does not allow it ([13 OVL-18](13-chunk-overlays.md)) |
 | Waypoints | always | show waypoints, names, temp radius, beacons, beacon min/max distance, death waypoints |
 | Addons | iff `create` or `create_rns` loaded | one section per mod: train overlay, deposit overlay |
 | Server | OP only (≥ 2) | working copy of the server config; **Apply** button ([05 §3](05-regen-commands-admin.md)): layer checkboxes per dimension (+ defaults), cave band min/max, sync, waypoints, privacy |
@@ -222,6 +225,7 @@ matching text keeps its style; nested component structure is flattened.
 | Store | Content | Lifetime |
 |-------|---------|----------|
 | `ClientMapCache` (RAM) | Region textures, pending assemblies, in-flight disk loads, hover LRU (8), server announcements, hidden players, player positions, regen state/masks/progress, last ops snapshot | Per session; cleared on login/logout |
+| `ChunkOverlayStore` (RAM) | Allowed overlays announced by the server, chunk bitmaps per region (LRU 4 096), pending requests ([13](13-chunk-overlays.md)) | Per session; data cleared on login, everything on logout |
 | `DiskCache` | Region files + `index.json` | Persistent per server/world ([01 §5.2](01-regions-layers-storage.md)) |
 | `WaypointStore` | All known waypoints | RAM; local file for locally-stored ones ([06](06-waypoints.md)) |
 | `MapMarkerStore` | API marker providers | Process |
@@ -248,6 +252,8 @@ before the handshake never writes server-managed waypoints to its local file).
 6. Open the map during a regen: purple veil on painted, unfinished chunks and a progress bar.
 7. As a non-OP the settings screen has no Server tab and no Debug button.
 8. Resize the window with the map open: addon buttons are rebuilt in their zones.
+8b. Chunk overlays: see the acceptance checks of [13](13-chunk-overlays.md) (toggles in the
+   addon zone, settings rows, hover segment).
 9. Settings, Minimap tab: cycle "Frame theme" through Classic / Stone / Wood / Thin with both
    shapes and at GUI scales 1 to 4: the frame follows live, circle edges stay smooth (no
    stair-stepping), square edges stay pixel crisp, nothing overlaps the time label above a

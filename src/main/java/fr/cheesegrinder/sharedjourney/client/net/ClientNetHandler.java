@@ -1,8 +1,10 @@
 package fr.cheesegrinder.sharedjourney.client.net;
 
 import fr.cheesegrinder.sharedjourney.client.compat.CreateTrainMapBridge;
+import fr.cheesegrinder.sharedjourney.client.overlay.ChunkOverlayStore;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
+import fr.cheesegrinder.sharedjourney.common.network.ChunkOverlayPayloads;
 import fr.cheesegrinder.sharedjourney.common.network.OpsConfigPayloads;
 import fr.cheesegrinder.sharedjourney.common.network.PlayerVisibilityPayloads;
 import fr.cheesegrinder.sharedjourney.common.network.RegenPayloads;
@@ -61,6 +63,14 @@ public final class ClientNetHandler {
 
     public static void handleTrainPath(TrainPathPayloads.TrainPathPayload payload) {
         CreateTrainMapBridge.acceptPath(payload.trainId(), payload.xs(), payload.zs());
+    }
+
+    public static void handleOverlaySettings(ChunkOverlayPayloads.OverlaySettingsPayload payload) {
+        ChunkOverlayStore.acceptSettings(payload.forcedChunks(), payload.slimeChunks());
+    }
+
+    public static void handleOverlayRegionData(ChunkOverlayPayloads.OverlayRegionDataPayload payload) {
+        ChunkOverlayStore.acceptData(payload);
     }
 
     public static void handlePublicWaypoint(WaypointPayloads.PublicWaypointPayload payload) {

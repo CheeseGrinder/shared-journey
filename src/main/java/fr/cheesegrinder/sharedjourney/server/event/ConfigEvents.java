@@ -3,6 +3,7 @@ package fr.cheesegrinder.sharedjourney.server.event;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
 import fr.cheesegrinder.sharedjourney.server.render.BlockPalette;
+import fr.cheesegrinder.sharedjourney.server.service.ChunkOverlayService;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
 
 import net.neoforged.bus.api.SubscribeEvent;
@@ -23,7 +24,10 @@ public final class ConfigEvents {
             BlockPalette.invalidateOverrides();
             var server = ServerLifecycleHooks.getCurrentServer();
             if (server != null) {
-                server.execute(() -> SyncService.broadcastLayerSettings(server));
+                server.execute(() -> {
+                    SyncService.broadcastLayerSettings(server);
+                    ChunkOverlayService.broadcastSettings(server);
+                });
             }
         }
     }

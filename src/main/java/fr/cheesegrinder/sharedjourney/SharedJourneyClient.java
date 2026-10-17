@@ -43,6 +43,8 @@ public class SharedJourneyClient {
         Payloads.Hooks.clientRegenChunks = ClientNetHandler::handleRegenChunks;
         Payloads.Hooks.clientRegenProgress = ClientNetHandler::handleRegenProgress;
         Payloads.Hooks.clientTrainPath = ClientNetHandler::handleTrainPath;
+        Payloads.Hooks.clientOverlaySettings = ClientNetHandler::handleOverlaySettings;
+        Payloads.Hooks.clientOverlayRegionData = ClientNetHandler::handleOverlayRegionData;
         Payloads.Hooks.clientPublicWaypoint = ClientNetHandler::handlePublicWaypoint;
         Payloads.Hooks.clientPublicWaypointRemove = ClientNetHandler::handlePublicWaypointRemove;
         Payloads.Hooks.clientPlayerWaypoint = ClientNetHandler::handlePlayerWaypoint;

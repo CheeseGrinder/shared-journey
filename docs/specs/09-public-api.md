@@ -15,6 +15,7 @@ static `Hooks` fields wired by the entry points; calling them before wiring retu
 | Declarative markers | Client | `MapMarkerApi`, `MapMarkerProvider`, `MapMarker` |
 | Fullscreen UI extension | Client | `FullMapToolbarEvent`, `FullMapContextMenuEvent`, `FullMapInfoBarEvent` |
 | Constants | Both | `SharedJourneyConstants.MOD_ID` |
+| Reference consumers (not API) | Client | Force-loaded and slime chunk overlays, [§8](#8-reference-consumers) |
 
 ## 1. `WaypointApi` (client)
 
@@ -113,10 +114,28 @@ Not exposed: absolute positioning, custom widgets, texture icons (ItemStack only
 shortcuts, overflow handling, removal/reordering of internal rows. Buttons contributed to
 these zones are visually separated from the mod's own bars by design.
 
-## 8. Stability
+## 8. Reference consumers
 
-- Public API additions are tracked in `../../TODO.md`; the toolbar API currently has no internal
-  consumer (validated by an example mod only).
+The force-loaded and slime chunk overlays ([13](13-chunk-overlays.md)) are written the way an
+addon would be, in `client.overlay`, and use nothing but the public client API:
+
+| Need | API used |
+|------|----------|
+| Draw world-anchored rectangles on the minimap and the fullscreen map | `MapRenderEvent` + `MapView` (`dimension`, `centerX/Z`, `zoomScale`, `viewWidth/Height`, `screenX/Y`) |
+| A toggle in the dedicated addon zone of the fullscreen map | `FullMapToolbarEvent.ToolbarButton.toggle(TOP_LEFT, icon, tooltip, onPress, selected)` |
+| A fact about the hovered block in the bottom bar | `FullMapInfoBarEvent.Hover` |
+
+What the API deliberately does not offer is supplied by the mod itself: the server data
+travels over the mod's own payloads (`ChunkOverlayPayloads`), the overlay state lives in
+`ChunkOverlayStore`, and the client toggles are entries of the mod's client config. No API
+addition was needed. Observations for addon authors: the minimap has no toolbar (a minimap-only
+switch must live in a settings screen), and `MapView.zoomScale()` is the only level-of-detail
+signal — the overlays use it to stay under a bounded rectangle count.
+
+## 9. Stability
+
+- Public API additions are tracked in `../../TODO.md`; the toolbar API now has an internal
+  consumer (the chunk overlays, §8) besides the example mod.
 - Wire-format changes bump the network protocol version ([03 NET-01](03-sync-protocol.md));
   API signatures have no version number yet.
 
