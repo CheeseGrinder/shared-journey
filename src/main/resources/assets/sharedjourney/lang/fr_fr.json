@@ -37,6 +37,7 @@
   "sharedjourney.command.icons.reloaded": "Réglages des icônes de mobs rechargés : %s entrées en vigueur",
   "sharedjourney.command.icons.dumped": "Cadrage de %s mobs écrit dans %s",
   "sharedjourney.command.icons.dump_failed": "Impossible d'écrire le dump des icônes de mobs : %s",
+  "sharedjourney.command.radar.reloaded": "Règles du radar rechargées : %s règles en vigueur",
 
   "sharedjourney.context.teleport": "Se téléporter ici",
   "sharedjourney.context.waypoints": "Waypoints",

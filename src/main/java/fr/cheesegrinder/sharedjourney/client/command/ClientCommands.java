@@ -4,6 +4,7 @@ import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.event.ClientInputEvents;
 import fr.cheesegrinder.sharedjourney.client.render.MobIconDump;
 import fr.cheesegrinder.sharedjourney.client.render.MobIconTweaks;
+import fr.cheesegrinder.sharedjourney.client.render.RadarRules;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.DiskCache;
 import fr.cheesegrinder.sharedjourney.common.util.Lang;
@@ -89,7 +90,17 @@ public final class ClientCommands {
                 // /sj icons reload|dump: radar mob icon framing settings
                 .then(Commands.literal("icons")
                         .then(Commands.literal("reload").executes(ClientCommands::reloadIcons))
-                        .then(Commands.literal("dump").executes(ClientCommands::dumpIcons)));
+                        .then(Commands.literal("dump").executes(ClientCommands::dumpIcons)))
+                // /sj radar reload: radar rule files (categories)
+                .then(Commands.literal("radar")
+                        .then(Commands.literal("reload").executes(ClientCommands::reloadRadarRules)));
+    }
+
+    /** Re-reads the radar rule files. */
+    private static int reloadRadarRules(CommandContext<CommandSourceStack> ctx) {
+        int rules = RadarRules.reloadNow();
+        ctx.getSource().sendSuccess(() -> Component.translatable(Lang.COMMAND_RADAR_RELOADED, rules), false);
+        return rules;
     }
 
     /** Re-reads the mob icon settings files and rebuilds the icons. */

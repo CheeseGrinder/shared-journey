@@ -100,7 +100,7 @@ settings edited through the in-game screen apply live and are saved on close.
 | `heightFadeArrow` | true | up / down arrow next to faded entities |
 | `showPlayers` | true | — |
 | `hideFromMap` | false | server-enforced preference |
-| `showHostile` / `showPassive` / `showPets` / `showVillagers` | true / false / true / true | — |
+| `showHostile` / `showPassive` / `showPets` / `showVillagers` | true / false / true / true | Toggles of the radar categories: they gate the radar rules that name the same `category` ([12](12-radar-rules.md)); a rule without category ignores them |
 
 ### `[waypoints]`
 
@@ -133,6 +133,8 @@ settings edited through the in-game screen apply live and are saved on close.
 |------|---------|
 | `config/sharedjourney/mob_icons/*.json` | User overrides of radar mob icon framing |
 | `assets/<ns>/sharedjourney/mob_icons/*.json` | Mod / resource-pack framing |
+| `config/sharedjourney/radar_rules/*.json` | User radar rules (categories, colors, visibility), applied before the bundled ones; `/sj radar reload`. Schema in [12](12-radar-rules.md) |
+| `assets/<ns>/sharedjourney/radar_rules/*.json` | Mod / resource-pack radar rules; `assets/sharedjourney/...` ships `default.json` (the classic categories) |
 | `assets/sharedjourney/palette/vanilla.json` | Bundled vanilla block palette (see [11](11-limitations-and-open-issues.md), L-01) |
 
 ## Acceptance checks

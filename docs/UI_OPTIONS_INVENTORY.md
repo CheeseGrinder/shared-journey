@@ -43,6 +43,7 @@ NeoForge aujourd'hui.
 | radar | showPlayers | config | oui |
 | radar | hideFromMap | **UI** + config | oui |
 | radar | showHostile/Passive/Pets/Villagers | **UI** + config | oui |
+| radar | règles JSON (`config/sharedjourney/radar_rules/*.json`, `/sj radar reload`) | fichier (hors config TOML) | non (édition de fichier ; les 4 toggles ci-dessus filtrent les règles par catégorie, cf. specs/12) |
 | map | showTrainOverlay / showDepositOverlay | **UI** + config | oui |
 | map | showGrid | **UI** + config | oui |
 | map | showCave | **UI** + config | oui |

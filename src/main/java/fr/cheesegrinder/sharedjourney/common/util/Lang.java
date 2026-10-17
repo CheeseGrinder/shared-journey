@@ -237,6 +237,7 @@ public final class Lang {
     public static final String COMMAND_ICONS_RELOADED = key("command.icons.reloaded");
     public static final String COMMAND_ICONS_DUMPED = key("command.icons.dumped");
     public static final String COMMAND_ICONS_DUMP_FAILED = key("command.icons.dump_failed");
+    public static final String COMMAND_RADAR_RELOADED = key("command.radar.reloaded");
     public static final String REGEN_SCAN = key("regen.scan");
     public static final String REGEN_BOSSBAR = key("regen.bossbar");
 

@@ -4,6 +4,7 @@ import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.compat.JourneyMapBridge;
 import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
+import fr.cheesegrinder.sharedjourney.client.render.RadarRules;
 import fr.cheesegrinder.sharedjourney.client.service.ClientMapCache;
 import fr.cheesegrinder.sharedjourney.client.service.DiskCache;
 import fr.cheesegrinder.sharedjourney.client.service.WaypointStore;
@@ -17,6 +18,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.event.TagsUpdatedEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /** Client session lifecycle: local cache open/close + handshake. */
@@ -52,6 +54,12 @@ public final class ClientSessionEvents {
         // Visibility preference on the other players' map.
         PacketDistributor.sendToServer(
                 new PlayerVisibilityPayloads.MapVisibilityPayload(RadarClientConfig.HIDE_FROM_MAP.get()));
+    }
+
+    /** Entity type tags (re)synced: the radar rules' per-type resolutions may have changed. */
+    @SubscribeEvent
+    public static void onTagsUpdated(TagsUpdatedEvent event) {
+        RadarRules.invalidateCaches();
     }
 
     @SubscribeEvent

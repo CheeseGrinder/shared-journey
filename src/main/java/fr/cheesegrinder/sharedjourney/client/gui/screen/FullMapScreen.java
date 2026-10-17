@@ -1665,8 +1665,8 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
             MobHeadIcons.beginBatch();
             try {
                 for (Entity e : mc.level.getEntities(mc.player, box)) {
-                    Integer color = EntityDots.colorFor(e);
-                    if (color == null) {
+                    EntityDots.Style style = EntityDots.styleFor(e);
+                    if (style == null) {
                         continue;
                     }
 
@@ -1691,11 +1691,11 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
                     }
 
                     boolean head = false;
-                    if (RadarClientConfig.RADAR_MOB_HEADS.get()) {
-                        head = MobHeadIcons.draw(gg, e, sx, sy, MobHeadIcons.ICON_SIZE, alpha);
+                    if (RadarClientConfig.RADAR_MOB_HEADS.get() && !style.dotOnly()) {
+                        head = MobHeadIcons.draw(gg, e, sx, sy, MobHeadIcons.ICON_SIZE * style.iconScale(), alpha);
                     }
                     if (!head) {
-                        EntityDots.draw(gg, sx, sy, color, alpha);
+                        EntityDots.draw(gg, sx, sy, style.color(), alpha);
                     }
                 }
             } finally {

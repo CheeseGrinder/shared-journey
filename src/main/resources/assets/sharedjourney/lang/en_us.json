@@ -37,6 +37,7 @@
   "sharedjourney.command.icons.reloaded": "Mob icon settings reloaded: %s entries in force",
   "sharedjourney.command.icons.dumped": "Wrote the framing of %s mobs to %s",
   "sharedjourney.command.icons.dump_failed": "Could not write the mob icon dump: %s",
+  "sharedjourney.command.radar.reloaded": "Radar rules reloaded: %s rules in force",
 
   "sharedjourney.context.teleport": "Teleport here",
   "sharedjourney.context.waypoints": "Waypoints",

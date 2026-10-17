@@ -1,17 +1,12 @@
 package fr.cheesegrinder.sharedjourney.client.render;
 
-import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.TamableAnimal;
-import net.minecraft.world.entity.monster.Enemy;
-import net.minecraft.world.entity.npc.AbstractVillager;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -26,9 +21,10 @@ import org.joml.Matrix4f;
 import java.util.UUID;
 
 /**
- * Radar entity dots (minimap + fullscreen map): classification by
- * category using the client config filters, outlined stylized dots, and
- * the player's directional arrow (JourneyMap style).
+ * Radar entity dots (minimap + fullscreen map): classification through the
+ * radar rules ({@link RadarRules}) and the client config category toggles,
+ * outlined stylized dots, and the player's directional arrow (JourneyMap
+ * style).
  */
 public final class EntityDots {
 
@@ -41,31 +37,38 @@ public final class EntityDots {
     private EntityDots() {}
 
     /**
-     * Dot color for an entity, or null if its category is hidden.
-     * Order: player > tamed animal (pet) > villager > hostile > passive.
-     * Passive is any other mob: golems and water animals (squid,
-     * fish...) are neither Animal nor Enemy and were invisible with a
-     * narrower rule.
+     * How a radar entity is drawn: the dot color (also the fallback of the
+     * head icon), whether the head icon is skipped in favor of the dot, and
+     * a multiplier of the head icon size.
      */
-    public static Integer colorFor(Entity e) {
-        if (e instanceof Player) {
+    public record Style(int color, boolean dotOnly, float iconScale) {}
+
+    /**
+     * Drawing style of an entity, or null when the radar does not show it:
+     * not a living non-player entity, no rule accepts it ({@link RadarRules}),
+     * the first accepting rule hides it, or the toggle of the rule's
+     * category is off. The first accepting rule decides: a hidden category
+     * never falls through to a later rule. With the bundled rules this is
+     * the classic order pet > villager > hostile > passive.
+     */
+    public static Style styleFor(Entity e) {
+        if (!(e instanceof LivingEntity) || e instanceof Player) {
             // Players are rendered as a "skin head" via the positions
             // broadcast by the server (drawPlayerHead), not as a radar dot.
             return null;
         }
-        if (e instanceof TamableAnimal tamed && tamed.isTame()) {
-            return RadarClientConfig.RADAR_PETS.get() ? COLOR_PET : null;
+
+        RadarRuleSettings.Rule rule = RadarRules.resolve(e);
+        if (rule == null || !rule.visible()) {
+            return null;
         }
-        if (e instanceof AbstractVillager) {
-            return RadarClientConfig.RADAR_VILLAGERS.get() ? COLOR_VILLAGER : null;
+
+        RadarRuleSettings.Category category = rule.category();
+        if (category != null && !category.isEnabled()) {
+            return null;
         }
-        if (e instanceof Enemy) {
-            return RadarClientConfig.RADAR_HOSTILE.get() ? COLOR_HOSTILE : null;
-        }
-        if (e instanceof Mob) {
-            return RadarClientConfig.RADAR_PASSIVE.get() ? COLOR_PASSIVE : null;
-        }
-        return null;
+
+        return rule.style();
     }
 
     /** Stylized dot: black outline + color fill. */

@@ -5,6 +5,7 @@ import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
 import fr.cheesegrinder.sharedjourney.client.render.MobIconTweaks;
+import fr.cheesegrinder.sharedjourney.client.render.RadarRules;
 import fr.cheesegrinder.sharedjourney.client.render.WaypointIconShader;
 import fr.cheesegrinder.sharedjourney.common.network.PlayerVisibilityPayloads;
 
@@ -90,10 +91,14 @@ public final class ClientSetupEvents {
         }
     }
 
-    /** Mob icon framing settings: re-read with the resources (JSON files, see MobIconTweaks). */
+    /**
+     * Mob icon framing settings and radar rules: re-read with the resources
+     * (JSON files, see MobIconTweaks and RadarRules).
+     */
     @SubscribeEvent
     public static void onRegisterReloadListeners(RegisterClientReloadListenersEvent event) {
         event.registerReloadListener(MobIconTweaks.reloadListener());
+        event.registerReloadListener(RadarRules.reloadListener());
     }
 
     /** Core shader of the in-world waypoint icons (sharp bilinear sampling). */

@@ -24,6 +24,7 @@ the discrepancy is listed in [11-limitations-and-open-issues.md](11-limitations-
 | 09 | [Public API](09-public-api.md) | Facades, events, custom layers, markers, UI extension points |
 | 10 | [Compatibility bridges](10-compat-bridges.md) | JourneyMap bridge, fullscreen bridge, Create trains, `jmshim` |
 | 11 | [Limitations and open issues](11-limitations-and-open-issues.md) | Accepted limits, suspected defects, doc/code gaps |
+| 12 | [Radar rules](12-radar-rules.md) | JSON radar categories: matchers, effects, merging, defaults |
 
 ## Conventions
 
@@ -49,6 +50,7 @@ the discrepancy is listed in [11-limitations-and-open-issues.md](11-limitations-
 | Server render engine, sync, privacy | Implemented, validated in game |
 | Waypoints (private/public/temp/banner/death) | Implemented |
 | Fullscreen map, minimap, radar | Implemented |
+| Radar rules in JSON ([12](12-radar-rules.md)) | Implemented, not yet checked in game |
 | Public API (waypoints, map, layers, markers, UI events) | Implemented, no internal consumer for the toolbar API |
 | Player marker texture | Planned (TODO P3, waiting for the asset) |
 | Create rail flicker at low zoom (minification) | Known, accepted (TODO P5) |

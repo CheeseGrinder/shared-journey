@@ -36,6 +36,7 @@ requests, forced syncs, time since last region sent`.
 | `/sj goto <x> <z>` | Open the fullscreen map centred on the block (`+0.5`), with that block selected. Used by the clickable chat coordinates. |
 | `/sj icons reload` | Re-read the mob-icon framing settings files and rebuild the icons. |
 | `/sj icons dump` | Write the framing resolved for every living entity type to `config/sharedjourney/`. |
+| `/sj radar reload` | Re-read the radar rule files ([12](12-radar-rules.md)); reports the number of rules in force. |
 
 ### 1.3 Teleport
 

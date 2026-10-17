@@ -509,8 +509,8 @@ public final class MinimapRenderer {
             MobHeadIcons.beginBatch();
             try {
                 for (Entity e : player.level().getEntities(player, box)) {
-                    Integer color = EntityDots.colorFor(e);
-                    if (color == null) {
+                    EntityDots.Style style = EntityDots.styleFor(e);
+                    if (style == null) {
                         continue;
                     }
 
@@ -532,18 +532,19 @@ public final class MinimapRenderer {
                     // content pose is zoom-scaled (and rotated in rotate
                     // mode), so both are countered locally. Dot fallback.
                     boolean head = false;
-                    if (RadarClientConfig.RADAR_MOB_HEADS.get()) {
+                    if (RadarClientConfig.RADAR_MOB_HEADS.get() && !style.dotOnly()) {
                         gg.pose().pushPose();
                         gg.pose().translate((float) e.getX(), (float) e.getZ(), 0f);
                         if (rotate) {
                             gg.pose().mulPose(Axis.ZP.rotationDegrees(yaw + 180f));
                         }
                         gg.pose().scale(1f / zoom, 1f / zoom, 1f);
-                        head = MobHeadIcons.draw(gg, e, 0f, 0f, MobHeadIcons.ICON_SIZE, alpha);
+                        head = MobHeadIcons.draw(gg, e, 0f, 0f, MobHeadIcons.ICON_SIZE * style.iconScale(), alpha);
                         gg.pose().popPose();
                     }
                     if (!head) {
-                        EntityDots.draw(gg, (int) Math.floor(e.getX()), (int) Math.floor(e.getZ()), color, alpha);
+                        EntityDots.draw(
+                                gg, (int) Math.floor(e.getX()), (int) Math.floor(e.getZ()), style.color(), alpha);
                     }
                 }
             } finally {

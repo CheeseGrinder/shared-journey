@@ -162,7 +162,7 @@ legend (300) → context menu (500) → debug overlay.
 | ID | Requirement |
 |----|-------------|
 | RDR-01 | Active iff `radar.enabled` and the server cap > 0. Radius `min(radar.radius, radarMaxRadius)` blocks (client range 8–128, default 48); vertical window ±32 blocks. |
-| RDR-02 | Classification, in priority order: player (never a dot — see RDR-05) > tamed animal (`showPets`, blue) > villager (`showVillagers`, green) > `Enemy` (`showHostile`, red) > any other `Mob` (`showPassive`, gray). Defaults: hostile, pets, villagers on; passive off. |
+| RDR-02 | Classification is data-driven ([12](12-radar-rules.md)): ordered JSON rules, first match wins, and the toggles gate the rules that name their category. The bundled rules give, in priority order: player (never a dot — see RDR-05) > tamed animal (`showPets`, blue) > villager (`showVillagers`, green) > `Enemy` (`showHostile`, red) > any other `Mob` (`showPassive`, gray). Defaults: hostile, pets, villagers on; passive off. |
 | RDR-03 | With `radar.mobHeads` on, mobs are flat **head icons** rendered from the entity's own model and texture; if an icon is not ready or cannot be built, the coloured dot (5×5 with black outline) is drawn. |
 | RDR-04 | Icons are constant screen size and kept upright (counter-rotated/scaled against the map pose); one batched draw per surface per frame. |
 | RDR-05 | Other players are drawn from the server's `PlayerPositionsPayload` as skin heads (`radar.showPlayers`), using the live entity position when the client tracks that player. Hidden players are absent from the payload. |

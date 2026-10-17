@@ -1,0 +1,16 @@
+{
+  "_readme": [
+    "Radar rules: which entities the radar draws and how. The FIRST rule whose matcher accepts an entity decides; later rules are not consulted. Only living, non-player entities are candidates (other players are drawn as skin heads).",
+    "Edit a copy in config/sharedjourney/radar_rules/*.json, or ship your own assets/<namespace>/sharedjourney/radar_rules/*.json from a mod or resource pack. Rules of a later source are placed BEFORE these ones; a rule with the same 'id' replaces the rule in place, or removes it with \"enabled\": false; a file with \"replace\": true first discards every rule of lower priority. /sj radar reload re-reads the files in game.",
+    "Matcher (all given fields must match; a list means any of its values; absent = not tested): type (entity type id, or 'namespace:*'), tag (entity type tag id), kind (living | mob | enemy | animal | water_animal | villager | tamable), name (custom name glob, * and ?, case-insensitive), tamed (true | false, wolves / cats / parrots), owner (self | other, of a tamed animal).",
+    "Effect: category (hostile | passive | pets | villagers: the rule is hidden while the matching radar toggle is off; omit it for a rule no toggle controls), visible (false hides what the rule matches), color (\"#RRGGBB\" or \"#AARRGGBB\", the dot color; defaults to the category color), style (auto | dot: dot forces the colored dot instead of the head icon), iconScale (0.25 to 4, multiplies the head icon size).",
+    "A rule with an unknown key or an invalid value is logged and skipped. The four rules below reproduce the classic behavior: pet, then villager, then hostile, then any other mob."
+  ],
+
+  "rules": [
+    { "id": "pets", "kind": "tamable", "tamed": true, "category": "pets", "color": "#3B82F6" },
+    { "id": "villagers", "kind": "villager", "category": "villagers", "color": "#7CD97C" },
+    { "id": "hostile", "kind": "enemy", "category": "hostile", "color": "#FF4040" },
+    { "id": "passive", "kind": "mob", "category": "passive", "color": "#C8C8C8" }
+  ]
+}
