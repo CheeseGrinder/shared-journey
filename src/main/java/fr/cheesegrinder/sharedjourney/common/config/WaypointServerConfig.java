@@ -12,6 +12,15 @@ public final class WaypointServerConfig {
     /** Admin kill switch: clients also need their own deathWaypoints toggle on. */
     public static ModConfigSpec.BooleanValue DEATH_WAYPOINTS_ENABLED;
 
+    /** Automatic bed waypoint (private, per player): set when a player sets their spawn in a bed. */
+    public static ModConfigSpec.BooleanValue BED_WAYPOINTS_ENABLED;
+
+    /** Automatic nether portal waypoint (shared): recorded when a player goes through a portal. */
+    public static ModConfigSpec.BooleanValue PORTAL_WAYPOINTS_ENABLED;
+
+    /** Automatic respawn anchor waypoint (private, per player): set when a player sets their spawn in one. */
+    public static ModConfigSpec.BooleanValue ANCHOR_WAYPOINTS_ENABLED;
+
     /** Where players' own (non-public) waypoints are stored. */
     public static ModConfigSpec.EnumValue<Storage> WAYPOINT_STORAGE;
 
@@ -35,6 +44,20 @@ public final class WaypointServerConfig {
         DEATH_WAYPOINTS_ENABLED = b.comment(
                         "Allow automatic death waypoints. Each client also has its own on/off toggle.")
                 .define("deathWaypointsEnabled", true);
+        BED_WAYPOINTS_ENABLED = b.comment(
+                        "Automatic bed waypoint: private to each player, follows the bed they last set their"
+                                + " spawn in. Disabling hides the existing ones without deleting them.")
+                .define("bedWaypointsEnabled", true);
+        PORTAL_WAYPOINTS_ENABLED = b.comment(
+                        "Automatic nether portal waypoints: shared with everyone, recorded when a player goes"
+                                + " through a portal (both ends). Disabling hides the existing ones without"
+                                + " deleting them.")
+                .define("portalWaypointsEnabled", true);
+        ANCHOR_WAYPOINTS_ENABLED = b.comment(
+                        "Automatic respawn anchor waypoint: private to each player, follows the anchor they"
+                                + " last set their spawn in. Disabling hides the existing ones without deleting"
+                                + " them.")
+                .define("anchorWaypointsEnabled", true);
         WAYPOINT_STORAGE = b.comment(
                         "Where players' own waypoints are stored: SERVER (persisted per-player, private) or"
                                 + " CLIENT (purely local, today's behavior). Temporary waypoints always stay"

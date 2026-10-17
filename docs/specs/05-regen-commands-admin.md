@@ -85,7 +85,7 @@ The settings screen exposes a **Server** tab to players with permission level �
 | ID | Requirement |
 |----|-------------|
 | OPS-01 | Opening the tab sends `OpsConfigRequestPayload`; a non-OP gets no answer. |
-| OPS-02 | The editable snapshot (`OpsConfigPayload`): default layers, shared layers per dimension, cave bands, cave reveal radius (chunks), push radius, max KB/s, sync rate (ticks), on-demand flag, radar cap, death-waypoints flag, waypoint storage (server/client), privacy policy, quarantine radius, quarantine drain minutes. |
+| OPS-02 | The editable snapshot (`OpsConfigPayload`): default layers, shared layers per dimension, cave bands, cave reveal radius (chunks), push radius, max KB/s, sync rate (ticks), on-demand flag, radar cap, death-waypoints flag, waypoint storage (server/client), bed / nether portal / respawn anchor automatic-waypoint flags, privacy policy, quarantine radius, quarantine drain minutes. |
 | OPS-03 | **Apply** sends the working copy (C2S `OpsConfigPayload`). The server re-checks permission ≥ 2, drops invalid layer entries, clamps every number to the config bounds (caveBands to −8..20), keeps the current policy on an unknown name, saves the spec, invalidates caches, re-broadcasts `LayerSettingsPayload` to everyone and echoes the authoritative snapshot to the editor. |
 | OPS-04 | The cave-band editor uses a min and a max slider and sends the full inclusive range. |
 | OPS-05 | Not editable in game (file only): `engine.*` (threads, per-tick budget, blend radius, hidden blocks, colour overrides) and `common.*`. Worker count is fixed at engine start. |

@@ -63,6 +63,9 @@ public final class OpsConfigPayloads {
             int radarMaxRadius,
             boolean deathWaypointsEnabled,
             boolean waypointStorageServer,
+            boolean bedWaypointsEnabled,
+            boolean portalWaypointsEnabled,
+            boolean anchorWaypointsEnabled,
             String hiddenAreaPolicy,
             int quarantineRadiusChunks,
             int quarantineDrainMinutes)
@@ -85,6 +88,9 @@ public final class OpsConfigPayloads {
             buf.writeVarInt(p.radarMaxRadius);
             buf.writeBoolean(p.deathWaypointsEnabled);
             buf.writeBoolean(p.waypointStorageServer);
+            buf.writeBoolean(p.bedWaypointsEnabled);
+            buf.writeBoolean(p.portalWaypointsEnabled);
+            buf.writeBoolean(p.anchorWaypointsEnabled);
             buf.writeUtf(p.hiddenAreaPolicy, 32);
             buf.writeVarInt(p.quarantineRadiusChunks);
             buf.writeVarInt(p.quarantineDrainMinutes);
@@ -109,6 +115,9 @@ public final class OpsConfigPayloads {
                     buf.readVarInt(),
                     buf.readBoolean(),
                     buf.readVarInt(),
+                    buf.readBoolean(),
+                    buf.readBoolean(),
+                    buf.readBoolean(),
                     buf.readBoolean(),
                     buf.readBoolean(),
                     buf.readUtf(32),

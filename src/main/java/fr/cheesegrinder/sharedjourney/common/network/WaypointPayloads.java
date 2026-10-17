@@ -14,7 +14,8 @@ import java.util.UUID;
 /**
  * Waypoint payloads (spec §5): public waypoints (shared, broadcast),
  * per-player private waypoints (server-persisted, point-to-point) and
- * banner waypoints (server-detected, S2C only). Handlers are dispatched
+ * banner waypoints and automatic waypoints (both server-detected, S2C
+ * only). Handlers are dispatched
  * through {@link Payloads.Hooks} — see {@link Payloads} for the
  * indirection rationale.
  *
@@ -186,6 +187,55 @@ public final class WaypointPayloads {
         }
     }
 
+    // ---------------------------------------------------------------- S2C: automatic waypoints
+
+    /**
+     * Automatic waypoint upsert (bed, nether portal, respawn anchor), S2C
+     * only: the server alone detects them. Shared kinds are broadcast to
+     * everyone, private ones are sent to their owner only. The name and
+     * colour are deliberately absent: the client derives them (translated)
+     * from the kind. Visibility is a per-client choice, never shared.
+     */
+    public record AutoWaypointPayload(UUID id, String kind, ResourceLocation dimension, int x, int y, int z)
+            implements CustomPacketPayload {
+        public static final Type<AutoWaypointPayload> TYPE = new Type<>(Payloads.id("auto_waypoint"));
+
+        public static final StreamCodec<FriendlyByteBuf, AutoWaypointPayload> CODEC = StreamCodec.of(
+                (buf, p) -> {
+                    buf.writeUUID(p.id);
+                    buf.writeUtf(p.kind, 16);
+                    buf.writeResourceLocation(p.dimension);
+                    buf.writeVarInt(p.x);
+                    buf.writeVarInt(p.y);
+                    buf.writeVarInt(p.z);
+                },
+                buf -> new AutoWaypointPayload(
+                        buf.readUUID(),
+                        buf.readUtf(16),
+                        buf.readResourceLocation(),
+                        buf.readVarInt(),
+                        buf.readVarInt(),
+                        buf.readVarInt()));
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** Automatic waypoint removal (S2C only): the block is gone, or the kind was disabled. */
+    public record AutoWaypointRemovePayload(UUID id) implements CustomPacketPayload {
+        public static final Type<AutoWaypointRemovePayload> TYPE = new Type<>(Payloads.id("auto_waypoint_remove"));
+
+        public static final StreamCodec<FriendlyByteBuf, AutoWaypointRemovePayload> CODEC =
+                StreamCodec.of((buf, p) -> buf.writeUUID(p.id), buf -> new AutoWaypointRemovePayload(buf.readUUID()));
+
+        @Override
+        public @NotNull Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     // ---------------------------------------------------------------- registration
 
     /** Registers this group's payloads; called by {@link Payloads#register}. */
@@ -247,5 +297,15 @@ public final class WaypointPayloads {
                 BannerWaypointRemovePayload.TYPE,
                 BannerWaypointRemovePayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> Payloads.Hooks.clientBannerWaypointRemove.accept(payload)));
+
+        registrar.playToClient(
+                AutoWaypointPayload.TYPE,
+                AutoWaypointPayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Payloads.Hooks.clientAutoWaypoint.accept(payload)));
+
+        registrar.playToClient(
+                AutoWaypointRemovePayload.TYPE,
+                AutoWaypointRemovePayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> Payloads.Hooks.clientAutoWaypointRemove.accept(payload)));
     }
 }

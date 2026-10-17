@@ -700,12 +700,12 @@ public class FullMapScreen extends Screen implements JourneyMapFullscreenBridge.
         boolean doubleClick = now - lastClickAt < DOUBLE_CLICK_MS;
         Waypoint nearest = nearestWaypoint(mouseX, mouseY);
         if (nearest != null) {
-            // Banner waypoints are read-only (position/name/color/group
-            // come from the physical banner) and death waypoints are a
-            // factual record (where you died): double-click does not open
-            // the edit form, same restriction as the manager screen.
-            boolean editable =
-                    !Waypoint.SOURCE_BANNER.equals(nearest.source()) && !Waypoint.GROUP_DEATHS.equals(nearest.group());
+            // Banner and automatic (bed, portal, anchor) waypoints are
+            // read-only (position/name/color/group come from the physical
+            // block) and death waypoints are a factual record (where you
+            // died): double-click does not open the edit form, same
+            // restriction as the manager screen.
+            boolean editable = !nearest.isWorldDerived() && !Waypoint.GROUP_DEATHS.equals(nearest.group());
             if (doubleClick && editable && nearest.id().equals(lastClickWaypoint)) {
                 lastClickAt = 0;
                 lastClickWaypoint = null;

@@ -18,7 +18,7 @@ import java.util.function.Consumer;
  * positions), {@link RegenPayloads} (regen state/masks/progress),
  * {@link TrainPathPayloads} (Create bridge), {@link ChunkOverlayPayloads}
  * (server-computed chunk overlays), {@link WaypointPayloads}
- * (public + player + banner) and {@link OpsConfigPayloads} (ops config
+ * (public + player + banner + automatic) and {@link OpsConfigPayloads} (ops config
  * screen). This class is the thin orchestrator: the {@link Hooks} handler
  * indirection, the shared payload id factory and the registration entry
  * point delegating to each group.
@@ -49,6 +49,8 @@ public final class Payloads {
         public static Consumer<WaypointPayloads.PlayerWaypointRemovePayload> clientPlayerWaypointRemove = p -> {};
         public static Consumer<WaypointPayloads.BannerWaypointPayload> clientBannerWaypoint = p -> {};
         public static Consumer<WaypointPayloads.BannerWaypointRemovePayload> clientBannerWaypointRemove = p -> {};
+        public static Consumer<WaypointPayloads.AutoWaypointPayload> clientAutoWaypoint = p -> {};
+        public static Consumer<WaypointPayloads.AutoWaypointRemovePayload> clientAutoWaypointRemove = p -> {};
         public static BiConsumer<Player, TrainPathPayloads.TrainPathRequestPayload> serverTrainPathRequest =
                 (pl, p) -> {};
         public static BiConsumer<Player, WaypointPayloads.PublicWaypointPayload> serverPublicWaypoint = (pl, p) -> {};

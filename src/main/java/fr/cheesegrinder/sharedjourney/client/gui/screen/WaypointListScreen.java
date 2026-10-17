@@ -182,6 +182,18 @@ public class WaypointListScreen extends Screen {
         if (Waypoint.GROUP_BANNERS.equals(group)) {
             return Component.translatable(Lang.GROUP_BANNERS);
         }
+
+        if (Waypoint.GROUP_BEDS.equals(group)) {
+            return Component.translatable(Lang.GROUP_BEDS);
+        }
+
+        if (Waypoint.GROUP_PORTALS.equals(group)) {
+            return Component.translatable(Lang.GROUP_PORTALS);
+        }
+
+        if (Waypoint.GROUP_ANCHORS.equals(group)) {
+            return Component.translatable(Lang.GROUP_ANCHORS);
+        }
         return Component.literal(group);
     }
 
@@ -440,12 +452,13 @@ public class WaypointListScreen extends Screen {
                         .tooltip(Tooltip.create(Component.translatable(Lang.WAYPOINTS_TOGGLE)))
                         .build();
                 buttons.add(visibility);
-                // Banner waypoints are read-only (position/name/color are
-                // derived from the physical banner): no Edit, no Delete —
-                // removing them means breaking the banner in the world.
+                // Banner and automatic (bed, portal, anchor) waypoints are
+                // read-only (position/name/color are derived from the
+                // physical block): no Edit, no Delete — removing them means
+                // breaking the block in the world.
                 // Death waypoints are a factual record of where the player
                 // died: they can be consulted and deleted, never edited.
-                boolean banner = Waypoint.SOURCE_BANNER.equals(waypoint.source());
+                boolean banner = waypoint.isWorldDerived();
                 boolean death = Waypoint.GROUP_DEATHS.equals(waypoint.group());
                 if (!banner && !death) {
                     buttons.add(Button.builder(
@@ -538,6 +551,11 @@ public class WaypointListScreen extends Screen {
                 if (Waypoint.SOURCE_BANNER.equals(waypoint.source())) {
                     info.append("  · ")
                             .append(Component.translatable(Lang.WAYPOINT_TYPE_BANNER)
+                                    .getString());
+                }
+                if (Waypoint.SOURCE_AUTO.equals(waypoint.source())) {
+                    info.append("  · ")
+                            .append(Component.translatable(Lang.WAYPOINT_TYPE_AUTO)
                                     .getString());
                 }
                 gg.drawString(font, info.toString(), left + 20, top + 11, 0x888888);

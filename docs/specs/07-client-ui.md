@@ -111,7 +111,7 @@ assume it; the compass toggle only controls the **minimap**).
 | FM-01 | Opens centred on the player, on `MinimapRenderer.displayedLayer()`, or on the last fullscreen layer when `map.rememberLayer` is on; clamped to allowed layers. `new FullMapScreen(x, z)` opens centred and selects that block. |
 | FM-02 | Drag (left button) pans and cancels train following; wheel zooms around the cursor; arrow keys pan 16 blocks. |
 | FM-03 | Zoom is a power of two: scale from `64/2048` to `16384/2048`; the displayed "Zoom" label is `round(scale × 2048)`. Buttons `+`/`−`, keypad `+`/`-` and the zoom keys zoom around the screen centre. |
-| FM-04 | Left single click on a block selects it (white outline, at least 6 px so it is visible at low zoom); **double-click** on the same block creates a DIMENSION waypoint via the form; double-click on a waypoint opens its edit form (not for banner/death waypoints). A single click on a waypoint selects nothing. Double-click window 350 ms; waypoint hit radius 6 px. |
+| FM-04 | Left single click on a block selects it (white outline, at least 6 px so it is visible at low zoom); **double-click** on the same block creates a DIMENSION waypoint via the form; double-click on a waypoint opens its edit form (not for banner, automatic or death waypoints). A single click on a waypoint selects nothing. Double-click window 350 ms; waypoint hit radius 6 px. |
 | FM-05 | A click on a Create train follows it (smoothed 0.15 of the remaining distance per frame) until a pan, `F`, or close. |
 | FM-06 | `F` / "follow" button centres on the player; the locate (compass) button opens X/Z fields; Enter or `→` jumps and selects the block. |
 | FM-07 | Regions covering the viewport are requested from the server when missing or stale (throttled, [03 §6](03-sync-protocol.md)); the INFO sidecar of each is requested with it. |
@@ -207,7 +207,7 @@ Client tabs apply **live**; the file is saved once on close. Tabs:
 | Map | always | default layer, auto layer, cave auto-switch, remember layer, chunk grid, disk cache; then a "Chunk overlays" section: force-loaded chunks and slime chunks toggles, each replaced by a "disabled by the server" notice when the server does not allow it ([13 OVL-18](13-chunk-overlays.md)) |
 | Waypoints | always | show waypoints, names, temp radius, beacons, beacon min/max distance, death waypoints |
 | Addons | iff `create` or `create_rns` loaded | one section per mod: train overlay, deposit overlay |
-| Server | OP only (≥ 2) | working copy of the server config; **Apply** button ([05 §3](05-regen-commands-admin.md)): layer checkboxes per dimension (+ defaults), cave band min/max, sync, waypoints, privacy |
+| Server | OP only (≥ 2) | working copy of the server config; **Apply** button ([05 §3](05-regen-commands-admin.md)): layer checkboxes per dimension (+ defaults), cave band min/max, sync, waypoints (death, storage, bed / nether portal / respawn anchor automatic waypoints), privacy |
 | Debug… | OP only, bottom-left button (hidden tab) | "Rendering overlay" toggle (runtime only, never persisted; draws zoom px/block, GUI scale, `z×gui` `[aligned]`/`[fractional]`, layer/band/dim, player region, fps on minimap and map) |
 
 Sync rate is stored in ticks and shown in seconds (`ticks / 20`). Row tooltips reuse the

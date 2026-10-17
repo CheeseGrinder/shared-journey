@@ -72,7 +72,7 @@ NeoForge aujourd'hui.
 | engine | maxWorkerThreads / renderChunksPerTick / biomeBlendRadius | onglet avancé ops |
 | engine | hiddenBlocks / blockColorOverrides | listes — édition texte assistée, pas prioritaire |
 | sync | pushRadiusRegions / maxKbPerSecond / syncRateTicks / allowOnDemandRequests / radarMaxRadius | onglet ops |
-| waypoints | deathWaypointsEnabled / waypointStorage | onglet ops |
+| waypoints | deathWaypointsEnabled / waypointStorage / bedWaypointsEnabled / portalWaypointsEnabled / anchorWaypointsEnabled | onglet ops |
 | privacy | hiddenAreaPolicy / quarantineRadiusChunks / quarantineDrainMinutes | onglet ops |
 | overlays | forcedChunksEnabled / slimeChunksEnabled | config only today (file / NeoForge config screen), not yet in the ops tab (specs/13, B-18) |
 

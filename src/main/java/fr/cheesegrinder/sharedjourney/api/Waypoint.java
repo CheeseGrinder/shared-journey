@@ -41,6 +41,13 @@ public record Waypoint(
      */
     public static final String SOURCE_BANNER = "banner";
 
+    /**
+     * Source of the automatic contextual waypoints (player bed, nether
+     * portal, respawn anchor) detected server-side. Read-only, world-derived,
+     * volatile client-side like banner waypoints.
+     */
+    public static final String SOURCE_AUTO = "auto";
+
     /** Default group of hand-created waypoints. */
     public static final String GROUP_DEFAULT = "default";
 
@@ -52,6 +59,15 @@ public record Waypoint(
 
     /** Reserved group of banner waypoints. */
     public static final String GROUP_BANNERS = "banners";
+
+    /** Reserved group of the automatic bed waypoints. */
+    public static final String GROUP_BEDS = "beds";
+
+    /** Reserved group of the automatic nether portal waypoints. */
+    public static final String GROUP_PORTALS = "portals";
+
+    /** Reserved group of the automatic respawn anchor waypoints. */
+    public static final String GROUP_ANCHORS = "anchors";
 
     public Waypoint {
         if (group == null || group.isBlank()) {
@@ -116,5 +132,26 @@ public record Waypoint(
 
     public BlockPos pos() {
         return new BlockPos(x, y, z);
+    }
+
+    /**
+     * Is this waypoint derived from a physical block of the world (named
+     * banner, bed, nether portal, respawn anchor)? Such waypoints are
+     * created and removed by the server alone: read-only for the player,
+     * who can only hide them locally.
+     */
+    public boolean isWorldDerived() {
+        return SOURCE_BANNER.equals(source) || SOURCE_AUTO.equals(source);
+    }
+
+    /** Is this one of the groups the mod reserves for itself? */
+    public static boolean isReservedGroup(String group) {
+        return GROUP_DEFAULT.equals(group)
+                || GROUP_DEATHS.equals(group)
+                || GROUP_PUBLIC.equals(group)
+                || GROUP_BANNERS.equals(group)
+                || GROUP_BEDS.equals(group)
+                || GROUP_PORTALS.equals(group)
+                || GROUP_ANCHORS.equals(group);
     }
 }

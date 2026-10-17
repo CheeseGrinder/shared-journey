@@ -529,6 +529,21 @@ public class MapSettingsScreen extends Screen {
                 ops.storageServer,
                 v -> Component.translatable(Lang.settingsValue(v ? "server" : "client")),
                 v -> ops.storageServer = v));
+        rows.add(toggle(
+                Component.translatable(Lang.SETTINGS_SERVER_BED),
+                Lang.configTooltip("bedWaypointsEnabled"),
+                () -> ops.bedWaypoints,
+                v -> ops.bedWaypoints = v));
+        rows.add(toggle(
+                Component.translatable(Lang.SETTINGS_SERVER_PORTAL),
+                Lang.configTooltip("portalWaypointsEnabled"),
+                () -> ops.portalWaypoints,
+                v -> ops.portalWaypoints = v));
+        rows.add(toggle(
+                Component.translatable(Lang.SETTINGS_SERVER_ANCHOR),
+                Lang.configTooltip("anchorWaypointsEnabled"),
+                () -> ops.anchorWaypoints,
+                v -> ops.anchorWaypoints = v));
 
         rows.add(header(Component.translatable(Lang.SETTINGS_SERVER_PRIVACY)));
         rows.add(cycle(
@@ -661,6 +676,9 @@ public class MapSettingsScreen extends Screen {
         boolean onDemand;
         boolean deathWaypoints;
         boolean storageServer;
+        boolean bedWaypoints;
+        boolean portalWaypoints;
+        boolean anchorWaypoints;
         PrivacyServerConfig.HiddenAreaPolicy policy;
 
         static OpsState from(OpsConfigPayloads.OpsConfigPayload p) {
@@ -704,6 +722,9 @@ public class MapSettingsScreen extends Screen {
             s.radarCap = p.radarMaxRadius();
             s.deathWaypoints = p.deathWaypointsEnabled();
             s.storageServer = p.waypointStorageServer();
+            s.bedWaypoints = p.bedWaypointsEnabled();
+            s.portalWaypoints = p.portalWaypointsEnabled();
+            s.anchorWaypoints = p.anchorWaypointsEnabled();
             s.policy = parsePolicy(p.hiddenAreaPolicy());
             s.quarantineRadius = p.quarantineRadiusChunks();
             s.quarantineDrain = p.quarantineDrainMinutes();
@@ -748,6 +769,9 @@ public class MapSettingsScreen extends Screen {
                     radarCap,
                     deathWaypoints,
                     storageServer,
+                    bedWaypoints,
+                    portalWaypoints,
+                    anchorWaypoints,
                     policy.name(),
                     quarantineRadius,
                     quarantineDrain);

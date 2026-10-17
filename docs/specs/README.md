@@ -18,7 +18,7 @@ the discrepancy is listed in [11-limitations-and-open-issues.md](11-limitations-
 | 03 | [Synchronization protocol](03-sync-protocol.md) | Handshake, delta push, on-demand requests, bandwidth, payload catalogue |
 | 04 | [Privacy and anti-exploit](04-privacy-and-anti-exploit.md) | Radar cap, cave unlocking, hidden players, quarantine, integrity |
 | 05 | [Regeneration, commands and admin](05-regen-commands-admin.md) | `/sj` commands, regen modes, in-game ops config |
-| 06 | [Waypoints](06-waypoints.md) | Model, types, groups, storage, banners, death, beacons |
+| 06 | [Waypoints](06-waypoints.md) | Model, types, groups, storage, banners, automatic (bed, portal, anchor), death, beacons |
 | 07 | [Client experience](07-client-ui.md) | Minimap, fullscreen map, radar, screens, keys, client cache |
 | 08 | [Configuration reference](08-configuration.md) | Every config key: default, range, effect |
 | 09 | [Public API](09-public-api.md) | Facades, events, custom layers, markers, UI extension points |
@@ -50,6 +50,7 @@ the discrepancy is listed in [11-limitations-and-open-issues.md](11-limitations-
 |------|-------|
 | Server render engine, sync, privacy | Implemented, validated in game |
 | Waypoints (private/public/temp/banner/death) | Implemented |
+| Automatic waypoints: bed, nether portal, respawn anchor ([06 §3.4](06-waypoints.md)) | Implemented, not yet checked in game |
 | Fullscreen map, minimap, radar | Implemented |
 | Radar rules in JSON ([12](12-radar-rules.md)) | Implemented, not yet checked in game |
 | Chunk overlays: force-loaded and slime ([13](13-chunk-overlays.md)) | Implemented, not yet checked in game |

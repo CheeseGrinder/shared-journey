@@ -116,6 +116,9 @@ public final class Lang {
     public static final String SETTINGS_SERVER_WAYPOINTS = key("settings.server.waypoints");
     public static final String SETTINGS_SERVER_DEATH = key("settings.server.death_waypoints");
     public static final String SETTINGS_SERVER_STORAGE = key("settings.server.waypoint_storage");
+    public static final String SETTINGS_SERVER_BED = key("settings.server.bed_waypoints");
+    public static final String SETTINGS_SERVER_PORTAL = key("settings.server.portal_waypoints");
+    public static final String SETTINGS_SERVER_ANCHOR = key("settings.server.anchor_waypoints");
     public static final String SETTINGS_SERVER_PRIVACY = key("settings.server.privacy");
     public static final String SETTINGS_SERVER_POLICY = key("settings.server.hidden_policy");
     public static final String SETTINGS_SERVER_QUAR_RADIUS = key("settings.server.quarantine_radius");
@@ -237,6 +240,17 @@ public final class Lang {
     public static final String GROUP_DEATHS = key("group.deaths");
     public static final String GROUP_PUBLIC = key("group.public");
     public static final String GROUP_BANNERS = key("group.banners");
+    public static final String GROUP_BEDS = key("group.beds");
+    public static final String GROUP_PORTALS = key("group.portals");
+    public static final String GROUP_ANCHORS = key("group.anchors");
+
+    /** Display-only type label for automatic waypoints (bed, portal, anchor). */
+    public static final String WAYPOINT_TYPE_AUTO = key("waypoint.type.auto");
+
+    /** Name of an automatic waypoint kind ("sharedjourney.waypoint.auto.bed"...). */
+    public static String autoWaypointName(String kindId) {
+        return key("waypoint.auto." + kindId);
+    }
 
     // ------------------------------------------------------------------ commands / services
 

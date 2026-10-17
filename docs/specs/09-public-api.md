@@ -31,7 +31,7 @@ All calls operate on the client's `WaypointStore`.
 | `createGroup(name)` | false on blank or taken |
 | `renameGroup(from, to)` | false if not editable or target invalid/taken; moves waypoints and hidden state |
 | `deleteGroup(group)` | Deletes the group **and its waypoints**; false if not editable |
-| `isGroupEditable(group)` | false for `default`, `deaths`, `public`, `banners` and bridged-mod groups |
+| `isGroupEditable(group)` | false for `default`, `deaths`, `public`, `banners`, `beds`, `portals`, `anchors` and bridged-mod groups |
 | `isGroupVisible`, `setGroupVisible` | Local per-client choice |
 
 `WaypointEvent.{Added (cancellable), Updated, Removed}` are posted on `NeoForge.EVENT_BUS`

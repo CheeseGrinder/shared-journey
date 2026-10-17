@@ -5,6 +5,7 @@ import fr.cheesegrinder.sharedjourney.api.event.BlockColorRegisterEvent;
 import fr.cheesegrinder.sharedjourney.api.event.LayerRegisterEvent;
 import fr.cheesegrinder.sharedjourney.server.command.MapCommands;
 import fr.cheesegrinder.sharedjourney.server.render.BlockPalette;
+import fr.cheesegrinder.sharedjourney.server.service.AutoWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.BannerWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.CaveTracker;
 import fr.cheesegrinder.sharedjourney.server.service.ChunkOverlayService;
@@ -51,6 +52,7 @@ public final class ServerLifecycleEvents {
         PublicWaypointService.init(event.getServer());
         PlayerWaypointService.init(event.getServer());
         BannerWaypointService.init(event.getServer());
+        AutoWaypointService.init(event.getServer());
 
         // Replay chunks loaded before the init (spawn chunks).
         ChunkEvents.replayEarlyChunks(event.getServer());
@@ -62,6 +64,7 @@ public final class ServerLifecycleEvents {
         PublicWaypointService.shutdown();
         PlayerWaypointService.shutdown();
         BannerWaypointService.shutdown();
+        AutoWaypointService.shutdown();
         MapManager.shutdown();
         QuarantineService.shutdown();
         ChunkOverlayService.shutdown();
@@ -85,6 +88,7 @@ public final class ServerLifecycleEvents {
         RegenService.tick(event.getServer());
         SyncService.tick(event.getServer());
         ChunkOverlayService.tick(event.getServer());
+        AutoWaypointService.tick(event.getServer());
     }
 
     @SubscribeEvent

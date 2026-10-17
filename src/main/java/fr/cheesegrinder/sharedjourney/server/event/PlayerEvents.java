@@ -1,6 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.event;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
+import fr.cheesegrinder.sharedjourney.server.service.AutoWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.BannerWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.ChunkOverlayService;
 import fr.cheesegrinder.sharedjourney.server.service.PlayerWaypointService;
@@ -30,6 +31,7 @@ public final class PlayerEvents {
             PublicWaypointService.sendAllTo(sp);
             PlayerWaypointService.sendAllTo(sp);
             BannerWaypointService.sendAllTo(sp);
+            AutoWaypointService.sendAllTo(sp);
         }
     }
 

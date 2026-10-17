@@ -4,7 +4,10 @@ import fr.cheesegrinder.sharedjourney.api.Waypoint;
 import fr.cheesegrinder.sharedjourney.api.event.WaypointEvent;
 import fr.cheesegrinder.sharedjourney.client.config.WaypointClientConfig;
 import fr.cheesegrinder.sharedjourney.common.network.WaypointPayloads;
+import fr.cheesegrinder.sharedjourney.common.util.Lang;
+import fr.cheesegrinder.sharedjourney.common.waypoint.AutoWaypointKind;
 
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 
@@ -209,15 +212,13 @@ public final class WaypointStore {
 
     /**
      * Can this group be renamed/deleted in the management screen? The
-     * reserved groups (default, deaths, public, banners) and the bridged
+     * reserved groups (default, deaths, public, banners, beds, portals,
+     * anchors) and the bridged
      * mods' groups (waystones... any group holding non-user waypoints)
      * cannot.
      */
     public static boolean isEditableGroup(String group) {
-        if (Waypoint.GROUP_DEFAULT.equals(group)
-                || Waypoint.GROUP_DEATHS.equals(group)
-                || Waypoint.GROUP_PUBLIC.equals(group)
-                || Waypoint.GROUP_BANNERS.equals(group)) {
+        if (Waypoint.isReservedGroup(group)) {
             return false;
         }
 
@@ -329,8 +330,8 @@ public final class WaypointStore {
             return;
         }
 
-        if (Waypoint.SOURCE_BANNER.equals(wp.source())) {
-            updateBanner(wp);
+        if (wp.isWorldDerived()) {
+            updateWorldDerived(wp);
             return;
         }
 
@@ -340,14 +341,15 @@ public final class WaypointStore {
     }
 
     /**
-     * Banner waypoints are read-only (no UI edits the position/name/
-     * color): the only field the UI can change is visibility, which is
-     * routed through {@link #HIDDEN_IDS} like PUBLIC — otherwise the
-     * next login's full resync (see {@code acceptBannerUpsert}) would
+     * Banner and automatic waypoints are read-only (no UI edits the
+     * position/name/color): the only field the UI can change is
+     * visibility, which is routed through {@link #HIDDEN_IDS} like PUBLIC
+     * — otherwise the next login's full resync (see
+     * {@code acceptBannerUpsert}, {@code acceptAutoUpsert}) would
      * silently reset it, since it recomputes {@code visible} from
      * {@code HIDDEN_IDS}, not from the in-memory copy.
      */
-    private static void updateBanner(Waypoint wp) {
+    private static void updateWorldDerived(Waypoint wp) {
         setHiddenId(wp.id(), !wp.visible());
         putWaypoint(wp.id(), wp);
         NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
@@ -632,6 +634,50 @@ public final class WaypointStore {
                 Waypoint.GROUP_BANNERS,
                 visible,
                 Waypoint.Type.PUBLIC);
+    }
+
+    // ------------------------------------------------------------------ automatic waypoints
+
+    /**
+     * Server push: upsert of an automatic waypoint (bed, nether portal,
+     * respawn anchor) at login, on creation, or when its kind is
+     * re-enabled. Read-only client-side: there is no C2S counterpart. The
+     * name, colour and group are derived from the kind; an unknown kind
+     * (a newer server) is ignored.
+     */
+    public static void acceptAutoUpsert(WaypointPayloads.AutoWaypointPayload p) {
+        AutoWaypointKind kind = AutoWaypointKind.fromId(p.kind());
+        if (kind == null) {
+            return;
+        }
+
+        Waypoint wp = normalizedAuto(p, kind, !HIDDEN_IDS.contains(p.id()));
+        putWaypoint(wp.id(), wp);
+        NeoForge.EVENT_BUS.post(new WaypointEvent.Updated(wp));
+    }
+
+    /** Server push: removal of an automatic waypoint (block gone, or kind disabled). */
+    public static void acceptAutoRemove(UUID id) {
+        Waypoint wp = removeWaypoint(id);
+        if (wp != null) {
+            NeoForge.EVENT_BUS.post(new WaypointEvent.Removed(wp));
+        }
+    }
+
+    private static Waypoint normalizedAuto(
+            WaypointPayloads.AutoWaypointPayload p, AutoWaypointKind kind, boolean visible) {
+        return new Waypoint(
+                p.id(),
+                Component.translatable(Lang.autoWaypointName(kind.id())).getString(),
+                p.dimension(),
+                p.x(),
+                p.y(),
+                p.z(),
+                kind.colorRgb(),
+                Waypoint.SOURCE_AUTO,
+                kind.group(),
+                visible,
+                kind.shared() ? Waypoint.Type.PUBLIC : Waypoint.Type.DIMENSION);
     }
 
     /** Forces the visibility of every waypoint of a dimension (+ globals). */

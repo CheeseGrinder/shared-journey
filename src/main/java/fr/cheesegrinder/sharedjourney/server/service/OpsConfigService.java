@@ -59,6 +59,7 @@ public final class OpsConfigService {
         ServerConfig.SPEC.save();
         ServerConfig.invalidateCache();
         SyncService.broadcastLayerSettings(server);
+        AutoWaypointService.refreshEnabled();
         // Echo the authoritative state (post-sanitization) to the editor.
         PacketDistributor.sendToPlayer(player, snapshot());
         LOGGER.info(
@@ -82,6 +83,9 @@ public final class OpsConfigService {
                 SyncServerConfig.RADAR_MAX_RADIUS.get(),
                 WaypointServerConfig.DEATH_WAYPOINTS_ENABLED.get(),
                 WaypointServerConfig.WAYPOINT_STORAGE.get() == WaypointServerConfig.Storage.SERVER,
+                WaypointServerConfig.BED_WAYPOINTS_ENABLED.get(),
+                WaypointServerConfig.PORTAL_WAYPOINTS_ENABLED.get(),
+                WaypointServerConfig.ANCHOR_WAYPOINTS_ENABLED.get(),
                 PrivacyServerConfig.HIDDEN_AREA_POLICY.get().name(),
                 PrivacyServerConfig.QUARANTINE_RADIUS_CHUNKS.get(),
                 PrivacyServerConfig.QUARANTINE_DRAIN_MINUTES.get());
@@ -114,6 +118,9 @@ public final class OpsConfigService {
         WaypointServerConfig.DEATH_WAYPOINTS_ENABLED.set(p.deathWaypointsEnabled());
         WaypointServerConfig.WAYPOINT_STORAGE.set(
                 p.waypointStorageServer() ? WaypointServerConfig.Storage.SERVER : WaypointServerConfig.Storage.CLIENT);
+        WaypointServerConfig.BED_WAYPOINTS_ENABLED.set(p.bedWaypointsEnabled());
+        WaypointServerConfig.PORTAL_WAYPOINTS_ENABLED.set(p.portalWaypointsEnabled());
+        WaypointServerConfig.ANCHOR_WAYPOINTS_ENABLED.set(p.anchorWaypointsEnabled());
 
         PrivacyServerConfig.HIDDEN_AREA_POLICY.set(parsePolicy(p.hiddenAreaPolicy()));
         PrivacyServerConfig.QUARANTINE_RADIUS_CHUNKS.set(Math.clamp(p.quarantineRadiusChunks(), 1, 32));

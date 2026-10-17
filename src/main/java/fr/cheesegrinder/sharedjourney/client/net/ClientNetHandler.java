@@ -97,6 +97,14 @@ public final class ClientNetHandler {
         WaypointStore.acceptBannerRemove(payload.id());
     }
 
+    public static void handleAutoWaypoint(WaypointPayloads.AutoWaypointPayload payload) {
+        WaypointStore.acceptAutoUpsert(payload);
+    }
+
+    public static void handleAutoWaypointRemove(WaypointPayloads.AutoWaypointRemovePayload payload) {
+        WaypointStore.acceptAutoRemove(payload.id());
+    }
+
     public static void handleOpsConfig(OpsConfigPayloads.OpsConfigPayload payload) {
         ClientMapCache.opsConfig = payload;
     }

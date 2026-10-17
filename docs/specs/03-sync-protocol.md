@@ -11,7 +11,7 @@ sequenceDiagram
     participant C as Client
     participant S as Server
     C->>S: login
-    Note over S: PlayerLoggedIn:<br/>SyncService.onPlayerJoin (state + LayerSettings + first delta)<br/>sendHiddenPlayers, RegenService.sendStateTo,<br/>Public/Player/Banner waypoints full send
+    Note over S: PlayerLoggedIn:<br/>SyncService.onPlayerJoin (state + LayerSettings + first delta)<br/>sendHiddenPlayers, RegenService.sendStateTo,<br/>Public/Player/Banner/Auto waypoints full send
     Note over C: LoggingIn: open cache, WaypointStore
     C->>S: ClientIndexPayload (hashed local index)
     Note over S: seeds sentVersions, recomputes delta
@@ -97,9 +97,10 @@ sequenceDiagram
 | `OverlayRegionRequestPayload(kind, dimension, rxs[], rzs[])` / `OverlayRegionDataPayload(kind, dimension, [(rx, rz, bitmap)])` | C2S / S2C | Per-region chunk bitmaps of the force-loaded and slime chunk overlays ([13](13-chunk-overlays.md)); forced-chunk changes are pushed with the same data payload. |
 | `PublicWaypoint[Remove]Payload`, `PlayerWaypoint[Remove]Payload` | C2S + S2C | Waypoints ([06](06-waypoints.md)). |
 | `BannerWaypoint[Remove]Payload` | S2C | Banner waypoints. |
+| `AutoWaypointPayload(id, kind, dimension, x, y, z)` / `AutoWaypointRemovePayload(id)` | S2C | Automatic bed / portal / respawn anchor waypoints; shared kinds are broadcast, private ones sent to their owner only ([06 §3.4](06-waypoints.md)). |
 | `OpsConfigRequestPayload` / `OpsConfigPayload` | C2S / both | In-game server config ([05](05-regen-commands-admin.md)). |
 
-Total: **23** payload registrations on one registrar versioned **`"1"`**.
+Total: **25** payload registrations on one registrar versioned **`"1"`**.
 
 | ID | Requirement |
 |----|-------------|

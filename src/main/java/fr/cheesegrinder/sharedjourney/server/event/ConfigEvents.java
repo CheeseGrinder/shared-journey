@@ -3,6 +3,7 @@ package fr.cheesegrinder.sharedjourney.server.event;
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.common.config.ServerConfig;
 import fr.cheesegrinder.sharedjourney.server.render.BlockPalette;
+import fr.cheesegrinder.sharedjourney.server.service.AutoWaypointService;
 import fr.cheesegrinder.sharedjourney.server.service.ChunkOverlayService;
 import fr.cheesegrinder.sharedjourney.server.service.SyncService;
 
@@ -27,6 +28,7 @@ public final class ConfigEvents {
                 server.execute(() -> {
                     SyncService.broadcastLayerSettings(server);
                     ChunkOverlayService.broadcastSettings(server);
+                    AutoWaypointService.refreshEnabled();
                 });
             }
         }

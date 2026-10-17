@@ -2,6 +2,7 @@ package fr.cheesegrinder.sharedjourney.client.render;
 
 import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.api.Waypoint;
+import fr.cheesegrinder.sharedjourney.common.waypoint.AutoWaypointKind;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -42,6 +43,15 @@ public final class WaypointIcons {
     /** Icon of banner waypoints ({@link Waypoint#SOURCE_BANNER}). */
     public static final ResourceLocation BANNER = texture("banner");
 
+    /** Icon of the automatic bed waypoints ({@link AutoWaypointKind#BED}). */
+    public static final ResourceLocation BED = texture("bed");
+
+    /** Icon of the automatic nether portal waypoints ({@link AutoWaypointKind#PORTAL}). */
+    public static final ResourceLocation PORTAL = texture("portal");
+
+    /** Icon of the automatic respawn anchor waypoints ({@link AutoWaypointKind#ANCHOR}). */
+    public static final ResourceLocation ANCHOR = texture("anchor");
+
     private WaypointIcons() {}
 
     private static ResourceLocation texture(String name) {
@@ -49,15 +59,33 @@ public final class WaypointIcons {
                 SharedJourneyConstants.MOD_ID, "textures/gui/waypoint/" + name + ".png");
     }
 
-    /** Sprite for a waypoint: banner source, death group, or the default diamond. */
+    /**
+     * Sprite for a waypoint: banner source, automatic kind (bed, portal,
+     * anchor), death group, or the default diamond.
+     */
     public static ResourceLocation textureFor(Waypoint wp) {
         if (Waypoint.SOURCE_BANNER.equals(wp.source())) {
             return BANNER;
+        }
+        if (Waypoint.SOURCE_AUTO.equals(wp.source())) {
+            return autoTexture(AutoWaypointKind.forGroup(wp.group()));
         }
         if (Waypoint.GROUP_DEATHS.equals(wp.group())) {
             return DEATH;
         }
         return DIAMOND;
+    }
+
+    private static ResourceLocation autoTexture(AutoWaypointKind kind) {
+        if (kind == null) {
+            return DIAMOND;
+        }
+
+        return switch (kind) {
+            case BED -> BED;
+            case PORTAL -> PORTAL;
+            case ANCHOR -> ANCHOR;
+        };
     }
 
     /** Draws the waypoint's icon centered on (x, y), tinted with its color. */

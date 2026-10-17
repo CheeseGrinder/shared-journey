@@ -79,6 +79,7 @@ hashes.json                      {"dim|LAYER|band|rx|rz": "version:sha256hex"}
 quarantine.json                  pending quarantined chunks (see 04)
 waypoints_public.json            shared waypoints (see 06)
 waypoints_banners.json           banner waypoints
+waypoints_auto.json              automatic bed / portal / respawn anchor waypoints (see 06 §3.4)
 waypoints/<player-uuid>.json     per-player private waypoints
 <dim>/<layer>/region_<rx>_<rz>.png
 <dim>/cave/<band>/region_<rx>_<rz>.png

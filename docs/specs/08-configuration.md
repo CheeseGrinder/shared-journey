@@ -55,6 +55,9 @@ settings edited through the in-game screen apply live and are saved on close.
 | Key | Default | Effect |
 |-----|---------|--------|
 | `deathWaypointsEnabled` | true | Admin kill switch for automatic death waypoints (announced to clients) |
+| `bedWaypointsEnabled` | true | Automatic bed waypoint, private per player ([06 AUTO](06-waypoints.md)). Off: hidden from clients, entries kept on disk |
+| `portalWaypointsEnabled` | true | Automatic nether portal waypoints, shared with everyone, recorded at both ends when a portal is used. Off: hidden, entries kept |
+| `anchorWaypointsEnabled` | true | Automatic respawn anchor waypoint, private per player. Off: hidden, entries kept |
 | `waypointStorage` | `SERVER` | `SERVER`: user DIMENSION waypoints persisted per player on the server; `CLIENT`: local file. TEMP always local, PUBLIC always server |
 
 ### `[privacy]`

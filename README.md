@@ -77,6 +77,9 @@ Shared Journey flips the model:
   plus **public waypoints** shared with the whole server.
 - **Banner waypoints**: place a *named* banner and it becomes a map marker; break it and the
   marker disappears — vanilla-style, no GUI required.
+- **Automatic waypoints**: your bed and respawn anchor (private, they follow your spawn point)
+  and the nether portals you go through (shared with everyone, both ends); each kind can be
+  switched off by the server.
 - Automatic **death waypoints**, a waypoint list screen (`U`), quick creation (`B`), and
   full editing (name, color, visibility) from the map.
 
