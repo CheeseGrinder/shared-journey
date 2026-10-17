@@ -6,19 +6,23 @@ Implementation: `SyncService` (server), `ClientMapCache` / `DiskCache` / `Client
 
 ## 1. Session lifecycle
 
-```
-client                                         server
-  │── login ─────────────────────────────────────▶│ PlayerLoggedIn:
-  │                                                │   SyncService.onPlayerJoin  (state + LayerSettings + first delta)
-  │                                                │   sendHiddenPlayers, RegenService.sendStateTo,
-  │                                                │   Public/Player/Banner waypoints full send
-  │  LoggingIn: open cache, WaypointStore          │
-  │── ClientIndexPayload (hashed local index) ────▶│ seeds sentVersions, recomputes delta
-  │── MapVisibilityPayload(hideFromMap) ──────────▶│ hidden set updated + broadcast
-  │◀── RegionDataPayload × n  (queue, KB/s cap) ───│
-  │── RegionRequestPayload (fullscreen) ──────────▶│ enqueue newer regions
-  │◀── PlayerPositionsPayload (~1/s) ──────────────│
-  │── logout ─────────────────────────────────────▶│ state dropped, hidden flag cleared
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    C->>S: login
+    Note over S: PlayerLoggedIn:<br/>SyncService.onPlayerJoin (state + LayerSettings + first delta)<br/>sendHiddenPlayers, RegenService.sendStateTo,<br/>Public/Player/Banner waypoints full send
+    Note over C: LoggingIn: open cache, WaypointStore
+    C->>S: ClientIndexPayload (hashed local index)
+    Note over S: seeds sentVersions, recomputes delta
+    C->>S: MapVisibilityPayload(hideFromMap)
+    Note over S: hidden set updated + broadcast
+    S-->>C: RegionDataPayload × n (queue, KB/s cap)
+    C->>S: RegionRequestPayload (fullscreen)
+    Note over S: enqueue newer regions
+    S-->>C: PlayerPositionsPayload (~1/s)
+    C->>S: logout
+    Note over S: state dropped, hidden flag cleared
 ```
 
 | ID | Requirement |
