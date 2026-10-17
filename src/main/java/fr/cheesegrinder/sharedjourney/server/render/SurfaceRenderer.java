@@ -1,7 +1,5 @@
 package fr.cheesegrinder.sharedjourney.server.render;
 
-import fr.cheesegrinder.sharedjourney.common.config.EngineServerConfig;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.LightLayer;
@@ -23,20 +21,12 @@ final class SurfaceRenderer {
             return 0xFF000000;
         }
 
+        // surfaceY already walked past decorative vegetation (flowers,
+        // grasses, saplings...) and air: y is the block that gets painted,
+        // and the height used for the slope shading below.
         BlockPos.MutableBlockPos pos = ctx.pos;
         pos.set(wx, y, wz);
         BlockState state = ctx.chunk.getBlockState(pos);
-        // Decorative vegetation (flowers, grasses, saplings...) must not
-        // show on the map: paint the block below instead. Air is skipped
-        // too: a hidden block hanging above a gap (propagule under a
-        // mangrove...) must not paint the air below it (gray).
-        while (y > ctx.chunk.getMinBuildHeight()
-                && (state.isAir()
-                        || (isMapHidden(state) && state.getFluidState().isEmpty()))) {
-            y--;
-            pos.set(wx, y, wz);
-            state = ctx.chunk.getBlockState(pos);
-        }
         // Water: biome color (blended across neighboring biomes) darkened
         // with depth.
         if (!state.getFluidState().isEmpty()) {
@@ -95,13 +85,8 @@ final class SurfaceRenderer {
         return BlockPalette.color(state, ctx.level, ctx.pos);
     }
 
-    /** Decorative blocks invisible on the map (hiddenBlocks server config). */
-    private static boolean isMapHidden(BlockState state) {
-        return EngineServerConfig.isHiddenBlock(state);
-    }
-
     private static boolean isGrassTinted(BlockState state) {
-        // Grasses/ferns are filtered out by isMapHidden: only tinted blocks
+        // Grasses/ferns are skipped by SurfaceHeight: only tinted blocks
         // that can actually be the painted surface remain.
         return state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.SUGAR_CANE);
     }

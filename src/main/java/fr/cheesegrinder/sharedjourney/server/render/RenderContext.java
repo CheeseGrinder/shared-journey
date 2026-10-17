@@ -1,11 +1,12 @@
 package fr.cheesegrinder.sharedjourney.server.render;
 
+import fr.cheesegrinder.sharedjourney.common.util.SurfaceHeight;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.BiomeManager;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
  * Shared context of a chunk render: level, chunk, biome zoom and a reused
@@ -25,9 +26,14 @@ final class RenderContext {
         this.zoom = zoom;
     }
 
-    /** Surface height (WORLD_SURFACE heightmap) within the current chunk. */
+    /**
+     * Ground height within the current chunk: the WORLD_SURFACE heightmap
+     * walked down past air and hidden blocks (grass...), so shading and
+     * contours never use the height of a vegetation block. Leaves {@link #pos}
+     * on the returned position.
+     */
     int surfaceY(int wx, int wz) {
-        return chunk.getHeight(Heightmap.Types.WORLD_SURFACE, wx & 15, wz & 15);
+        return SurfaceHeight.groundY(chunk, wx, wz, pos);
     }
 
     /** Surface height, including outside the current chunk (north neighbor). */
@@ -43,6 +49,6 @@ final class RenderContext {
             return surfaceY(wx, cp.getMinBlockZ());
         }
 
-        return neighbor.getHeight(Heightmap.Types.WORLD_SURFACE, wx & 15, wz & 15);
+        return SurfaceHeight.groundY(neighbor, wx, wz, pos);
     }
 }

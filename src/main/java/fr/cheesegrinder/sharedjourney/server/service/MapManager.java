@@ -9,6 +9,7 @@ import fr.cheesegrinder.sharedjourney.common.region.RegionHashes;
 import fr.cheesegrinder.sharedjourney.common.region.RegionIndex;
 import fr.cheesegrinder.sharedjourney.common.region.RegionKey;
 import fr.cheesegrinder.sharedjourney.common.region.RegionStorage;
+import fr.cheesegrinder.sharedjourney.common.util.SurfaceHeight;
 import fr.cheesegrinder.sharedjourney.server.render.ChunkColorizer;
 
 import net.minecraft.core.BlockPos;
@@ -21,7 +22,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.storage.LevelResource;
 
 import com.mojang.logging.LogUtils;
@@ -601,9 +601,11 @@ public final class MapManager {
         for (int dz = 0; dz < 16; dz++) {
             for (int dx = 0; dx < 16; dx++) {
                 int i = dz * 16 + dx;
-                int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, dx, dz);
+                // Ground block, not the heightmap top: hidden vegetation
+                // (short/tall grass...) must not be reported to the hover.
+                int y = SurfaceHeight.groundY(chunk, cp.getMinBlockX() + dx, cp.getMinBlockZ() + dz, pos);
                 heights[i] = (short) y;
-                BlockState state = chunk.getBlockState(pos.set(cp.getMinBlockX() + dx, y, cp.getMinBlockZ() + dz));
+                BlockState state = chunk.getBlockState(pos);
                 blockIds[i] = state.isAir()
                         ? ""
                         : BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
@@ -616,7 +618,7 @@ public final class MapManager {
                 // Center of the 4x4 cell, at its column's surface Y.
                 int dx = bx * 4 + 2;
                 int dz = bz * 4 + 2;
-                int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, dx, dz);
+                int y = SurfaceHeight.groundY(chunk, cp.getMinBlockX() + dx, cp.getMinBlockZ() + dz, pos);
                 biomeIds[bz * 4 + bx] = chunk.getNoiseBiome(
                                 (cp.getMinBlockX() + dx) >> 2, y >> 2, (cp.getMinBlockZ() + dz) >> 2)
                         .unwrapKey()

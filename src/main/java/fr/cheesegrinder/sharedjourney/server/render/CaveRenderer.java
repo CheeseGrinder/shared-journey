@@ -1,5 +1,7 @@
 package fr.cheesegrinder.sharedjourney.server.render;
 
+import fr.cheesegrinder.sharedjourney.common.config.EngineServerConfig;
+
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -22,7 +24,9 @@ final class CaveRenderer {
         int airStart = -1;
         for (int y = yTop; y >= yBottom; y--) {
             BlockState s = ctx.chunk.getBlockState(ctx.pos.set(wx, y, wz));
-            boolean open = s.isAir() || !s.getFluidState().isEmpty();
+            // Hidden blocks (grass, torches...) are see-through: the floor is
+            // the solid block below them.
+            boolean open = s.isAir() || !s.getFluidState().isEmpty() || EngineServerConfig.isHiddenBlock(s);
             if (open && airStart == -1) {
                 airStart = y;
             } else if (!open && airStart != -1) {
