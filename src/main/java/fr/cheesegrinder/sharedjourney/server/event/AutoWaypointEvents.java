@@ -50,7 +50,8 @@ public final class AutoWaypointEvents {
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onTravel(EntityTravelToDimensionEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            AutoWaypointService.onPortalTravel(player);
+            AutoWaypointService.onPortalTravel(
+                    player, "travel to " + event.getDimension().location());
         }
     }
 
@@ -58,7 +59,8 @@ public final class AutoWaypointEvents {
     @SubscribeEvent
     public static void onChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            AutoWaypointService.onPortalTravel(player);
+            AutoWaypointService.onPortalTravel(
+                    player, "arrival from " + event.getFrom().location());
         }
     }
 

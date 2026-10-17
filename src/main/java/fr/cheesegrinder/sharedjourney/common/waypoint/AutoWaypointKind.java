@@ -22,6 +22,9 @@ public enum AutoWaypointKind {
     /** The respawn anchor a player set their spawn in (private, one per player). */
     ANCHOR("anchor", Waypoint.GROUP_ANCHORS, 0xE8A640, false);
 
+    /** Wire/disk marker for "no colour override: use the kind's own colour". */
+    public static final int NO_COLOR = -1;
+
     private final String id;
     private final String group;
     private final int colorRgb;
@@ -46,6 +49,15 @@ public enum AutoWaypointKind {
 
     public int colorRgb() {
         return colorRgb;
+    }
+
+    /**
+     * The colour (RGB) to display: the per-waypoint override when there is
+     * one (e.g. a bed's dye colour), the kind's own colour for
+     * {@link #NO_COLOR}.
+     */
+    public int colorRgb(int override) {
+        return override == NO_COLOR ? colorRgb : override & 0xFFFFFF;
     }
 
     /** Shared kinds are visible to every player, the others to their owner only. */

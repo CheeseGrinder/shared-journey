@@ -873,7 +873,7 @@ public final class WaypointStore {
                 p.x(),
                 p.y(),
                 p.z(),
-                kind.colorRgb(),
+                kind.colorRgb(p.color()),
                 Waypoint.SOURCE_AUTO,
                 kind.group(),
                 visible,

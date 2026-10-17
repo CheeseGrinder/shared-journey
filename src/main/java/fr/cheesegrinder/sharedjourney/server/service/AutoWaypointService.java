@@ -15,11 +15,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.NetherPortalBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -77,16 +79,41 @@ public final class AutoWaypointService {
     /** A nether portal interior is at most 21 blocks wide/tall: bound every walk. */
     private static final int MAX_PORTAL_SCAN = 24;
 
-    /** One tracked waypoint. {@code owner} is null for shared kinds. */
+    /** Period (ticks) of the "standing in a portal" safety net over the online players. */
+    private static final int PORTAL_SCAN_INTERVAL_TICKS = 5;
+
+    /**
+     * Extra margin (blocks) around the player's box when the travel events
+     * find no portal block inside it: the player may stand a hair off the
+     * portal cell at the moment the event fires.
+     */
+    private static final double PORTAL_SEARCH_MARGIN = 1.0;
+
+    /**
+     * One tracked waypoint. {@code owner} is null for shared kinds;
+     * {@code color} is an RGB override (the bed's dye colour) or
+     * {@link AutoWaypointKind#NO_COLOR} for the kind's own colour.
+     */
     private record Entry(
-            UUID id, AutoWaypointKind kind, @Nullable UUID owner, ResourceLocation dimension, int x, int y, int z) {
+            UUID id,
+            AutoWaypointKind kind,
+            @Nullable UUID owner,
+            ResourceLocation dimension,
+            int x,
+            int y,
+            int z,
+            int color) {
 
         BlockPos pos() {
             return new BlockPos(x, y, z);
         }
 
         WaypointPayloads.AutoWaypointPayload toPayload() {
-            return new WaypointPayloads.AutoWaypointPayload(id, kind.id(), dimension, x, y, z);
+            return new WaypointPayloads.AutoWaypointPayload(id, kind.id(), dimension, x, y, z, color);
+        }
+
+        Entry withColor(int newColor) {
+            return new Entry(id, kind, owner, dimension, x, y, z, newColor);
         }
     }
 
@@ -98,6 +125,7 @@ public final class AutoWaypointService {
     private static MinecraftServer server;
     private static Path file;
     private static int tickCounter;
+    private static int portalScanCounter;
 
     private AutoWaypointService() {}
 
@@ -120,6 +148,7 @@ public final class AutoWaypointService {
         file = null;
         server = null;
         tickCounter = 0;
+        portalScanCounter = 0;
     }
 
     /** Full send at login: one upsert per enabled entry visible to this player. */
@@ -178,7 +207,7 @@ public final class AutoWaypointService {
         Entry fresh = spawnEntry(player, dimension, pos);
         UUID keep = fresh == null ? null : fresh.id();
         boolean changed = removeOwnedSpawnEntries(player.getUUID(), keep);
-        if (fresh != null && ENTRIES.put(fresh.id(), fresh) == null) {
+        if (fresh != null && !fresh.equals(ENTRIES.put(fresh.id(), fresh))) {
             changed = true;
             push(fresh, true);
         }
@@ -212,7 +241,17 @@ public final class AutoWaypointService {
                 dimension.location(),
                 pos.getX(),
                 pos.getY(),
-                pos.getZ());
+                pos.getZ(),
+                colorOf(kind, level.getBlockState(pos)));
+    }
+
+    /** The bed's dye colour (RGB) for a BED entry, otherwise the "kind colour" marker. */
+    private static int colorOf(AutoWaypointKind kind, BlockState state) {
+        if (kind == AutoWaypointKind.BED && state.getBlock() instanceof BedBlock bed) {
+            return bed.getColor().getTextureDiffuseColor() & 0xFFFFFF;
+        }
+
+        return AutoWaypointKind.NO_COLOR;
     }
 
     @Nullable
@@ -246,20 +285,68 @@ public final class AutoWaypointService {
      * A player went through (or arrived by) a nether portal: records it as
      * a shared waypoint. Any portal block the player's body overlaps leads
      * to the same canonical position (bottom row, middle of the portal), so
-     * every crossing of one portal maps to one single waypoint.
+     * every crossing of one portal maps to one single waypoint. The portal
+     * block is looked up inside the player's box first, then within a small
+     * margin around it; {@code trigger} only labels the diagnostic log line
+     * written when no portal block is found at all.
      */
-    public static void onPortalTravel(ServerPlayer player) {
-        // A hidden player must not leak where they are through a shared marker.
-        if (!isEnabled(AutoWaypointKind.PORTAL) || SyncService.isHidden(player.getUUID())) {
+    public static void onPortalTravel(ServerPlayer player, String trigger) {
+        if (!canRecordPortal(player)) {
             return;
         }
 
         ServerLevel level = player.serverLevel();
-        BlockPos portalBlock = findPortalBlock(level, player.getBoundingBox());
+        AABB box = player.getBoundingBox();
+        BlockPos portalBlock = findPortalBlock(level, box);
         if (portalBlock == null) {
+            LOGGER.info(
+                    "Automatic portal waypoint: no portal block found on {} for {} in {} at {} (box {})",
+                    trigger,
+                    player.getGameProfile().getName(),
+                    level.dimension().location(),
+                    player.blockPosition(),
+                    box);
             return;
         }
 
+        recordPortal(level, portalBlock);
+    }
+
+    /**
+     * Safety net independent of the travel events: every few ticks, a
+     * player whose box overlaps a nether portal block is recorded. Standing
+     * inside a portal is "using" it for our purpose; the deterministic id
+     * dedups the repeated checks.
+     */
+    private static void scanPortals(MinecraftServer minecraftServer) {
+        if (!isEnabled(AutoWaypointKind.PORTAL)) {
+            return;
+        }
+
+        for (ServerPlayer player : minecraftServer.getPlayerList().getPlayers()) {
+            scanPortal(player);
+        }
+    }
+
+    private static void scanPortal(ServerPlayer player) {
+        if (player.isSpectator() || !canRecordPortal(player)) {
+            return;
+        }
+
+        ServerLevel level = player.serverLevel();
+        BlockPos portalBlock = nearestPortalBlock(level, player.getBoundingBox(), true);
+        if (portalBlock != null) {
+            recordPortal(level, portalBlock);
+        }
+    }
+
+    /** A hidden player must not leak where they are through a shared marker. */
+    private static boolean canRecordPortal(ServerPlayer player) {
+        return isEnabled(AutoWaypointKind.PORTAL) && !SyncService.isHidden(player.getUUID());
+    }
+
+    /** Records (once) the shared waypoint of the portal that contains {@code portalBlock}. */
+    private static void recordPortal(ServerLevel level, BlockPos portalBlock) {
         BlockPos anchor = portalAnchor(level, portalBlock);
         ResourceLocation dimension = level.dimension().location();
         UUID id = entryId(AutoWaypointKind.PORTAL, null, dimension, anchor);
@@ -272,8 +359,15 @@ public final class AutoWaypointService {
             return;
         }
 
-        Entry entry =
-                new Entry(id, AutoWaypointKind.PORTAL, null, dimension, anchor.getX(), anchor.getY(), anchor.getZ());
+        Entry entry = new Entry(
+                id,
+                AutoWaypointKind.PORTAL,
+                null,
+                dimension,
+                anchor.getX(),
+                anchor.getY(),
+                anchor.getZ(),
+                AutoWaypointKind.NO_COLOR);
         ENTRIES.put(id, entry);
         save();
         push(entry, true);
@@ -311,6 +405,12 @@ public final class AutoWaypointService {
             return;
         }
 
+        portalScanCounter++;
+        if (portalScanCounter >= PORTAL_SCAN_INTERVAL_TICKS) {
+            portalScanCounter = 0;
+            scanPortals(minecraftServer);
+        }
+
         tickCounter++;
         if (tickCounter < VALIDATE_INTERVAL_TICKS) {
             return;
@@ -322,21 +422,50 @@ public final class AutoWaypointService {
 
     private static void validate(MinecraftServer minecraftServer) {
         List<Entry> stale = new ArrayList<>();
+        boolean changed = false;
         for (Entry entry : ENTRIES.values()) {
             if (isStale(minecraftServer, entry)) {
                 stale.add(entry);
+            } else {
+                changed |= refreshColor(minecraftServer, entry);
             }
-        }
-
-        if (stale.isEmpty()) {
-            return;
         }
 
         for (Entry entry : stale) {
             ENTRIES.remove(entry.id());
             push(entry, false);
+            changed = true;
         }
-        save();
+
+        if (changed) {
+            save();
+        }
+    }
+
+    /**
+     * A bed replaced in place by one of another dye colour keeps the same
+     * position (hence id): the entry follows the colour of what is there
+     * now. True when the entry was updated and re-pushed.
+     */
+    private static boolean refreshColor(MinecraftServer minecraftServer, Entry entry) {
+        if (entry.kind() != AutoWaypointKind.BED) {
+            return false;
+        }
+
+        ServerLevel level = minecraftServer.getLevel(ResourceKey.create(Registries.DIMENSION, entry.dimension()));
+        if (level == null || !level.isLoaded(entry.pos())) {
+            return false;
+        }
+
+        int color = colorOf(entry.kind(), level.getBlockState(entry.pos()));
+        if (color == entry.color()) {
+            return false;
+        }
+
+        Entry updated = entry.withColor(color);
+        ENTRIES.put(updated.id(), updated);
+        push(updated, true);
+        return true;
     }
 
     /** True only when the chunk is loaded AND the expected block is gone. */
@@ -357,18 +486,51 @@ public final class AutoWaypointService {
 
     // ------------------------------------------------------------------ portal geometry
 
-    /** Any nether portal block overlapped by the box, or null. */
+    /**
+     * A nether portal block overlapped by the box, else one within
+     * {@value #PORTAL_SEARCH_MARGIN} block(s) of it, or null.
+     */
     @Nullable
     private static BlockPos findPortalBlock(ServerLevel level, AABB box) {
+        BlockPos inside = nearestPortalBlock(level, box, false);
+        if (inside != null) {
+            return inside;
+        }
+
+        return nearestPortalBlock(level, box.inflate(PORTAL_SEARCH_MARGIN), true);
+    }
+
+    /**
+     * The portal block in the box closest to its centre, or null. With
+     * {@code requireLoaded}, a box touching a chunk that is not loaded yields
+     * null instead of loading it (the player's own cell is always loaded, so
+     * the exact-box lookup of the travel events skips the check: a chunk
+     * placed this very tick may not be visible yet).
+     */
+    @Nullable
+    private static BlockPos nearestPortalBlock(ServerLevel level, AABB box, boolean requireLoaded) {
         BlockPos min = BlockPos.containing(box.minX, box.minY, box.minZ);
         BlockPos max = BlockPos.containing(box.maxX, box.maxY, box.maxZ);
+        if (requireLoaded && !level.hasChunksAt(min, max)) {
+            return null;
+        }
+
+        Vec3 center = box.getCenter();
+        BlockPos nearest = null;
+        double nearestDistance = Double.MAX_VALUE;
         for (BlockPos pos : BlockPos.betweenClosed(min, max)) {
-            if (level.getBlockState(pos).is(Blocks.NETHER_PORTAL)) {
-                return pos.immutable();
+            if (!level.getBlockState(pos).is(Blocks.NETHER_PORTAL)) {
+                continue;
+            }
+
+            double distance = pos.distToCenterSqr(center.x, center.y, center.z);
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearest = pos.immutable();
             }
         }
 
-        return null;
+        return nearest;
     }
 
     /**
@@ -493,7 +655,8 @@ public final class AutoWaypointService {
                 dimension,
                 o.get("x").getAsInt(),
                 o.get("y").getAsInt(),
-                o.get("z").getAsInt());
+                o.get("z").getAsInt(),
+                o.has("color") ? o.get("color").getAsInt() : AutoWaypointKind.NO_COLOR);
     }
 
     private static void save() {
@@ -513,6 +676,9 @@ public final class AutoWaypointService {
             o.addProperty("x", entry.x());
             o.addProperty("y", entry.y());
             o.addProperty("z", entry.z());
+            if (entry.color() != AutoWaypointKind.NO_COLOR) {
+                o.addProperty("color", entry.color());
+            }
             arr.add(o);
         }
 

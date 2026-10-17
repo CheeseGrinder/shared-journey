@@ -98,7 +98,7 @@ sequenceDiagram
 | `OverlayRegionRequestPayload(kind, dimension, rxs[], rzs[])` / `OverlayRegionDataPayload(kind, dimension, [(rx, rz, bitmap)])` | C2S / S2C | Per-region chunk bitmaps of the force-loaded and slime chunk overlays ([13](13-chunk-overlays.md)); forced-chunk changes are pushed with the same data payload. |
 | `PublicWaypoint[Remove]Payload`, `PlayerWaypoint[Remove]Payload` | C2S + S2C | Waypoints ([06](06-waypoints.md)). The two upserts end with a `converted` boolean, the Overworld / Nether link flag ([14](14-converted-waypoints.md)). |
 | `BannerWaypoint[Remove]Payload` | S2C | Banner waypoints. |
-| `AutoWaypointPayload(id, kind, dimension, x, y, z)` / `AutoWaypointRemovePayload(id)` | S2C | Automatic bed / portal / respawn anchor waypoints; shared kinds are broadcast, private ones sent to their owner only ([06 §3.4](06-waypoints.md)). |
+| `AutoWaypointPayload(id, kind, dimension, x, y, z, color)` / `AutoWaypointRemovePayload(id)` | S2C | Automatic bed / portal / respawn anchor waypoints (`color`: RGB int override, the bed's dye colour, `-1` = kind colour); shared kinds are broadcast, private ones sent to their owner only ([06 §3.4](06-waypoints.md)). |
 | `OpsConfigRequestPayload` / `OpsConfigPayload` | C2S / both | In-game server config ([05](05-regen-commands-admin.md)). |
 
 Total: **25** payload registrations on one registrar versioned **`"1"`**.

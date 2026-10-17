@@ -209,10 +209,12 @@ public final class WaypointPayloads {
      * Automatic waypoint upsert (bed, nether portal, respawn anchor), S2C
      * only: the server alone detects them. Shared kinds are broadcast to
      * everyone, private ones are sent to their owner only. The name and
-     * colour are deliberately absent: the client derives them (translated)
-     * from the kind. Visibility is a per-client choice, never shared.
+     * name is deliberately absent: the client derives it (translated) from
+     * the kind. {@code color} is an RGB override (a bed's dye colour), or
+     * {@code -1} for the kind's own colour. Visibility is a per-client
+     * choice, never shared.
      */
-    public record AutoWaypointPayload(UUID id, String kind, ResourceLocation dimension, int x, int y, int z)
+    public record AutoWaypointPayload(UUID id, String kind, ResourceLocation dimension, int x, int y, int z, int color)
             implements CustomPacketPayload {
         public static final Type<AutoWaypointPayload> TYPE = new Type<>(Payloads.id("auto_waypoint"));
 
@@ -224,6 +226,7 @@ public final class WaypointPayloads {
                     buf.writeVarInt(p.x);
                     buf.writeVarInt(p.y);
                     buf.writeVarInt(p.z);
+                    buf.writeInt(p.color);
                 },
                 buf -> new AutoWaypointPayload(
                         buf.readUUID(),
@@ -231,7 +234,8 @@ public final class WaypointPayloads {
                         buf.readResourceLocation(),
                         buf.readVarInt(),
                         buf.readVarInt(),
-                        buf.readVarInt()));
+                        buf.readVarInt(),
+                        buf.readInt()));
 
         @Override
         public @NotNull Type<? extends CustomPacketPayload> type() {
