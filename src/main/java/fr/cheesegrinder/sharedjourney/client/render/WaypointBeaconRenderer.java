@@ -246,7 +246,8 @@ public final class WaypointBeaconRenderer {
         float h = ICON_HALF_EXTENT;
         // Half-texel UV inset: the sprite is sampled LINEAR here, and at
         // the exact 0/1 borders the default REPEAT wrap would blend the
-        // opposite edge's texels in.
+        // opposite edge's texels in (the sharp bilinear shader samples
+        // between texel centers only, the inset keeps the quad edge on one).
         float uv0 = 0.5f / WaypointIcons.SIZE;
         float uv1 = 1f - uv0;
 
@@ -260,12 +261,16 @@ public final class WaypointBeaconRenderer {
 
     /**
      * Clone of {@link RenderType#textSeeThrough} sampling its texture
-     * with LINEAR filtering (blur = true, only difference). The 16 px
-     * sprite is drawn at ~20-30 screen px in-world: NEAREST sampling at
-     * that non-integer ratio duplicated some texel columns and not
-     * others, reading as a crushed, uneven icon. World-only — the GUI
-     * surfaces (minimap, fullscreen map, lists) keep their crisp NEAREST
-     * rendering through the regular blit path.
+     * with LINEAR filtering (blur = true) through the sharp bilinear
+     * {@link WaypointIconShader}. The 16 px sprite is drawn at ~20-30
+     * screen px in-world, and much larger when the player stands next to
+     * a beacon: NEAREST sampling at a non-integer ratio duplicated some
+     * texel columns and not others (crushed, uneven icon), plain
+     * bilinear blurred the magnified sprite. The shader keeps texel
+     * interiors flat and smooths only a one-screen-pixel band at their
+     * edges. World-only — the GUI surfaces (minimap, fullscreen map,
+     * lists) keep their crisp NEAREST rendering through the regular blit
+     * path.
      */
     private static final class SmoothIconRenderType extends RenderType {
 
@@ -277,7 +282,7 @@ public final class WaypointBeaconRenderer {
                 false,
                 true,
                 CompositeState.builder()
-                        .setShaderState(RENDERTYPE_TEXT_SEE_THROUGH_SHADER)
+                        .setShaderState(new ShaderStateShard(WaypointIconShader::get))
                         .setTextureState(new TextureStateShard(texture, true, false))
                         .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
                         .setLightmapState(LIGHTMAP)

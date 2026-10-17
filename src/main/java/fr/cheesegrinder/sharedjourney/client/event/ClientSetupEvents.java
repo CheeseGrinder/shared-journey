@@ -4,6 +4,7 @@ import fr.cheesegrinder.sharedjourney.api.SharedJourneyConstants;
 import fr.cheesegrinder.sharedjourney.client.config.ClientConfig;
 import fr.cheesegrinder.sharedjourney.client.config.RadarClientConfig;
 import fr.cheesegrinder.sharedjourney.client.render.MinimapRenderer;
+import fr.cheesegrinder.sharedjourney.client.render.WaypointIconShader;
 import fr.cheesegrinder.sharedjourney.common.network.PlayerVisibilityPayloads;
 
 import net.minecraft.client.KeyMapping;
@@ -16,6 +17,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -84,6 +86,12 @@ public final class ClientSetupEvents {
             PacketDistributor.sendToServer(
                     new PlayerVisibilityPayloads.MapVisibilityPayload(RadarClientConfig.HIDE_FROM_MAP.get()));
         }
+    }
+
+    /** Core shader of the in-world waypoint icons (sharp bilinear sampling). */
+    @SubscribeEvent
+    public static void onRegisterShaders(RegisterShadersEvent event) {
+        WaypointIconShader.register(event);
     }
 
     @SubscribeEvent
