@@ -9,14 +9,14 @@ server instantly sees everything the community explored.
 
 ## 2. Goals
 
-| ID | Goal |
-|----|------|
-| G-1 | One map for everybody: the server is the single source of truth. |
-| G-2 | Cheap on the server: the tick thread only resolves chunks; pixels, PNG encoding and disk I/O run on worker threads. |
-| G-3 | Cheap on the network: delta sync, per-player bandwidth cap, client-side disk cache. |
+| ID  | Goal                                                                                                                                                                                                    |
+|-----|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| G-1 | One map for everybody: the server is the single source of truth.                                                                                                                                        |
+| G-2 | Cheap on the server: the tick thread only resolves chunks; pixels, PNG encoding and disk I/O run on worker threads.                                                                                     |
+| G-3 | Cheap on the network: delta sync, per-player bandwidth cap, client-side disk cache.                                                                                                                     |
 | G-4 | Hard to abuse: radar radius is capped server-side, caves are painted only where a player went, hover data is precomputed (no chunk-load timing oracle), hidden players do not leak through map updates. |
-| G-5 | Works with modded content out of the box: block colors come from textures, mob radar icons from entity models, JourneyMap-API mods (Waystones, Create add-ons) work through a bridge. |
-| G-6 | Extensible: public API for waypoints, map reads/actions, custom layers, block colors, markers and fullscreen-map UI. |
+| G-5 | Works with modded content out of the box: block colors come from textures, mob radar icons from entity models, JourneyMap-API mods (Waystones, Create add-ons) work through a bridge.                   |
+| G-6 | Extensible: public API for waypoints, map reads/actions, custom layers, block colors, markers and fullscreen-map UI.                                                                                    |
 
 ## 3. Non-goals
 
@@ -30,22 +30,22 @@ server instantly sees everything the community explored.
 
 ## 4. Glossary
 
-| Term | Meaning |
-|------|---------|
-| **Region** | A 512×512-block tile = 32×32 chunks, 1 pixel per block. Addressed by a `RegionKey`. |
-| **RegionKey** | `(dimension, layer, caveBand, rx, rz)`; `rx = floorDiv(blockX, 512)`. |
-| **Layer** | A rendering of the world: `day`, `night`, `topo`, `biome`, `cave`, or a custom layer. |
-| **Cave band** | A 16-block vertical slice of the CAVE layer; `band = floorDiv(y, 16)`. |
-| **INFO** | Pseudo-layer carrying the hover sidecar (`HoverRegionData`): not displayable. |
-| **Version** | Per-region monotonic long, `max(previous + 1, currentTimeMillis)`; grows on every effective rewrite. |
-| **Index** | `{RegionKey → version}` registry (`index.json`), on the server and in each client cache. |
-| **Handshake** | The client's login upload of its local index (with recomputed file hashes). |
-| **Delta** | Regions whose server version is newer than what the player is known to hold. |
-| **Hidden player** | A player who asked not to appear on the others' map (`radar.hideFromMap`). |
-| **Quarantine** | Delayed diffusion of map updates made near a hidden player. |
-| **Public variant** | The frozen pre-quarantine copy of a region served to non-trusted players. |
-| **Bridge** | Reflection proxy that lets JourneyMap-API mods run without JourneyMap. |
-| **OP** | Permission level ≥ 2. |
+| Term               | Meaning                                                                                              |
+|--------------------|------------------------------------------------------------------------------------------------------|
+| **Region**         | A 512×512-block tile = 32×32 chunks, 1 pixel per block. Addressed by a `RegionKey`.                  |
+| **RegionKey**      | `(dimension, layer, caveBand, rx, rz)`; `rx = floorDiv(blockX, 512)`.                                |
+| **Layer**          | A rendering of the world: `day`, `night`, `topo`, `biome`, `cave`, or a custom layer.                |
+| **Cave band**      | A 16-block vertical slice of the CAVE layer; `band = floorDiv(y, 16)`.                               |
+| **INFO**           | Pseudo-layer carrying the hover sidecar (`HoverRegionData`): not displayable.                        |
+| **Version**        | Per-region monotonic long, `max(previous + 1, currentTimeMillis)`; grows on every effective rewrite. |
+| **Index**          | `{RegionKey → version}` registry (`index.json`), on the server and in each client cache.             |
+| **Handshake**      | The client's login upload of its local index (with recomputed file hashes).                          |
+| **Delta**          | Regions whose server version is newer than what the player is known to hold.                         |
+| **Hidden player**  | A player who asked not to appear on the others' map (`radar.hideFromMap`).                           |
+| **Quarantine**     | Delayed diffusion of map updates made near a hidden player.                                          |
+| **Public variant** | The frozen pre-quarantine copy of a region served to non-trusted players.                            |
+| **Bridge**         | Reflection proxy that lets JourneyMap-API mods run without JourneyMap.                               |
+| **OP**             | Permission level ≥ 2.                                                                                |
 
 ## 5. Architecture
 
@@ -61,12 +61,26 @@ server instantly sees everything the community explored.
 
 ### 5.2 Layering (enforced by discipline, not by the build)
 
+```mermaid
+flowchart BT
+    api["<b>api</b><br/>public interfaces and events<br/>no dependency on other mod packages"]
+    common["<b>common</b><br/>config, network payloads, region model, shared utils"]
+    server["<b>server</b><br/>engine, sync, services, commands, events"]
+    client["<b>client</b><br/>screens, renderers, caches, bridges"]
+
+    common --> api
+    server --> common
+    server --> api
+    client --> common
+    client --> api
+
+    server -. "never references" .- client
+    common -. "Payloads.Hooks<br/>(handlers injected at startup)" .-> server
+    common -. "Payloads.Hooks<br/>(handlers injected at startup)" .-> client
 ```
-api                      no dependency on other mod packages
-common    -> api         config, network payloads, region model, shared utils
-server    -> common,api  engine, sync, services, commands, events
-client    -> common,api  screens, renderers, caches, bridges
-```
+
+Solid arrows are compile-time dependencies. Dotted links are forbidden direct references,
+replaced by runtime injection.
 
 `server` and `client` never reference each other. `common` cannot call them either, so
 packet handlers are injected through static function fields (`Payloads.Hooks`, wired by
@@ -75,48 +89,63 @@ the entry points). The same pattern backs `WaypointApi.Hooks`, `MapApi.Hooks` an
 
 ### 5.3 Data flow
 
-```
- server tick thread                    worker threads                       clients
- ────────────────                      ──────────────                       ───────
- chunk events ─┐
- CaveTracker  ─┼─▶ render queue ─▶ resolve chunk (getChunkNow)
- RegenService ─┘   (dedup)                │  (+ 3×3 biome neighbours)
-                                          ▼
-                                   renderChunk: pixels per layer/band
-                                   + INFO sidecar ─▶ RegionImage / HoverRegion (RAM)
-                                          │                │
-                                          │                └─▶ PNG/bin on disk (async save)
-                                          ▼
-                              SyncService.pushRegionUpdates ──▶ per-player queue ─▶ RegionDataPayload
-                                                                   (KB/s budget)     fragments
-                                                                                        │
-                                                                         ClientMapCache ◀┘ ─▶ DiskCache
+```mermaid
+flowchart LR
+    subgraph main["Server main thread"]
+        direction TB
+        trig["Triggers<br/>chunk events, CaveTracker,<br/>RegenService, MapApi"]
+        queue["Render queue<br/>(deduplicated)"]
+        resolve["Resolve chunk<br/>getChunkNow + 3×3 biome neighbours<br/>+ quarantine verdict"]
+        push["SyncService<br/>per-player queue<br/>KB/s budget, fragments"]
+        trig --> queue --> resolve
+    end
+
+    subgraph workers["Worker threads"]
+        direction TB
+        render["renderChunk<br/>pixels per layer/band<br/>+ INFO sidecar"]
+        ram[("RegionImage / HoverRegion<br/>in RAM")]
+        disk[("PNG / bin<br/>on disk")]
+        render --> ram
+        ram -. "async save" .-> disk
+    end
+
+    subgraph client["Client"]
+        direction TB
+        cache["ClientMapCache<br/>(textures)"]
+        dcache[("DiskCache")]
+        cache --> dcache
+    end
+
+    resolve -- "submit (in-flight cap)" --> render
+    render -- "pushRegionUpdates<br/>(hops to main thread)" --> push
+    ram -- "dataOf" --> push
+    push -- "RegionDataPayload" --> cache
 ```
 
 ## 6. Global invariants
 
-| ID | Invariant |
-|----|-----------|
-| INV-1 | The client MUST NOT derive map pixels or hover data from anything but server pushes (hover MAY prefer a locally loaded chunk, which is the client's own world data). |
-| INV-2 | Chunk access (`getChunkNow`, chunk loads) happens on the server main thread only. Workers get an already-resolved `ChunkAccess` and read it read-only. |
-| INV-3 | The mod never causes chunk generation. Neighbour lookups use `ChunkStatus.BIOMES` with `load=false`; regen checks the on-disk NBT status first. |
-| INV-4 | Region versions strictly increase on every effective rewrite and are never reused. |
-| INV-5 | A rewrite that leaves the pixels (or hover data) unchanged MUST NOT bump the version nor trigger a push. |
+| ID    | Invariant                                                                                                                                                                                                                                    |
+|-------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| INV-1 | The client MUST NOT derive map pixels or hover data from anything but server pushes (hover MAY prefer a locally loaded chunk, which is the client's own world data).                                                                         |
+| INV-2 | Chunk access (`getChunkNow`, chunk loads) happens on the server main thread only. Workers get an already-resolved `ChunkAccess` and read it read-only.                                                                                       |
+| INV-3 | The mod never causes chunk generation. Neighbour lookups use `ChunkStatus.BIOMES` with `load=false`; regen checks the on-disk NBT status first.                                                                                              |
+| INV-4 | Region versions strictly increase on every effective rewrite and are never reused.                                                                                                                                                           |
+| INV-5 | A rewrite that leaves the pixels (or hover data) unchanged MUST NOT bump the version nor trigger a push.                                                                                                                                     |
 | INV-6 | Region files, sidecars, `index.json`, `hashes.json`, `quarantine.json` and the client region cache are written atomically (temp file + rename). Waypoint JSON files are the known exception ([11](11-limitations-and-open-issues.md), L-06). |
-| INV-7 | Every server-side handler of a client payload validates permission and bounds; a client is never trusted for sizes, counts or ranges. |
-| INV-8 | The map layer ids on the wire are strings; unknown ids are registered on the fly (client works without the mod that registered a custom layer). |
-| INV-9 | Server owner-facing text (admin command feedback, stats, debug) is English; player-facing text is translatable (`en_us`, `fr_fr`). |
+| INV-7 | Every server-side handler of a client payload validates permission and bounds; a client is never trusted for sizes, counts or ranges.                                                                                                        |
+| INV-8 | The map layer ids on the wire are strings; unknown ids are registered on the fly (client works without the mod that registered a custom layer).                                                                                              |
+| INV-9 | Server owner-facing text (admin command feedback, stats, debug) is English; player-facing text is translatable (`en_us`, `fr_fr`).                                                                                                           |
 
 ## 7. Side-by-side responsibilities
 
-| Concern | Server | Client |
-|---------|--------|--------|
-| Map pixels | Render, store, version, serve | Receive, cache (RAM + disk), draw |
-| Layer availability | Config per dimension, announced via `LayerSettingsPayload` | Obeys the announcement |
-| Waypoints | Persists public, banner and (default) per-player private ones | Local store, local-only ones, per-client visibility |
-| Radar | Caps the radius, broadcasts non-hidden player positions | Draws nearby entities it already knows; mob icons from entity models |
-| Hover info | Produces the INFO sidecar | Reads it locally (or the loaded chunk) |
-| Config | `SERVER` (per world), `COMMON` | `CLIENT` (per machine) |
+| Concern            | Server                                                        | Client                                                               |
+|--------------------|---------------------------------------------------------------|----------------------------------------------------------------------|
+| Map pixels         | Render, store, version, serve                                 | Receive, cache (RAM + disk), draw                                    |
+| Layer availability | Config per dimension, announced via `LayerSettingsPayload`    | Obeys the announcement                                               |
+| Waypoints          | Persists public, banner and (default) per-player private ones | Local store, local-only ones, per-client visibility                  |
+| Radar              | Caps the radius, broadcasts non-hidden player positions       | Draws nearby entities it already knows; mob icons from entity models |
+| Hover info         | Produces the INFO sidecar                                     | Reads it locally (or the loaded chunk)                               |
+| Config             | `SERVER` (per world), `COMMON`                                | `CLIENT` (per machine)                                               |
 
 ## 8. Distribution artifacts
 
